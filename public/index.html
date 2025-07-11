@@ -9,14 +9,16 @@
     <title>FarGuard - Token Approval Manager</title>
     <meta name="description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
     
-    <!-- REQUIRED: Farcaster Mini App Meta Tag -->
-    <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","button":{"title":"🛡️ Open FarGuard","action":{"type":"launch_frame","name":"FarGuard","url":"https://fgrevoke.vercel.app","splashImageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","splashBackgroundColor":"#7c3aed"}}}' />
+    <!-- CRITICAL: This meta tag format is required -->
+    <meta property="fc:frame" content="vNext" />
+    <meta property="fc:frame:image" content="https://fgrevoke.vercel.app/farguard-logo.png" />
+    <meta property="fc:frame:button:1" content="🛡️ Open FarGuard" />
+    <meta property="fc:frame:button:1:action" content="link" />
+    <meta property="fc:frame:button:1:target" content="https://fgrevoke.vercel.app" />
     
-    <!-- Open Graph Meta Tags -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://fgrevoke.vercel.app" />
+    <!-- Open Graph -->
     <meta property="og:title" content="FarGuard - Token Approval Manager" />
-    <meta property="og:description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
+    <meta property="og:description" content="Manage your token approvals securely on Farcaster" />
     <meta property="og:image" content="https://fgrevoke.vercel.app/farguard-logo.png" />
     
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
@@ -25,22 +27,5 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    
-    <!-- Farcaster Mini App SDK -->
-    <script type="module">
-      import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
-      window.sdk = sdk;
-      window.farcasterSdk = sdk;
-      
-      // Call ready when app loads
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          if (sdk?.actions?.ready) {
-            sdk.actions.ready();
-            console.log('SDK ready() called on load');
-          }
-        }, 500);
-      });
-    </script>
   </body>
 </html>

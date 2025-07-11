@@ -1,16 +1,8 @@
 {
-  "accountAssociation": {
-    "header": "eyJmaWQiOjI0MjU5NywidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDc1OUUxOWQ3MDQzNTdmZkMwODAxNTg5RDc3OTg1M2JkZWVkODkwNTMifQ",
-    "payload": "eyJkb21haW4iOiJmZ3Jldm9rZS52ZXJjZWwuYXBwIn0",
-    "signature": "MHgzYWQ4ODBjYzU0N2ExOGMxNTBjZDc3ZjgxZjAxYTRiMzk5ZWRjZjlkZmNjZWVhZGYwY2M3NjM5NjMwMjQ4OWU0MWViYjYwNjExYjdhMzk3MWU5M2UwMGIwNDE0YTlmN2I0NTMwNTExOWFlNjA0Njk0YjgyY2QwNDBmOTBhOThiYjFi"
-  }
-}
   "miniapp": {
     "name": "FarGuard",
-    "description": "Secure token approval management for Farcaster users",
+    "description": "Token approval manager for Farcaster",
     "icon": "https://fgrevoke.vercel.app/farguard-logo.png",
-    "homeUrl": "https://fgrevoke.vercel.app",
-    "imageUrl": "https://fgrevoke.vercel.app/farguard-logo.png",
-    "webhookUrl": "https://fgrevoke.vercel.app/api/webhook"
+    "homeUrl": "https://fgrevoke.vercel.app"
   }
 }
