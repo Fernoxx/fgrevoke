@@ -28,59 +28,100 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     
-    <!-- Farcaster Mini App SDK -->
-    <script type="module">
-      // Load SDK from multiple sources
-      try {
-        const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
-        window.sdk = sdk;
-        window.farcasterSdk = sdk;
-        console.log('✅ Farcaster SDK loaded successfully');
-        
-        // Try to call ready immediately
-        if (sdk?.actions?.ready) {
-          sdk.actions.ready();
-          console.log('✅ SDK ready() called immediately');
+    <!-- Safer Farcaster SDK Loading -->
+    <script>
+      // Prevent any uncaught errors from crashing the app
+      window.addEventListener('error', function(e) {
+        console.log('Caught error:', e.error);
+        e.preventDefault();
+      });
+      
+      window.addEventListener('unhandledrejection', function(e) {
+        console.log('Caught rejection:', e.reason);
+        e.preventDefault();
+      });
+      
+      // Try to load SDK safely
+      (function() {
+        try {
+          // Method 1: Try ESM import
+          if (typeof window.import !== 'undefined') {
+            import('https://esm.sh/@farcaster/miniapp-sdk').then(({ sdk }) => {
+              window.sdk = sdk;
+              window.farcasterSdk = sdk;
+              console.log('✅ SDK loaded via ESM');
+              
+              // Call ready after delay
+              setTimeout(() => {
+                if (sdk?.actions?.ready) {
+                  sdk.actions.ready();
+                  console.log('✅ SDK ready() called');
+                }
+              }, 1000);
+            }).catch(e => {
+              console.log('ESM load failed:', e);
+              loadFallbackSDK();
+            });
+          } else {
+            loadFallbackSDK();
+          }
+        } catch (e) {
+          console.log('SDK loading error:', e);
+          loadFallbackSDK();
         }
         
-        // Also try after a delay
-        setTimeout(() => {
-          if (sdk?.actions?.ready) {
-            sdk.actions.ready();
-            console.log('✅ SDK ready() called after delay');
+        function loadFallbackSDK() {
+          try {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js';
+            script.onload = function() {
+              console.log('✅ Fallback SDK loaded');
+              setTimeout(() => {
+                if (window.farcasterSdk?.actions?.ready) {
+                  window.farcasterSdk.actions.ready();
+                  console.log('✅ Fallback SDK ready() called');
+                }
+              }, 1000);
+            };
+            script.onerror = function() {
+              console.log('❌ All SDK loading methods failed');
+            };
+            document.head.appendChild(script);
+          } catch (e) {
+            console.log('Fallback SDK loading failed:', e);
           }
-        }, 1000);
-        
-      } catch (error) {
-        console.log('❌ Failed to load Farcaster SDK:', error);
-        
-        // Fallback: Try CDN version
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js';
-        script.onload = () => {
-          console.log('✅ Fallback SDK loaded');
-          if (window.farcasterSdk?.actions?.ready) {
-            window.farcasterSdk.actions.ready();
-            console.log('✅ Fallback SDK ready() called');
-          }
-        };
-        document.head.appendChild(script);
-      }
+        }
+      })();
     </script>
     
-    <!-- Backup ready call on window load -->
+    <!-- Backup ready calls -->
     <script>
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          if (window.sdk?.actions?.ready) {
-            window.sdk.actions.ready();
-            console.log('✅ Window load SDK ready() called');
-          } else if (window.farcasterSdk?.actions?.ready) {
-            window.farcasterSdk.actions.ready();
-            console.log('✅ Window load farcasterSdk ready() called');
+      // Multiple ready() attempts
+      setTimeout(() => {
+        if (window.sdk?.actions?.ready) {
+          window.sdk.actions.ready();
+          console.log('✅ Backup ready() #1');
+        }
+      }, 2000);
+      
+      setTimeout(() => {
+        if (window.sdk?.actions?.ready) {
+          window.sdk.actions.ready();
+          console.log('✅ Backup ready() #2');
+        }
+      }, 5000);
+      
+      // PostMessage fallback
+      setTimeout(() => {
+        if (window.parent !== window) {
+          try {
+            window.parent.postMessage({ type: 'miniapp-ready' }, '*');
+            console.log('✅ PostMessage ready() sent');
+          } catch (e) {
+            console.log('PostMessage failed:', e);
           }
-        }, 2000);
-      });
+        }
+      }, 3000);
     </script>
   </body>
 </html>

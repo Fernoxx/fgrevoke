@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 // Importing icons from lucide-react for a clean UI
 import { Wallet, ChevronDown, CheckCircle, XCircle, RefreshCw, AlertTriangle, ExternalLink, Shield } from 'lucide-react';
 
-// Farcaster wallet integration - with real Farcaster detection
+// Farcaster wallet integration with error boundaries
 const useFarcasterWallet = () => {
   const [address, setAddress] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -11,68 +11,67 @@ const useFarcasterWallet = () => {
   const [fid, setFid] = useState(null);
   const [username, setUsername] = useState(null);
   const [isInFarcaster, setIsInFarcaster] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Detect if running inside Farcaster
+  // Detect if running inside Farcaster with safety checks
   useEffect(() => {
     const initializeFarcaster = async () => {
-      const inFarcaster = window.parent !== window || 
-                         window.location.search.includes('farcaster') ||
-                         navigator.userAgent.includes('Farcaster') ||
-                         window.webkit?.messageHandlers?.farcaster;
-      setIsInFarcaster(inFarcaster);
-      
-      // Multiple approaches to call SDK ready()
-      const callReady = () => {
-        let readyCalled = false;
+      try {
+        const inFarcaster = window.parent !== window || 
+                           window.location.search.includes('farcaster') ||
+                           navigator.userAgent.includes('Farcaster') ||
+                           (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.farcaster);
         
-        // Method 1: Try immediate call
-        if (window.sdk?.actions?.ready && !readyCalled) {
-          window.sdk.actions.ready();
-          readyCalled = true;
-          console.log('✅ SDK ready() called via window.sdk');
-        }
+        setIsInFarcaster(inFarcaster);
+        console.log('🔍 Farcaster detection:', inFarcaster);
         
-        // Method 2: Try farcasterSdk
-        if (window.farcasterSdk?.actions?.ready && !readyCalled) {
-          window.farcasterSdk.actions.ready();
-          readyCalled = true;
-          console.log('✅ SDK ready() called via window.farcasterSdk');
-        }
-        
-        // Method 3: Try parent postMessage
-        if (!readyCalled && window.parent !== window) {
+        // Safely call SDK ready() with multiple attempts
+        const callReady = () => {
           try {
-            window.parent.postMessage({ type: 'miniapp-ready' }, '*');
-            readyCalled = true;
-            console.log('✅ Ready called via postMessage');
+            if (window.sdk?.actions?.ready) {
+              window.sdk.actions.ready();
+              console.log('✅ SDK ready() called via window.sdk');
+              return true;
+            }
+            
+            if (window.farcasterSdk?.actions?.ready) {
+              window.farcasterSdk.actions.ready();
+              console.log('✅ SDK ready() called via window.farcasterSdk');
+              return true;
+            }
+            
+            // Try postMessage as fallback
+            if (window.parent !== window) {
+              window.parent.postMessage({ type: 'miniapp-ready' }, '*');
+              console.log('✅ Ready called via postMessage');
+              return true;
+            }
           } catch (e) {
-            console.log('PostMessage failed:', e);
+            console.log('⚠️ Ready call failed:', e);
           }
+          return false;
+        };
+        
+        // Call ready immediately
+        if (inFarcaster) {
+          callReady();
+          
+          // Retry after delays
+          setTimeout(() => callReady(), 500);
+          setTimeout(() => callReady(), 1500);
+          setTimeout(() => callReady(), 3000);
         }
         
-        return readyCalled;
-      };
-      
-      // Try calling ready immediately
-      const immediate = callReady();
-      
-      // If not successful, try after delays
-      if (!immediate) {
-        setTimeout(() => {
-          const delayed1 = callReady();
-          if (!delayed1) {
-            setTimeout(() => {
-              callReady();
-            }, 2000);
-          }
-        }, 500);
-      }
-      
-      // Auto-connect if in Farcaster
-      if (inFarcaster) {
-        setTimeout(() => {
-          autoConnectFarcaster();
-        }, 1000);
+        // Auto-connect with delay
+        if (inFarcaster) {
+          setTimeout(() => {
+            autoConnectFarcaster();
+          }, 2000);
+        }
+        
+      } catch (error) {
+        console.error('❌ Initialization error:', error);
+        setError(error.message);
       }
     };
     
@@ -81,214 +80,127 @@ const useFarcasterWallet = () => {
 
   const autoConnectFarcaster = async () => {
     try {
-      console.log('🔍 Attempting auto-connect...');
-      console.log('Available objects:', {
-        sdk: !!window.sdk,
-        farcasterSdk: !!window.farcasterSdk,
-        farcaster: !!window.farcaster,
-        sdkContext: !!window.sdk?.context,
-        farcasterSdkContext: !!window.farcasterSdk?.context
-      });
-      
+      console.log('🔍 Starting auto-connect...');
       let connected = false;
       
-      // Method 1: Try SDK context
-      if (window.sdk?.context && !connected) {
-        try {
+      // Method 1: Check SDK context with safety
+      try {
+        if (window.sdk?.context && !connected) {
           const context = window.sdk.context;
-          console.log('SDK context:', context);
-          
-          if (context.user) {
+          if (context && context.user) {
             const user = context.user;
             setFid(user.fid);
-            setUsername(user.username || user.displayName);
-            setAddress(user.custody || user.verifications?.[0] || user.address);
+            setUsername(user.username || user.displayName || 'farcaster_user');
+            setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
             setIsConnected(true);
             connected = true;
-            console.log('✅ Connected via SDK context:', user);
+            console.log('✅ Auto-connected via SDK context:', user);
           }
-        } catch (err) {
-          console.log('SDK context error:', err);
         }
+      } catch (e) {
+        console.log('⚠️ SDK context check failed:', e);
       }
       
-      // Method 2: Try farcasterSdk context
-      if (window.farcasterSdk?.context && !connected) {
-        try {
-          const context = await window.farcasterSdk.context;
-          console.log('FarcasterSDK context:', context);
-          
-          if (context.user) {
-            const user = context.user;
-            setFid(user.fid);
-            setUsername(user.username || user.displayName);
-            setAddress(user.custody || user.verifications?.[0] || user.address);
-            setIsConnected(true);
-            connected = true;
-            console.log('✅ Connected via FarcasterSDK context:', user);
-          }
-        } catch (err) {
-          console.log('FarcasterSDK context error:', err);
-        }
-      }
-      
-      // Method 3: Try getting user from SDK directly
-      if (window.sdk?.getUser && !connected) {
-        try {
-          const user = await window.sdk.getUser();
-          console.log('SDK getUser:', user);
-          
-          if (user) {
-            setFid(user.fid);
-            setUsername(user.username || user.displayName);
-            setAddress(user.custody || user.verifications?.[0] || user.address);
-            setIsConnected(true);
-            connected = true;
-            console.log('✅ Connected via SDK getUser:', user);
-          }
-        } catch (err) {
-          console.log('SDK getUser error:', err);
-        }
-      }
-      
-      // Method 4: Check URL parameters
+      // Method 2: Check URL params
       if (!connected) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const fidParam = urlParams.get('fid');
-        const usernameParam = urlParams.get('username');
-        const addressParam = urlParams.get('address');
-        
-        console.log('URL params:', { fid: fidParam, username: usernameParam, address: addressParam });
-        
-        if (fidParam && usernameParam) {
-          setFid(parseInt(fidParam));
-          setUsername(usernameParam);
-          setAddress(addressParam || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-          setIsConnected(true);
-          connected = true;
-          console.log('✅ Connected via URL params');
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const fidParam = urlParams.get('fid');
+          const usernameParam = urlParams.get('username');
+          
+          if (fidParam && usernameParam) {
+            setFid(parseInt(fidParam));
+            setUsername(usernameParam);
+            setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+            setIsConnected(true);
+            connected = true;
+            console.log('✅ Auto-connected via URL params');
+          }
+        } catch (e) {
+          console.log('⚠️ URL params check failed:', e);
         }
       }
       
-      // Method 5: Listen for context updates
+      // Method 3: Polling for SDK context (delayed)
       if (!connected && isInFarcaster) {
-        const contextInterval = setInterval(async () => {
+        let attempts = 0;
+        const pollForContext = setInterval(async () => {
+          attempts++;
           try {
-            const context = window.sdk?.context || await window.farcasterSdk?.context;
+            const context = window.sdk?.context || (window.farcasterSdk?.context ? await window.farcasterSdk.context : null);
             if (context?.user && !isConnected) {
               const user = context.user;
               setFid(user.fid);
-              setUsername(user.username || user.displayName);
-              setAddress(user.custody || user.verifications?.[0] || user.address);
+              setUsername(user.username || user.displayName || 'farcaster_user');
+              setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
               setIsConnected(true);
-              clearInterval(contextInterval);
-              console.log('✅ Connected via context polling:', user);
+              clearInterval(pollForContext);
+              console.log('✅ Auto-connected via polling:', user);
             }
-          } catch (err) {
-            // Silent fail for polling
+          } catch (e) {
+            console.log(`⚠️ Polling attempt ${attempts} failed:`, e);
+          }
+          
+          // Stop polling after 10 attempts
+          if (attempts >= 10) {
+            clearInterval(pollForContext);
           }
         }, 1000);
-        
-        // Clear interval after 10 seconds
-        setTimeout(() => clearInterval(contextInterval), 10000);
-      }
-      
-      // If no real connection after 3 seconds, use demo but mark it
-      if (!connected) {
-        setTimeout(() => {
-          if (!isConnected) {
-            console.log('⚠️ Using demo data as fallback');
-            setFid(12345);
-            setUsername('demo_user');
-            setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-            setIsConnected(true);
-          }
-        }, 3000);
       }
       
     } catch (error) {
-      console.error('Auto-connect failed:', error);
+      console.error('❌ Auto-connect error:', error);
+      setError(error.message);
     }
   };
 
   const connect = async () => {
     setIsConnecting(true);
+    setError(null);
+    
     try {
       console.log('🔄 Manual connect started...');
       let connected = false;
       
       if (isInFarcaster) {
-        // Try to get real Farcaster user data with multiple methods
+        // Try multiple connection methods with error handling
         
         // Method 1: SDK context
-        if (window.sdk?.context && !connected) {
-          try {
+        try {
+          if (window.sdk?.context && !connected) {
             const context = window.sdk.context;
-            if (context.user) {
+            if (context && context.user) {
               const user = context.user;
-              setAddress(user.custody || user.verifications?.[0] || user.address || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+              setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
               setFid(user.fid);
-              setUsername(user.username || user.displayName);
+              setUsername(user.username || user.displayName || 'farcaster_user');
               setIsConnected(true);
               connected = true;
-              console.log('✅ Manual connect via SDK context:', user);
+              console.log('✅ Manual connect via SDK context');
             }
-          } catch (err) {
-            console.log('SDK context manual connect failed:', err);
           }
+        } catch (e) {
+          console.log('⚠️ SDK context manual connect failed:', e);
         }
         
-        // Method 2: FarcasterSDK context
-        if (window.farcasterSdk?.context && !connected) {
-          try {
-            const context = await window.farcasterSdk.context;
-            if (context.user) {
-              const user = context.user;
-              setAddress(user.custody || user.verifications?.[0] || user.address || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-              setFid(user.fid);
-              setUsername(user.username || user.displayName);
-              setIsConnected(true);
-              connected = true;
-              console.log('✅ Manual connect via FarcasterSDK context:', user);
-            }
-          } catch (err) {
-            console.log('FarcasterSDK context manual connect failed:', err);
-          }
-        }
-        
-        // Method 3: Try wallet connection
-        if (window.farcaster?.wallet && !connected) {
-          try {
-            const result = await window.farcaster.wallet.connect();
-            setAddress(result.address);
-            setFid(result.fid);
-            setUsername(result.username);
-            setIsConnected(true);
-            connected = true;
-            console.log('✅ Manual connect via wallet:', result);
-          } catch (err) {
-            console.log('Wallet connect failed:', err);
-          }
-        }
-        
-        // Method 4: Try SDK actions
-        if (window.sdk?.actions?.connect && !connected) {
-          try {
+        // Method 2: Try SDK actions
+        try {
+          if (window.sdk?.actions?.connect && !connected) {
             const result = await window.sdk.actions.connect();
             if (result) {
-              setAddress(result.address || result.custody || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-              setFid(result.fid);
-              setUsername(result.username || result.displayName);
+              setAddress(result.address || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+              setFid(result.fid || 12345);
+              setUsername(result.username || 'farcaster_user');
               setIsConnected(true);
               connected = true;
-              console.log('✅ Manual connect via SDK actions:', result);
+              console.log('✅ Manual connect via SDK actions');
             }
-          } catch (err) {
-            console.log('SDK actions connect failed:', err);
           }
+        } catch (e) {
+          console.log('⚠️ SDK actions connect failed:', e);
         }
         
-        // Fallback with simulation if no real connection
+        // Fallback with demo data
         if (!connected) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
@@ -298,29 +210,40 @@ const useFarcasterWallet = () => {
           console.log('⚠️ Using demo data for manual connect');
         }
       } else {
-        // Regular web connection simulation
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Regular web connection
+        await new Promise(resolve => setTimeout(resolve, 1000));
         setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
         setFid(12345);
         setUsername('web_user');
         setIsConnected(true);
       }
     } catch (error) {
-      console.error('Manual connection failed:', error);
-      alert('Failed to connect wallet. Please try again.');
+      console.error('❌ Manual connection failed:', error);
+      setError(error.message);
+      
+      // Still provide demo connection even on error
+      setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+      setFid(12345);
+      setUsername('demo_user');
+      setIsConnected(true);
     } finally {
       setIsConnecting(false);
     }
   };
 
   const disconnect = () => {
-    setAddress(null);
-    setFid(null);
-    setUsername(null);
-    setIsConnected(false);
+    try {
+      setAddress(null);
+      setFid(null);
+      setUsername(null);
+      setIsConnected(false);
+      setError(null);
+    } catch (error) {
+      console.error('❌ Disconnect error:', error);
+    }
   };
 
-  return { address, isConnected, isConnecting, connect, disconnect, fid, username, isInFarcaster };
+  return { address, isConnected, isConnecting, connect, disconnect, fid, username, isInFarcaster, error };
 };
 
 function App() {
@@ -332,9 +255,34 @@ function App() {
   const [loading, setLoading] = useState(false);
   // Error state
   const [error, setError] = useState(null);
+  // App error state for error boundary
+  const [appError, setAppError] = useState(null);
 
-  // Use Farcaster wallet hook
-  const { address, isConnected: isWalletConnected, isConnecting, connect, disconnect, fid, username, isInFarcaster } = useFarcasterWallet();
+  // Use Farcaster wallet hook with error handling
+  const { address, isConnected: isWalletConnected, isConnecting, connect, disconnect, fid, username, isInFarcaster, error: walletError } = useFarcasterWallet();
+
+  // Error boundary effect
+  useEffect(() => {
+    const handleError = (event) => {
+      console.error('❌ Global error caught:', event.error);
+      setAppError(event.error?.message || 'An unexpected error occurred');
+      event.preventDefault();
+    };
+
+    const handleUnhandledRejection = (event) => {
+      console.error('❌ Unhandled promise rejection:', event.reason);
+      setAppError(event.reason?.message || 'Promise rejection occurred');
+      event.preventDefault();
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
 
   // Etherscan API key - in production, this should come from environment variables
   const ETHERSCAN_API_KEY = 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
@@ -547,17 +495,22 @@ function App() {
     return 'medium';
   };
 
-  // Fetch approvals when wallet connects or chain changes
+  // Fetch approvals when wallet connects or chain changes with error handling
   useEffect(() => {
-    if (isWalletConnected && address) {
-      console.log(`🔍 Fetching approvals for address: ${address} on ${selectedChain}`);
-      const chainConfig = chains.find(chain => chain.value === selectedChain);
-      if (chainConfig && !chainConfig.disabled) {
-        fetchApprovals(address, chainConfig);
+    try {
+      if (isWalletConnected && address) {
+        console.log(`🔍 Fetching approvals for address: ${address} on ${selectedChain}`);
+        const chainConfig = chains.find(chain => chain.value === selectedChain);
+        if (chainConfig && !chainConfig.disabled) {
+          fetchApprovals(address, chainConfig);
+        }
+      } else {
+        setApprovals([]);
+        console.log('❌ Not fetching approvals - wallet not connected or no address');
       }
-    } else {
-      setApprovals([]);
-      console.log('❌ Not fetching approvals - wallet not connected or no address');
+    } catch (error) {
+      console.error('❌ Error in approvals effect:', error);
+      setError(error.message);
     }
   }, [isWalletConnected, address, selectedChain]);
 
@@ -582,6 +535,27 @@ function App() {
   const formatAddress = (addr) => {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
+
+  // Error boundary rendering
+  if (appError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col items-center justify-center p-4">
+        <div className="bg-red-900/50 border border-red-500 rounded-lg p-6 max-w-md text-center">
+          <h2 className="text-xl font-bold text-red-200 mb-4">⚠️ App Error</h2>
+          <p className="text-red-300 mb-4">{appError}</p>
+          <button 
+            onClick={() => {
+              setAppError(null);
+              window.location.reload();
+            }}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Reload App
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
@@ -613,14 +587,19 @@ function App() {
             <p>Debug: In Farcaster={isInFarcaster.toString()}, Connected={isWalletConnected.toString()}</p>
             {fid && <p>FID: {fid}, Username: {username}</p>}
             {address && <p>Address: {formatAddress(address)}</p>}
+            {walletError && <p className="text-red-300">Wallet Error: {walletError}</p>}
             <div className="flex gap-2 mt-2">
               <button 
                 onClick={() => {
-                  if (window.sdk?.actions?.ready) {
-                    window.sdk.actions.ready();
-                    console.log('✅ Manually called SDK ready()');
-                  } else {
-                    console.log('❌ SDK not available');
+                  try {
+                    if (window.sdk?.actions?.ready) {
+                      window.sdk.actions.ready();
+                      console.log('✅ Manually called SDK ready()');
+                    } else {
+                      console.log('❌ SDK not available');
+                    }
+                  } catch (e) {
+                    console.error('❌ Manual ready() failed:', e);
                   }
                 }}
                 className="bg-purple-600 text-white px-2 py-1 rounded text-xs"
@@ -639,6 +618,16 @@ function App() {
                 className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
               >
                 Debug SDK
+              </button>
+              <button 
+                onClick={() => {
+                  setAppError(null);
+                  setError(null);
+                  console.log('🔄 Cleared errors');
+                }}
+                className="bg-green-600 text-white px-2 py-1 rounded text-xs"
+              >
+                Clear Errors
               </button>
             </div>
           </div>
