@@ -14,109 +14,197 @@ const useFarcasterWallet = () => {
 
   // Detect if running inside Farcaster
   useEffect(() => {
-    const checkFarcasterEnvironment = () => {
+    const initializeFarcaster = async () => {
       const inFarcaster = window.parent !== window || 
                          window.location.search.includes('farcaster') ||
                          navigator.userAgent.includes('Farcaster') ||
                          window.webkit?.messageHandlers?.farcaster;
       setIsInFarcaster(inFarcaster);
       
-      // Initialize Farcaster SDK if available
-      if (inFarcaster) {
-        // Try different SDK methods
-        if (window.farcasterSdk?.actions?.ready) {
-          window.farcasterSdk.actions.ready();
-          console.log('Farcaster SDK ready() called');
-        } else if (window.sdk?.actions?.ready) {
+      // Multiple approaches to call SDK ready()
+      const callReady = () => {
+        let readyCalled = false;
+        
+        // Method 1: Try immediate call
+        if (window.sdk?.actions?.ready && !readyCalled) {
           window.sdk.actions.ready();
-          console.log('SDK ready() called');
-        } else {
-          // Fallback for different SDK versions
-          setTimeout(() => {
-            if (window.farcasterSdk?.actions?.ready) {
-              window.farcasterSdk.actions.ready();
-            } else if (window.sdk?.actions?.ready) {
-              window.sdk.actions.ready();
-            }
-          }, 1000);
+          readyCalled = true;
+          console.log('✅ SDK ready() called via window.sdk');
         }
         
-        // Auto-connect if Farcaster user data is available
-        autoConnectFarcaster();
+        // Method 2: Try farcasterSdk
+        if (window.farcasterSdk?.actions?.ready && !readyCalled) {
+          window.farcasterSdk.actions.ready();
+          readyCalled = true;
+          console.log('✅ SDK ready() called via window.farcasterSdk');
+        }
+        
+        // Method 3: Try parent postMessage
+        if (!readyCalled && window.parent !== window) {
+          try {
+            window.parent.postMessage({ type: 'miniapp-ready' }, '*');
+            readyCalled = true;
+            console.log('✅ Ready called via postMessage');
+          } catch (e) {
+            console.log('PostMessage failed:', e);
+          }
+        }
+        
+        return readyCalled;
+      };
+      
+      // Try calling ready immediately
+      const immediate = callReady();
+      
+      // If not successful, try after delays
+      if (!immediate) {
+        setTimeout(() => {
+          const delayed1 = callReady();
+          if (!delayed1) {
+            setTimeout(() => {
+              callReady();
+            }, 2000);
+          }
+        }, 500);
+      }
+      
+      // Auto-connect if in Farcaster
+      if (inFarcaster) {
+        setTimeout(() => {
+          autoConnectFarcaster();
+        }, 1000);
       }
     };
     
-    checkFarcasterEnvironment();
+    initializeFarcaster();
   }, []);
 
   const autoConnectFarcaster = async () => {
     try {
-      // Method 1: Check for Farcaster SDK context
-      if (window.farcasterSdk?.context) {
-        const context = await window.farcasterSdk.context;
-        if (context.user) {
-          setFid(context.user.fid);
-          setUsername(context.user.username);
-          setAddress(context.user.custody || context.user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-          setIsConnected(true);
-          console.log('Connected via Farcaster SDK context:', context.user);
-          return;
+      console.log('🔍 Attempting auto-connect...');
+      console.log('Available objects:', {
+        sdk: !!window.sdk,
+        farcasterSdk: !!window.farcasterSdk,
+        farcaster: !!window.farcaster,
+        sdkContext: !!window.sdk?.context,
+        farcasterSdkContext: !!window.farcasterSdk?.context
+      });
+      
+      let connected = false;
+      
+      // Method 1: Try SDK context
+      if (window.sdk?.context && !connected) {
+        try {
+          const context = window.sdk.context;
+          console.log('SDK context:', context);
+          
+          if (context.user) {
+            const user = context.user;
+            setFid(user.fid);
+            setUsername(user.username || user.displayName);
+            setAddress(user.custody || user.verifications?.[0] || user.address);
+            setIsConnected(true);
+            connected = true;
+            console.log('✅ Connected via SDK context:', user);
+          }
+        } catch (err) {
+          console.log('SDK context error:', err);
         }
       }
       
-      // Method 2: Check for SDK user
-      if (window.sdk?.context?.user) {
-        const user = window.sdk.context.user;
-        setFid(user.fid);
-        setUsername(user.username);
-        setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-        setIsConnected(true);
-        console.log('Connected via SDK context:', user);
-        return;
+      // Method 2: Try farcasterSdk context
+      if (window.farcasterSdk?.context && !connected) {
+        try {
+          const context = await window.farcasterSdk.context;
+          console.log('FarcasterSDK context:', context);
+          
+          if (context.user) {
+            const user = context.user;
+            setFid(user.fid);
+            setUsername(user.username || user.displayName);
+            setAddress(user.custody || user.verifications?.[0] || user.address);
+            setIsConnected(true);
+            connected = true;
+            console.log('✅ Connected via FarcasterSDK context:', user);
+          }
+        } catch (err) {
+          console.log('FarcasterSDK context error:', err);
+        }
       }
       
-      // Method 3: Check window.farcaster object
-      if (window.farcaster?.user) {
-        const user = window.farcaster.user;
-        setFid(user.fid);
-        setUsername(user.username);
-        setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-        setIsConnected(true);
-        console.log('Connected via window.farcaster:', user);
-        return;
+      // Method 3: Try getting user from SDK directly
+      if (window.sdk?.getUser && !connected) {
+        try {
+          const user = await window.sdk.getUser();
+          console.log('SDK getUser:', user);
+          
+          if (user) {
+            setFid(user.fid);
+            setUsername(user.username || user.displayName);
+            setAddress(user.custody || user.verifications?.[0] || user.address);
+            setIsConnected(true);
+            connected = true;
+            console.log('✅ Connected via SDK getUser:', user);
+          }
+        } catch (err) {
+          console.log('SDK getUser error:', err);
+        }
       }
       
-      // Method 4: Check URL params for Farcaster data
-      const urlParams = new URLSearchParams(window.location.search);
-      const fidParam = urlParams.get('fid');
-      const usernameParam = urlParams.get('username');
-      
-      if (fidParam && usernameParam) {
-        setFid(parseInt(fidParam));
-        setUsername(usernameParam);
-        setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-        setIsConnected(true);
-        console.log('Connected via URL params:', { fid: fidParam, username: usernameParam });
-        return;
+      // Method 4: Check URL parameters
+      if (!connected) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const fidParam = urlParams.get('fid');
+        const usernameParam = urlParams.get('username');
+        const addressParam = urlParams.get('address');
+        
+        console.log('URL params:', { fid: fidParam, username: usernameParam, address: addressParam });
+        
+        if (fidParam && usernameParam) {
+          setFid(parseInt(fidParam));
+          setUsername(usernameParam);
+          setAddress(addressParam || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+          setIsConnected(true);
+          connected = true;
+          console.log('✅ Connected via URL params');
+        }
       }
       
-      // Method 5: Try to get context after delay (sometimes SDK loads late)
-      setTimeout(async () => {
-        if (window.farcasterSdk?.context) {
+      // Method 5: Listen for context updates
+      if (!connected && isInFarcaster) {
+        const contextInterval = setInterval(async () => {
           try {
-            const context = await window.farcasterSdk.context;
-            if (context.user && !isConnected) {
-              setFid(context.user.fid);
-              setUsername(context.user.username);
-              setAddress(context.user.custody || context.user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+            const context = window.sdk?.context || await window.farcasterSdk?.context;
+            if (context?.user && !isConnected) {
+              const user = context.user;
+              setFid(user.fid);
+              setUsername(user.username || user.displayName);
+              setAddress(user.custody || user.verifications?.[0] || user.address);
               setIsConnected(true);
-              console.log('Late connected via Farcaster SDK:', context.user);
+              clearInterval(contextInterval);
+              console.log('✅ Connected via context polling:', user);
             }
           } catch (err) {
-            console.log('Late connection attempt failed:', err);
+            // Silent fail for polling
           }
-        }
-      }, 2000);
+        }, 1000);
+        
+        // Clear interval after 10 seconds
+        setTimeout(() => clearInterval(contextInterval), 10000);
+      }
+      
+      // If no real connection after 3 seconds, use demo but mark it
+      if (!connected) {
+        setTimeout(() => {
+          if (!isConnected) {
+            console.log('⚠️ Using demo data as fallback');
+            setFid(12345);
+            setUsername('demo_user');
+            setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+            setIsConnected(true);
+          }
+        }, 3000);
+      }
       
     } catch (error) {
       console.error('Auto-connect failed:', error);
@@ -126,39 +214,49 @@ const useFarcasterWallet = () => {
   const connect = async () => {
     setIsConnecting(true);
     try {
+      console.log('🔄 Manual connect started...');
+      let connected = false;
+      
       if (isInFarcaster) {
-        // Try to get real Farcaster user data
-        let connected = false;
+        // Try to get real Farcaster user data with multiple methods
         
-        // Method 1: Use Farcaster SDK
+        // Method 1: SDK context
+        if (window.sdk?.context && !connected) {
+          try {
+            const context = window.sdk.context;
+            if (context.user) {
+              const user = context.user;
+              setAddress(user.custody || user.verifications?.[0] || user.address || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+              setFid(user.fid);
+              setUsername(user.username || user.displayName);
+              setIsConnected(true);
+              connected = true;
+              console.log('✅ Manual connect via SDK context:', user);
+            }
+          } catch (err) {
+            console.log('SDK context manual connect failed:', err);
+          }
+        }
+        
+        // Method 2: FarcasterSDK context
         if (window.farcasterSdk?.context && !connected) {
           try {
             const context = await window.farcasterSdk.context;
             if (context.user) {
-              setAddress(context.user.custody || context.user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-              setFid(context.user.fid);
-              setUsername(context.user.username);
+              const user = context.user;
+              setAddress(user.custody || user.verifications?.[0] || user.address || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+              setFid(user.fid);
+              setUsername(user.username || user.displayName);
               setIsConnected(true);
               connected = true;
-              console.log('Manual connect via SDK:', context.user);
+              console.log('✅ Manual connect via FarcasterSDK context:', user);
             }
           } catch (err) {
-            console.log('SDK connect failed:', err);
+            console.log('FarcasterSDK context manual connect failed:', err);
           }
         }
         
-        // Method 2: Use window.sdk
-        if (window.sdk?.context?.user && !connected) {
-          const user = window.sdk.context.user;
-          setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
-          setFid(user.fid);
-          setUsername(user.username);
-          setIsConnected(true);
-          connected = true;
-          console.log('Manual connect via window.sdk:', user);
-        }
-        
-        // Method 3: Use built-in wallet if available
+        // Method 3: Try wallet connection
         if (window.farcaster?.wallet && !connected) {
           try {
             const result = await window.farcaster.wallet.connect();
@@ -167,20 +265,37 @@ const useFarcasterWallet = () => {
             setUsername(result.username);
             setIsConnected(true);
             connected = true;
-            console.log('Manual connect via wallet:', result);
+            console.log('✅ Manual connect via wallet:', result);
           } catch (err) {
             console.log('Wallet connect failed:', err);
           }
         }
         
-        // Fallback: Use mock data if no real connection
+        // Method 4: Try SDK actions
+        if (window.sdk?.actions?.connect && !connected) {
+          try {
+            const result = await window.sdk.actions.connect();
+            if (result) {
+              setAddress(result.address || result.custody || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+              setFid(result.fid);
+              setUsername(result.username || result.displayName);
+              setIsConnected(true);
+              connected = true;
+              console.log('✅ Manual connect via SDK actions:', result);
+            }
+          } catch (err) {
+            console.log('SDK actions connect failed:', err);
+          }
+        }
+        
+        // Fallback with simulation if no real connection
         if (!connected) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
           setFid(12345);
           setUsername('demo_user');
           setIsConnected(true);
-          console.log('Using fallback mock data');
+          console.log('⚠️ Using demo data for manual connect');
         }
       } else {
         // Regular web connection simulation
@@ -191,7 +306,7 @@ const useFarcasterWallet = () => {
         setIsConnected(true);
       }
     } catch (error) {
-      console.error('Connection failed:', error);
+      console.error('Manual connection failed:', error);
       alert('Failed to connect wallet. Please try again.');
     } finally {
       setIsConnecting(false);
@@ -237,27 +352,35 @@ function App() {
   const fetchApprovals = async (userAddress, chainConfig) => {
     setLoading(true);
     setError(null);
+    console.log(`🚀 Starting fetchApprovals for ${userAddress} on ${chainConfig.value}`);
     
     try {
       const approvalsList = [];
       
+      // Build API URLs
+      const tokenUrl = `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`;
+      const normalUrl = `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`;
+      
+      console.log('📡 Calling token API:', tokenUrl);
+      console.log('📡 Calling normal API:', normalUrl);
+      
       // 1. Fetch ERC20 token transactions to find approvals
-      const tokenResponse = await fetch(
-        `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`
-      );
+      const tokenResponse = await fetch(tokenUrl);
       const tokenData = await tokenResponse.json();
+      console.log('📊 Token API response:', tokenData);
       
       // 2. Fetch normal transactions to find contract interactions
-      const normalResponse = await fetch(
-        `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`
-      );
+      const normalResponse = await fetch(normalUrl);
       const normalData = await normalResponse.json();
+      console.log('📊 Normal API response:', normalData);
       
       // Process token transactions to identify approvals
       const uniqueApprovals = new Map();
       
-      if (tokenData.status === '1' && tokenData.result) {
-        tokenData.result.slice(0, 50).forEach(tx => {
+      if (tokenData.status === '1' && tokenData.result && tokenData.result.length > 0) {
+        console.log(`✅ Found ${tokenData.result.length} token transactions`);
+        
+        tokenData.result.slice(0, 50).forEach((tx, index) => {
           if (tx.to && tx.tokenSymbol && tx.contractAddress && tx.value !== '0') {
             const key = `${tx.contractAddress}-${tx.to}`;
             const existing = uniqueApprovals.get(key);
@@ -270,58 +393,71 @@ function App() {
                 contract: tx.contractAddress,
                 spender: tx.to,
                 spenderName: getSpenderName(tx.to),
-                amount: tx.value === '0' ? 'Revoked' : 'Unlimited',
+                amount: tx.value === '0' ? 'Revoked' : formatTokenAmount(tx.value, tx.tokenDecimal),
                 type: 'Token',
                 timestamp: tx.timeStamp,
                 lastActivity: new Date(tx.timeStamp * 1000).toLocaleDateString(),
                 txHash: tx.hash,
                 riskLevel: assessRiskLevel(tx.to, tx.tokenSymbol)
               });
+              console.log(`📝 Added token approval ${index + 1}:`, tx.tokenSymbol, 'to', getSpenderName(tx.to));
             }
           }
         });
+      } else {
+        console.log('⚠️ No token transactions found or API error:', tokenData);
       }
       
       // Process normal transactions for contract approvals
-      if (normalData.status === '1' && normalData.result) {
-        normalData.result.slice(0, 30).forEach(tx => {
+      if (normalData.status === '1' && normalData.result && normalData.result.length > 0) {
+        console.log(`✅ Found ${normalData.result.length} normal transactions`);
+        
+        normalData.result.slice(0, 30).forEach((tx, index) => {
           if (tx.to && tx.input && tx.input.length > 10 && tx.value === '0') {
-            // Check if it's an approval transaction (methodId: 0x095ea7b3)
+            // Check if it's an approval transaction (methodId: 0x095ea7b3 for ERC20, 0xa22cb465 for NFT)
             if (tx.input.startsWith('0x095ea7b3') || tx.input.startsWith('0xa22cb465')) {
-              const key = `${tx.to}-${tx.from}`;
+              const key = `${tx.to}-contract-${tx.hash}`;
               if (!uniqueApprovals.has(key)) {
                 uniqueApprovals.set(key, {
                   id: key,
-                  name: 'Contract Interaction',
-                  symbol: 'APPROVAL',
+                  name: tx.input.startsWith('0xa22cb465') ? 'NFT Collection' : 'Token Contract',
+                  symbol: tx.input.startsWith('0xa22cb465') ? 'NFT' : 'TOKEN',
                   contract: tx.to,
                   spender: tx.to,
                   spenderName: getSpenderName(tx.to),
-                  amount: 'Smart Contract',
+                  amount: tx.input.startsWith('0xa22cb465') ? 'All NFTs' : 'Unlimited',
                   type: tx.input.startsWith('0xa22cb465') ? 'NFT' : 'Token',
                   timestamp: tx.timeStamp,
                   lastActivity: new Date(tx.timeStamp * 1000).toLocaleDateString(),
                   txHash: tx.hash,
                   riskLevel: assessRiskLevel(tx.to, 'CONTRACT')
                 });
+                console.log(`📝 Added contract approval ${index + 1}:`, getSpenderName(tx.to));
               }
             }
           }
         });
+      } else {
+        console.log('⚠️ No normal transactions found or API error:', normalData);
       }
       
       const finalApprovals = Array.from(uniqueApprovals.values())
         .filter(approval => approval.amount !== 'Revoked')
         .slice(0, 20);
       
+      console.log(`✅ Final approvals count: ${finalApprovals.length}`);
       setApprovals(finalApprovals);
       
+      if (finalApprovals.length === 0) {
+        console.log('ℹ️ No active approvals found - this is actually good for security!');
+      }
+      
     } catch (err) {
+      console.error('❌ API Error:', err);
       setError(`Failed to fetch real approvals: ${err.message}`);
-      console.error('API Error:', err);
       
       // Fallback demo data if API fails
-      setApprovals([
+      const demoApprovals = [
         {
           id: 'demo-real-usdc',
           name: 'USD Coin',
@@ -333,10 +469,35 @@ function App() {
           type: 'Token',
           lastActivity: new Date().toLocaleDateString(),
           riskLevel: 'low'
+        },
+        {
+          id: 'demo-suspicious',
+          name: 'Suspicious Token',
+          symbol: 'SUS',
+          contract: '0x1234567890123456789012345678901234567890',
+          spender: '0xAbCdEf1234567890123456789012345678901234',
+          spenderName: 'Unknown Drainer',
+          amount: 'Unlimited',
+          type: 'Token',
+          lastActivity: new Date().toLocaleDateString(),
+          riskLevel: 'high'
         }
-      ]);
+      ];
+      setApprovals(demoApprovals);
+      console.log('🔄 Loaded demo data as fallback');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Helper function to format token amounts
+  const formatTokenAmount = (value, decimals) => {
+    try {
+      const num = parseFloat(value) / Math.pow(10, parseInt(decimals) || 18);
+      if (num > 1000000) return 'Unlimited';
+      return num.toFixed(2);
+    } catch {
+      return 'Unlimited';
     }
   };
   
@@ -389,12 +550,14 @@ function App() {
   // Fetch approvals when wallet connects or chain changes
   useEffect(() => {
     if (isWalletConnected && address) {
+      console.log(`🔍 Fetching approvals for address: ${address} on ${selectedChain}`);
       const chainConfig = chains.find(chain => chain.value === selectedChain);
       if (chainConfig && !chainConfig.disabled) {
         fetchApprovals(address, chainConfig);
       }
     } else {
       setApprovals([]);
+      console.log('❌ Not fetching approvals - wallet not connected or no address');
     }
   }, [isWalletConnected, address, selectedChain]);
 
@@ -450,6 +613,34 @@ function App() {
             <p>Debug: In Farcaster={isInFarcaster.toString()}, Connected={isWalletConnected.toString()}</p>
             {fid && <p>FID: {fid}, Username: {username}</p>}
             {address && <p>Address: {formatAddress(address)}</p>}
+            <div className="flex gap-2 mt-2">
+              <button 
+                onClick={() => {
+                  if (window.sdk?.actions?.ready) {
+                    window.sdk.actions.ready();
+                    console.log('✅ Manually called SDK ready()');
+                  } else {
+                    console.log('❌ SDK not available');
+                  }
+                }}
+                className="bg-purple-600 text-white px-2 py-1 rounded text-xs"
+              >
+                Call Ready()
+              </button>
+              <button 
+                onClick={() => {
+                  console.log('Available objects:', {
+                    sdk: window.sdk,
+                    farcasterSdk: window.farcasterSdk,
+                    context: window.sdk?.context,
+                    user: window.sdk?.context?.user
+                  });
+                }}
+                className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+              >
+                Debug SDK
+              </button>
+            </div>
           </div>
         )}
         {/* Header section */}
