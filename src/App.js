@@ -65,133 +65,157 @@ function App() {
     { name: 'Monad (Coming Soon)', value: 'monad', apiUrl: '', disabled: true },
   ];
 
-  // Fetch real approval data from blockchain
+  // Fetch real approval data from blockchain APIs
   const fetchApprovals = async (userAddress, chainConfig) => {
     setLoading(true);
     setError(null);
     
     try {
-      // Fetch ERC20 token transfers to identify approvals
-      const response = await fetch(
+      const approvalsList = [];
+      
+      // 1. Fetch ERC20 token transactions to find approvals
+      const tokenResponse = await fetch(
         `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`
       );
+      const tokenData = await tokenResponse.json();
       
-      const data = await response.json();
+      // 2. Fetch normal transactions to find contract interactions
+      const normalResponse = await fetch(
+        `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`
+      );
+      const normalData = await normalResponse.json();
       
-      if (data.status === '1' && data.result) {
-        // Process transactions to find unique approvals
-        const tokenApprovals = {};
-        
-        data.result.slice(0, 10).forEach(tx => {
-          if (tx.to && tx.tokenSymbol && tx.contractAddress) {
+      // Process token transactions to identify approvals
+      const uniqueApprovals = new Map();
+      
+      if (tokenData.status === '1' && tokenData.result) {
+        tokenData.result.slice(0, 50).forEach(tx => {
+          if (tx.to && tx.tokenSymbol && tx.contractAddress && tx.value !== '0') {
             const key = `${tx.contractAddress}-${tx.to}`;
-            if (!tokenApprovals[key]) {
-              tokenApprovals[key] = {
+            const existing = uniqueApprovals.get(key);
+            
+            if (!existing || parseInt(tx.timeStamp) > parseInt(existing.timestamp)) {
+              uniqueApprovals.set(key, {
                 id: key,
                 name: tx.tokenName || tx.tokenSymbol,
                 symbol: tx.tokenSymbol,
                 contract: tx.contractAddress,
                 spender: tx.to,
-                amount: 'Unlimited',
+                spenderName: getSpenderName(tx.to),
+                amount: tx.value === '0' ? 'Revoked' : 'Unlimited',
                 type: 'Token',
                 timestamp: tx.timeStamp,
                 lastActivity: new Date(tx.timeStamp * 1000).toLocaleDateString(),
-                riskLevel: Math.random() > 0.7 ? 'high' : Math.random() > 0.4 ? 'medium' : 'low'
-              };
+                txHash: tx.hash,
+                riskLevel: assessRiskLevel(tx.to, tx.tokenSymbol)
+              });
             }
           }
         });
-
-        // Add some demo approvals for better UX
-        const demoApprovals = [
-          {
-            id: 'uniswap-usdc',
-            name: 'USD Coin',
-            symbol: 'USDC',
-            contract: '0xA0b86a33E6417Fad0073EDa88d1AAAA5b9E1E2D5',
-            spender: '0xE592427A0AEce92De3Edee1F18E0157C05861564',
-            spenderName: 'Uniswap V3 Router',
-            amount: 'Unlimited',
-            type: 'Token',
-            lastActivity: '2024-07-10',
-            riskLevel: 'low'
-          },
-          {
-            id: 'suspicious-dai',
-            name: 'Dai Stablecoin',
-            symbol: 'DAI',
-            contract: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-            spender: '0x1234567890123456789012345678901234567890',
-            spenderName: 'Unknown Contract',
-            amount: '500 DAI',
-            type: 'Token',
-            lastActivity: '2024-07-11',
-            riskLevel: 'high'
-          },
-          {
-            id: 'opensea-bayc',
-            name: 'Bored Ape Yacht Club',
-            symbol: 'BAYC',
-            contract: '0xBC4CA0EdA7647A8aB7C2061c2E118A18a93fE367',
-            spender: '0x00000000006c3852cbEf3e08E8dF289169EdE581',
-            spenderName: 'OpenSea Registry',
-            amount: 'All NFTs',
-            type: 'NFT',
-            lastActivity: '2024-06-15',
-            riskLevel: 'medium'
-          }
-        ];
-
-        setApprovals([...Object.values(tokenApprovals), ...demoApprovals]);
-      } else {
-        // Fallback to demo data if API fails
-        setApprovals([
-          {
-            id: 'demo-usdc',
-            name: 'USD Coin',
-            symbol: 'USDC',
-            contract: '0xA0b86a33E6417Fad0073EDa88d1AAAA5b9E1E2D5',
-            spender: '0xE592427A0AEce92De3Edee1F18E0157C05861564',
-            spenderName: 'Uniswap V3 Router',
-            amount: 'Unlimited',
-            type: 'Token',
-            lastActivity: '2024-07-10',
-            riskLevel: 'low'
-          },
-          {
-            id: 'demo-suspicious',
-            name: 'Suspicious Token',
-            symbol: 'SUS',
-            contract: '0x1234567890123456789012345678901234567890',
-            spender: '0xAbCdEf1234567890123456789012345678901234',
-            spenderName: 'Unknown Drainer',
-            amount: 'Unlimited',
-            type: 'Token',
-            lastActivity: '2024-07-11',
-            riskLevel: 'high'
-          }
-        ]);
       }
+      
+      // Process normal transactions for contract approvals
+      if (normalData.status === '1' && normalData.result) {
+        normalData.result.slice(0, 30).forEach(tx => {
+          if (tx.to && tx.input && tx.input.length > 10 && tx.value === '0') {
+            // Check if it's an approval transaction (methodId: 0x095ea7b3)
+            if (tx.input.startsWith('0x095ea7b3') || tx.input.startsWith('0xa22cb465')) {
+              const key = `${tx.to}-${tx.from}`;
+              if (!uniqueApprovals.has(key)) {
+                uniqueApprovals.set(key, {
+                  id: key,
+                  name: 'Contract Interaction',
+                  symbol: 'APPROVAL',
+                  contract: tx.to,
+                  spender: tx.to,
+                  spenderName: getSpenderName(tx.to),
+                  amount: 'Smart Contract',
+                  type: tx.input.startsWith('0xa22cb465') ? 'NFT' : 'Token',
+                  timestamp: tx.timeStamp,
+                  lastActivity: new Date(tx.timeStamp * 1000).toLocaleDateString(),
+                  txHash: tx.hash,
+                  riskLevel: assessRiskLevel(tx.to, 'CONTRACT')
+                });
+              }
+            }
+          }
+        });
+      }
+      
+      const finalApprovals = Array.from(uniqueApprovals.values())
+        .filter(approval => approval.amount !== 'Revoked')
+        .slice(0, 20);
+      
+      setApprovals(finalApprovals);
+      
     } catch (err) {
-      setError(`Failed to fetch approvals: ${err.message}`);
-      // Fallback to demo data on error
+      setError(`Failed to fetch real approvals: ${err.message}`);
+      console.error('API Error:', err);
+      
+      // Fallback demo data if API fails
       setApprovals([
         {
-          id: 'error-demo',
-          name: 'Demo Token',
-          symbol: 'DEMO',
-          contract: '0x0000000000000000000000000000000000000000',
-          spender: '0x1111111111111111111111111111111111111111',
-          spenderName: 'Demo Spender',
+          id: 'demo-real-usdc',
+          name: 'USD Coin',
+          symbol: 'USDC',
+          contract: '0xA0b86a33E6417Fad0073EDa88d1AAAA5b9E1E2D5',
+          spender: '0xE592427A0AEce92De3Edee1F18E0157C05861564',
+          spenderName: 'Uniswap V3 Router',
           amount: 'Unlimited',
           type: 'Token',
-          lastActivity: 'Today',
+          lastActivity: new Date().toLocaleDateString(),
           riskLevel: 'low'
         }
       ]);
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Helper function to identify known spenders
+  const getSpenderName = (address) => {
+    const knownSpenders = {
+      '0xE592427A0AEce92De3Edee1F18E0157C05861564': 'Uniswap V3 Router',
+      '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D': 'Uniswap V2 Router',
+      '0x00000000006c3852cbEf3e08E8dF289169EdE581': 'OpenSea Registry',
+      '0x1E0049783F008A0085193E00003D00cd54003c71': 'OpenSea Conduit',
+      '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad': 'Universal Router',
+      '0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45': 'Uniswap Universal Router',
+      '0x1111111254EEB25477B68fb85Ed929f73A960582': '1inch Router',
+      '0x80C67432656d59144cEFf962E8fAF8926599bCF8': 'Kyber Router',
+      '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F': 'SushiSwap Router'
+    };
+    
+    return knownSpenders[address.toLowerCase()] || 'Unknown Contract';
+  };
+  
+  // Helper function to assess risk level
+  const assessRiskLevel = (spenderAddress, tokenSymbol) => {
+    const safeSpenders = [
+      '0xE592427A0AEce92De3Edee1F18E0157C05861564', // Uniswap V3
+      '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap V2
+      '0x00000000006c3852cbEf3e08E8dF289169EdE581', // OpenSea
+      '0x1E0049783F008A0085193E00003D00cd54003c71', // OpenSea Conduit
+      '0x1111111254EEB25477B68fb85Ed929f73A960582'  // 1inch
+    ];
+    
+    const riskyTokens = ['SHIB', 'DOGE', 'PEPE', 'FLOKI'];
+    
+    if (safeSpenders.includes(spenderAddress.toLowerCase())) {
+      return 'low';
+    }
+    
+    if (riskyTokens.includes(tokenSymbol)) {
+      return 'medium';
+    }
+    
+    // Unknown contracts are high risk
+    const spenderName = getSpenderName(spenderAddress);
+    if (spenderName === 'Unknown Contract') {
+      return 'high';
+    }
+    
+    return 'medium';
   };
 
   // Fetch approvals when wallet connects or chain changes
@@ -254,7 +278,23 @@ function App() {
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
         {/* Header section */}
         <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
-          <h1 className="text-3xl font-bold text-purple-200 mb-4 sm:mb-0">🛡️ FarGuard</h1>
+          <div className="flex items-center gap-3 mb-4 sm:mb-0">
+            {/* FarGuard Logo */}
+            <img 
+              src="https://fgrevoke.vercel.app/farguard-logo.png" 
+              alt="FarGuard Logo" 
+              className="w-8 h-8 rounded-lg"
+              onError={(e) => {
+                // Fallback to shield icon if image fails to load
+                e.target.style.display = 'none';
+                e.target.nextElementSibling.style.display = 'flex';
+              }}
+            />
+            <div className="w-8 h-8 bg-purple-600 rounded-lg items-center justify-center hidden">
+              <Shield className="w-5 h-5 text-purple-200" />
+            </div>
+            <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
+          </div>
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
             {/* Chain Selection Dropdown */}
             <div className="relative w-full sm:w-auto">
@@ -323,9 +363,14 @@ function App() {
           ) : (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-purple-200">
-                  Your Approvals ({selectedChain})
-                </h2>
+                <div>
+                  <h2 className="text-2xl font-bold text-purple-200">
+                    Your Contract Approvals ({selectedChain})
+                  </h2>
+                  <p className="text-sm text-purple-400 mt-1">
+                    Real-time tracking of your signed contracts and token approvals
+                  </p>
+                </div>
                 <button
                   onClick={() => {
                     const chainConfig = chains.find(chain => chain.value === selectedChain);
@@ -345,7 +390,7 @@ function App() {
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="bg-purple-700 rounded-lg p-4 text-center">
                   <p className="text-2xl font-bold text-white">{approvals.length}</p>
-                  <p className="text-sm text-purple-200">Total Approvals</p>
+                  <p className="text-sm text-purple-200">Signed Contracts</p>
                 </div>
                 <div className="bg-purple-700 rounded-lg p-4 text-center">
                   <p className="text-2xl font-bold text-red-400">
@@ -357,7 +402,7 @@ function App() {
                   <p className="text-2xl font-bold text-green-400">
                     {approvals.filter(a => a.riskLevel === 'low').length}
                   </p>
-                  <p className="text-sm text-purple-200">Safe</p>
+                  <p className="text-sm text-purple-200">Trusted</p>
                 </div>
               </div>
 
@@ -399,11 +444,16 @@ function App() {
                               {approval.name} ({approval.symbol})
                             </h3>
                             <p className="text-xs text-purple-300 mt-1">
-                              {approval.spenderName || formatAddress(approval.spender)}
+                              Approved to: {approval.spenderName || formatAddress(approval.spender)}
                             </p>
                             <p className="text-xs text-purple-400">
                               Contract: {formatAddress(approval.contract)}
                             </p>
+                            {approval.txHash && (
+                              <p className="text-xs text-purple-400">
+                                Tx: {formatAddress(approval.txHash)}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-opacity-20 ${
@@ -426,11 +476,17 @@ function App() {
                           onClick={() => handleRevokeApproval(approval.id)}
                           className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-3 rounded-md transition-colors"
                         >
-                          Revoke
+                          Revoke Approval
                         </button>
-                        <button className="px-3 py-2 text-purple-300 hover:text-white transition-colors">
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
+                        {approval.txHash && (
+                          <button 
+                            onClick={() => window.open(`https://etherscan.io/tx/${approval.txHash}`, '_blank')}
+                            className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
+                            title="View on Etherscan"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
