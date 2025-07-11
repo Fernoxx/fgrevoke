@@ -22,13 +22,26 @@ const useFarcasterWallet = () => {
       setIsInFarcaster(inFarcaster);
       
       // Initialize Farcaster SDK if available
-      if (window.farcasterSdk) {
-        window.farcasterSdk.actions.ready();
-        console.log('Farcaster SDK initialized');
-      }
-      
-      // Auto-connect if Farcaster user data is available
       if (inFarcaster) {
+        // Try different SDK methods
+        if (window.farcasterSdk?.actions?.ready) {
+          window.farcasterSdk.actions.ready();
+          console.log('Farcaster SDK ready() called');
+        } else if (window.sdk?.actions?.ready) {
+          window.sdk.actions.ready();
+          console.log('SDK ready() called');
+        } else {
+          // Fallback for different SDK versions
+          setTimeout(() => {
+            if (window.farcasterSdk?.actions?.ready) {
+              window.farcasterSdk.actions.ready();
+            } else if (window.sdk?.actions?.ready) {
+              window.sdk.actions.ready();
+            }
+          }, 1000);
+        }
+        
+        // Auto-connect if Farcaster user data is available
         autoConnectFarcaster();
       }
     };
@@ -38,29 +51,73 @@ const useFarcasterWallet = () => {
 
   const autoConnectFarcaster = async () => {
     try {
-      // Check for Farcaster context
-      if (window.farcaster) {
-        const user = await window.farcaster.getUser();
-        if (user) {
-          setFid(user.fid);
-          setUsername(user.username);
-          setAddress(user.address || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+      // Method 1: Check for Farcaster SDK context
+      if (window.farcasterSdk?.context) {
+        const context = await window.farcasterSdk.context;
+        if (context.user) {
+          setFid(context.user.fid);
+          setUsername(context.user.username);
+          setAddress(context.user.custody || context.user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
           setIsConnected(true);
+          console.log('Connected via Farcaster SDK context:', context.user);
           return;
         }
       }
       
-      // Check URL params for Farcaster data
+      // Method 2: Check for SDK user
+      if (window.sdk?.context?.user) {
+        const user = window.sdk.context.user;
+        setFid(user.fid);
+        setUsername(user.username);
+        setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+        setIsConnected(true);
+        console.log('Connected via SDK context:', user);
+        return;
+      }
+      
+      // Method 3: Check window.farcaster object
+      if (window.farcaster?.user) {
+        const user = window.farcaster.user;
+        setFid(user.fid);
+        setUsername(user.username);
+        setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+        setIsConnected(true);
+        console.log('Connected via window.farcaster:', user);
+        return;
+      }
+      
+      // Method 4: Check URL params for Farcaster data
       const urlParams = new URLSearchParams(window.location.search);
       const fidParam = urlParams.get('fid');
       const usernameParam = urlParams.get('username');
       
       if (fidParam && usernameParam) {
-        setFid(fidParam);
+        setFid(parseInt(fidParam));
         setUsername(usernameParam);
         setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
         setIsConnected(true);
+        console.log('Connected via URL params:', { fid: fidParam, username: usernameParam });
+        return;
       }
+      
+      // Method 5: Try to get context after delay (sometimes SDK loads late)
+      setTimeout(async () => {
+        if (window.farcasterSdk?.context) {
+          try {
+            const context = await window.farcasterSdk.context;
+            if (context.user && !isConnected) {
+              setFid(context.user.fid);
+              setUsername(context.user.username);
+              setAddress(context.user.custody || context.user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+              setIsConnected(true);
+              console.log('Late connected via Farcaster SDK:', context.user);
+            }
+          } catch (err) {
+            console.log('Late connection attempt failed:', err);
+          }
+        }
+      }, 2000);
+      
     } catch (error) {
       console.error('Auto-connect failed:', error);
     }
@@ -70,20 +127,60 @@ const useFarcasterWallet = () => {
     setIsConnecting(true);
     try {
       if (isInFarcaster) {
-        // Use Farcaster's built-in wallet if available
-        if (window.farcaster?.wallet) {
-          const result = await window.farcaster.wallet.connect();
-          setAddress(result.address);
-          setFid(result.fid);
-          setUsername(result.username);
+        // Try to get real Farcaster user data
+        let connected = false;
+        
+        // Method 1: Use Farcaster SDK
+        if (window.farcasterSdk?.context && !connected) {
+          try {
+            const context = await window.farcasterSdk.context;
+            if (context.user) {
+              setAddress(context.user.custody || context.user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+              setFid(context.user.fid);
+              setUsername(context.user.username);
+              setIsConnected(true);
+              connected = true;
+              console.log('Manual connect via SDK:', context.user);
+            }
+          } catch (err) {
+            console.log('SDK connect failed:', err);
+          }
+        }
+        
+        // Method 2: Use window.sdk
+        if (window.sdk?.context?.user && !connected) {
+          const user = window.sdk.context.user;
+          setAddress(user.custody || user.verifications?.[0] || '0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
+          setFid(user.fid);
+          setUsername(user.username);
           setIsConnected(true);
-        } else {
-          // Simulate connection in Farcaster environment
+          connected = true;
+          console.log('Manual connect via window.sdk:', user);
+        }
+        
+        // Method 3: Use built-in wallet if available
+        if (window.farcaster?.wallet && !connected) {
+          try {
+            const result = await window.farcaster.wallet.connect();
+            setAddress(result.address);
+            setFid(result.fid);
+            setUsername(result.username);
+            setIsConnected(true);
+            connected = true;
+            console.log('Manual connect via wallet:', result);
+          } catch (err) {
+            console.log('Wallet connect failed:', err);
+          }
+        }
+        
+        // Fallback: Use mock data if no real connection
+        if (!connected) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           setAddress('0x742d35Cc8565C1Ea5B27faBc9B0D5b03e6c49e3F');
           setFid(12345);
-          setUsername('farcaster_user');
+          setUsername('demo_user');
           setIsConnected(true);
+          console.log('Using fallback mock data');
         }
       } else {
         // Regular web connection simulation
@@ -347,6 +444,14 @@ function App() {
       `}</style>
 
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
+        {/* Debug info for development */}
+        {isInFarcaster && (
+          <div className="w-full max-w-4xl mb-4 text-xs text-purple-300 bg-purple-900/30 rounded p-2">
+            <p>Debug: In Farcaster={isInFarcaster.toString()}, Connected={isWalletConnected.toString()}</p>
+            {fid && <p>FID: {fid}, Username: {username}</p>}
+            {address && <p>Address: {formatAddress(address)}</p>}
+          </div>
+        )}
         {/* Header section */}
         <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
           <div className="flex items-center gap-3 mb-4 sm:mb-0">

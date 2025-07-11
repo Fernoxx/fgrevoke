@@ -1,9 +1,10 @@
 {
   "accountAssociation": {
-    "header": "eyJmaWQiOjEyMzQ1LCJ0eXBlIjoiY3VzdG9keSIsImtleSI6IjB4ZjQ3Nzc1ZmQ2NTBhNzg5ZTAwMDcwYzJmODBmYzAzN2U2OTg1NDQ3NyJ9",
+    "header": "eyJmaWQiOjI0MjU5NywidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDc1OUUxOWQ3MDQzNTdmZkMwODAxNTg5RDc3OTg1M2JkZWVkODkwNTMifQ",
     "payload": "eyJkb21haW4iOiJmZ3Jldm9rZS52ZXJjZWwuYXBwIn0",
-    "signature": "MHhkYzYzNDA1YjkzOGYyZmNlZjMxYWNhZGQyODJjYzAyNzAwNjU1NGI5YjY1ZTk1NzZjMGFhNjE2NmQ0Yzk1NjBjMWM="
-  },
+    "signature": "MHgzYWQ4ODBjYzU0N2ExOGMxNTBjZDc3ZjgxZjAxYTRiMzk5ZWRjZjlkZmNjZWVhZGYwY2M3NjM5NjMwMjQ4OWU0MWViYjYwNjExYjdhMzk3MWU5M2UwMGIwNDE0YTlmN2I0NTMwNTExOWFlNjA0Njk0YjgyY2QwNDBmOTBhOThiYjFi"
+  }
+}
   "miniapp": {
     "name": "FarGuard",
     "description": "Secure token approval management for Farcaster users",

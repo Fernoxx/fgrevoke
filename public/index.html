@@ -6,15 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#7c3aed" />
     
-    <!-- Primary Meta Tags -->
     <title>FarGuard - Token Approval Manager</title>
     <meta name="description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
     
     <!-- REQUIRED: Farcaster Mini App Meta Tag -->
     <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","button":{"title":"🛡️ Open FarGuard","action":{"type":"launch_frame","name":"FarGuard","url":"https://fgrevoke.vercel.app","splashImageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","splashBackgroundColor":"#7c3aed"}}}' />
-    
-    <!-- Backward compatibility -->
-    <meta name="fc:frame" content='{"version":"1","imageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","button":{"title":"🛡️ Open FarGuard","action":{"type":"launch_frame","name":"FarGuard","url":"https://fgrevoke.vercel.app","splashImageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","splashBackgroundColor":"#7c3aed"}}}' />
     
     <!-- Open Graph Meta Tags -->
     <meta property="og:type" content="website" />
@@ -23,15 +19,28 @@
     <meta property="og:description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
     <meta property="og:image" content="https://fgrevoke.vercel.app/farguard-logo.png" />
     
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/farguard-logo.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- REQUIRED: Farcaster Mini App SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js"></script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    
+    <!-- Farcaster Mini App SDK -->
+    <script type="module">
+      import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
+      window.sdk = sdk;
+      window.farcasterSdk = sdk;
+      
+      // Call ready when app loads
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          if (sdk?.actions?.ready) {
+            sdk.actions.ready();
+            console.log('SDK ready() called on load');
+          }
+        }, 500);
+      });
+    </script>
   </body>
 </html>
