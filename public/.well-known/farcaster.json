@@ -1,8 +1,0 @@
-{
-  "miniapp": {
-    "name": "FarGuard",
-    "description": "Token approval manager for Farcaster",
-    "icon": "https://fgrevoke.vercel.app/farguard-logo.png",
-    "homeUrl": "https://fgrevoke.vercel.app"
-  }
-}
