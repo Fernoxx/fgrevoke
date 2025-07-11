@@ -9,7 +9,7 @@
     <title>FarGuard - Token Approval Manager</title>
     <meta name="description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
     
-    <!-- REQUIRED: Farcaster Frame Meta Tags -->
+    <!-- Farcaster Frame Meta Tags -->
     <meta property="fc:frame" content="vNext" />
     <meta property="fc:frame:image" content="https://fgrevoke.vercel.app/farguard-logo.png" />
     <meta property="fc:frame:button:1" content="🛡️ Open FarGuard" />
@@ -27,101 +27,5 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    
-    <!-- Safer Farcaster SDK Loading -->
-    <script>
-      // Prevent any uncaught errors from crashing the app
-      window.addEventListener('error', function(e) {
-        console.log('Caught error:', e.error);
-        e.preventDefault();
-      });
-      
-      window.addEventListener('unhandledrejection', function(e) {
-        console.log('Caught rejection:', e.reason);
-        e.preventDefault();
-      });
-      
-      // Try to load SDK safely
-      (function() {
-        try {
-          // Method 1: Try ESM import
-          if (typeof window.import !== 'undefined') {
-            import('https://esm.sh/@farcaster/miniapp-sdk').then(({ sdk }) => {
-              window.sdk = sdk;
-              window.farcasterSdk = sdk;
-              console.log('✅ SDK loaded via ESM');
-              
-              // Call ready after delay
-              setTimeout(() => {
-                if (sdk?.actions?.ready) {
-                  sdk.actions.ready();
-                  console.log('✅ SDK ready() called');
-                }
-              }, 1000);
-            }).catch(e => {
-              console.log('ESM load failed:', e);
-              loadFallbackSDK();
-            });
-          } else {
-            loadFallbackSDK();
-          }
-        } catch (e) {
-          console.log('SDK loading error:', e);
-          loadFallbackSDK();
-        }
-        
-        function loadFallbackSDK() {
-          try {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js';
-            script.onload = function() {
-              console.log('✅ Fallback SDK loaded');
-              setTimeout(() => {
-                if (window.farcasterSdk?.actions?.ready) {
-                  window.farcasterSdk.actions.ready();
-                  console.log('✅ Fallback SDK ready() called');
-                }
-              }, 1000);
-            };
-            script.onerror = function() {
-              console.log('❌ All SDK loading methods failed');
-            };
-            document.head.appendChild(script);
-          } catch (e) {
-            console.log('Fallback SDK loading failed:', e);
-          }
-        }
-      })();
-    </script>
-    
-    <!-- Backup ready calls -->
-    <script>
-      // Multiple ready() attempts
-      setTimeout(() => {
-        if (window.sdk?.actions?.ready) {
-          window.sdk.actions.ready();
-          console.log('✅ Backup ready() #1');
-        }
-      }, 2000);
-      
-      setTimeout(() => {
-        if (window.sdk?.actions?.ready) {
-          window.sdk.actions.ready();
-          console.log('✅ Backup ready() #2');
-        }
-      }, 5000);
-      
-      // PostMessage fallback
-      setTimeout(() => {
-        if (window.parent !== window) {
-          try {
-            window.parent.postMessage({ type: 'miniapp-ready' }, '*');
-            console.log('✅ PostMessage ready() sent');
-          } catch (e) {
-            console.log('PostMessage failed:', e);
-          }
-        }
-      }, 3000);
-    </script>
   </body>
 </html>
