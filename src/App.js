@@ -21,6 +21,12 @@ const useFarcasterWallet = () => {
                          window.webkit?.messageHandlers?.farcaster;
       setIsInFarcaster(inFarcaster);
       
+      // Initialize Farcaster SDK if available
+      if (window.farcasterSdk) {
+        window.farcasterSdk.actions.ready();
+        console.log('Farcaster SDK initialized');
+      }
+      
       // Auto-connect if Farcaster user data is available
       if (inFarcaster) {
         autoConnectFarcaster();
