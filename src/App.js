@@ -50,33 +50,6 @@ function App() {
     },
   ];
 
-  // ENHANCED Farcaster Detection
-useEffect(() => {
-  const initFarcaster = async () => {
-    console.log('🔥 Initializing Farcaster SDK')
-    try {
-      // Hide Warpcast splash and enable in-app flow
-      await sdk.actions.ready()
-      console.log('✅ sdk.actions.ready() succeeded')
-
-      setIsInFarcaster(true)
-      setSdkReady(true)
-
-      // Load user context if available
-      if (sdk.context?.user) {
-        setUser(sdk.context.user)
-        console.log('👤 User loaded:', sdk.context.user)
-      }
-    } catch (e) {
-      console.warn('⚠️ ready() failed but continuing anyway', e)
-      // Even on error, treat us as in-app
-      setIsInFarcaster(true)
-      setSdkReady(true)
-    }
-  }
-  initFarcaster()
-}, [])
-
   // ENHANCED wallet connection with REAL Farcaster integration
   const connectWallet = async () => {
     console.log('🔌 ENHANCED Connect wallet clicked');
@@ -84,7 +57,7 @@ useEffect(() => {
     
     setIsConnecting(true);
     setError(null);
-    
+
     try {
       if (isInFarcaster && sdk && sdkReady) {
         console.log('📱 Attempting REAL Farcaster wallet connection...');
