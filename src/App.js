@@ -1,6 +1,7 @@
 // App.js - FarGuard with REAL Coinbase APIs and Fixed Wallet Connection
 import React, { useState, useEffect } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
+import { sdk } from '@farcaster/miniapp-sdk';
 
 function App() {
   const [selectedChain, setSelectedChain] = useState('ethereum');
@@ -16,7 +17,6 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isInFarcaster, setIsInFarcaster] = useState(false);
-  const [sdk, setSdk] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
 
   // Coinbase API configuration for REAL data
@@ -51,129 +51,56 @@ function App() {
   ];
 
   // ENHANCED Farcaster Detection
-  useEffect(() => {
-    const initFarcaster = async () => {
-      try {
-        console.log('🚀 ENHANCED Farcaster Detection...');
-        
-        // MULTIPLE detection methods
-        const checks = {
-          iframe: window.parent !== window,
-          userAgent: navigator.userAgent.includes('Farcaster') || navigator.userAgent.includes('Warpcast'),
-          referrer: document.referrer.includes('farcaster') || document.referrer.includes('warpcast'),
-          urlParams: window.location.search.includes('farcaster'),
-          pathname: window.location.pathname.includes('frame'),
-          hostname: window.location.hostname.includes('farcaster'),
-          parentPostMessage: window.parent !== window && window.location.origin !== 'http://localhost:3000'
-        };
-        
-        console.log('🔍 Detection results:', checks);
-        
-        const inFarcaster = Object.values(checks).some(Boolean);
-        setIsInFarcaster(inFarcaster);
-        
-        console.log('🎯 FINAL DECISION - In Farcaster:', inFarcaster);
-
-        if (inFarcaster) {
-          try {
-            console.log('📱 Loading @farcaster/miniapp-sdk...');
-            
-            // FORCE import the SDK
-            const module = await import('@farcaster/miniapp-sdk');
-            const farcasterSdk = module.sdk;
-            
-            if (!farcasterSdk) {
-              throw new Error('SDK not found in module');
-            }
-            
-            setSdk(farcasterSdk);
-            console.log('✅ SDK loaded successfully:', typeof farcasterSdk);
-
-            // CRITICAL: Call ready() IMMEDIATELY
-            console.log('🎬 Calling sdk.actions.ready()...');
-            await farcasterSdk.actions.ready();
-            console.log('✅ SDK READY() SUCCESS - Splash should be GONE!');
-            
-            setSdkReady(true);
-
-            // Get user context
-            console.log('👤 Getting user context...');
-            if (farcasterSdk.context?.user) {
-              const userData = farcasterSdk.context.user;
-              setUser(userData);
-              console.log('✅ User loaded:', userData);
-            } else {
-              console.log('ℹ️ No user context available');
-            }
-
-          } catch (sdkError) {
-            console.error('❌ SDK loading failed:', sdkError);
-            
-            // ENHANCED fallback methods
-            console.log('🆘 Trying ENHANCED fallback methods...');
-            
-            try {
-              // Method 1: Enhanced PostMessage
-              if (window.parent !== window) {
-                const messages = [
-                  { type: 'miniapp-ready' },
-                  { type: 'frame-ready' },
-                  { type: 'farcaster-ready' },
-                  { action: 'ready', source: 'farguard' }
-                ];
-                
-                messages.forEach(msg => {
-                  window.parent.postMessage(msg, '*');
-                });
-                console.log('📨 Sent multiple ready messages');
-              }
-              
-              // Method 2: Global ready functions
-              ['farcasterReady', 'frameReady', 'miniappReady'].forEach(fn => {
-                if (window[fn]) {
-                  window[fn]();
-                  console.log(`📞 Called ${fn}()`);
-                }
-              });
-              
-              // Method 3: Custom events
-              const events = ['farcaster-ready', 'miniapp-ready', 'frame-ready'];
-              events.forEach(event => {
-                window.dispatchEvent(new CustomEvent(event, { detail: { app: 'farguard' } }));
-              });
-              console.log('📢 Dispatched ready events');
-              
-              // Method 4: Force remove splash elements
-              setTimeout(() => {
-                const selectors = [
-                  '[data-splash]', '.splash-screen', '.miniapp-loading', 
-                  '.loading-screen', '[class*="splash"]', '[class*="loading"]'
-                ];
-                selectors.forEach(selector => {
-                  document.querySelectorAll(selector).forEach(el => el.remove());
-                });
-                console.log('🗑️ Force removed splash elements');
-              }, 500);
-              
-            } catch (fallbackError) {
-              console.error('❌ All fallback methods failed:', fallbackError);
-            }
-            
-            setSdkReady(true); // Continue anyway
-          }
-        } else {
-          setSdkReady(true);
-          console.log('🌐 Web environment - SDK not needed');
-        }
-        
-      } catch (error) {
-        console.error('❌ Complete initialization failure:', error);
-        setSdkReady(true);
+useEffect(() => {
+  const initFarcaster = async () => {
+    try {
+      console.log('🚀 ENHANCED Farcaster Detection...')
+      
+      // MULTIPLE detection methods
+      const checks = {
+        iframe: window.parent !== window,
+        userAgent: navigator.userAgent.includes('Farcaster') || navigator.userAgent.includes('Warpcast'),
+        referrer: document.referrer.includes('farcaster') || document.referrer.includes('warpcast'),
+        urlParams: window.location.search.includes('farcaster'),
+        pathname: window.location.pathname.includes('frame'),
+        hostname: window.location.hostname.includes('farcaster'),
+        parentPostMessage: window.parent !== window && window.location.origin !== 'http://localhost:3000'
       }
-    };
+      console.log('🔍 Detection results:', checks)
 
-    initFarcaster();
-  }, []);
+      const inFarcaster = Object.values(checks).some(Boolean)
+      setIsInFarcaster(inFarcaster)
+      console.log('🎯 FINAL DECISION - In Farcaster:', inFarcaster)
+
+      if (inFarcaster) {
+        console.log('🎬 Calling sdk.actions.ready()...')
+        try {
+          await sdk.actions.ready()
+          console.log('✅ Splash hidden, SDK is ready')
+        } catch (e) {
+          console.warn('ready() failed but continuing', e)
+        }
+        setSdkReady(true)
+
+        // grab user if available
+        if (sdk.context?.user) {
+          setUser(sdk.context.user)
+          console.log('👤 User loaded:', sdk.context.user)
+        } else {
+          console.log('ℹ️ No user context available')
+        }
+      } else {
+        setSdkReady(true)
+        console.log('🌐 Web environment - skipping ready()')
+      }
+
+    } catch (error) {
+      console.error('❌ Init failure:', error)
+      setSdkReady(true)
+    }
+  }
+  initFarcaster()
+}, [])
 
   // ENHANCED wallet connection with REAL Farcaster integration
   const connectWallet = async () => {
