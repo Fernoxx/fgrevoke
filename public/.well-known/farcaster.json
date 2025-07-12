@@ -1,8 +1,8 @@
 {
-  "version": "2",                            // bump this on each update
+  "version": "3",                            // bump this on each update
   "frame": {
     "name": "FarGuard",
-    "version": "2",                          // should match top‐level version
+    "version": "3",                          // should match top‐level version
     "iconUrl": "https://fgrevoke.vercel.app/farguard-logo.png",
     "homeUrl": "https://fgrevoke.vercel.app",
     "imageUrl": "https://fgrevoke.vercel.app/frame-image.png",

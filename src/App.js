@@ -53,49 +53,24 @@ function App() {
   // ENHANCED Farcaster Detection
 useEffect(() => {
   const initFarcaster = async () => {
+    console.log('🔥 Initializing Farcaster SDK')
     try {
-      console.log('🚀 ENHANCED Farcaster Detection...')
-      
-      // MULTIPLE detection methods
-      const checks = {
-        iframe: window.parent !== window,
-        userAgent: navigator.userAgent.includes('Farcaster') || navigator.userAgent.includes('Warpcast'),
-        referrer: document.referrer.includes('farcaster') || document.referrer.includes('warpcast'),
-        urlParams: window.location.search.includes('farcaster'),
-        pathname: window.location.pathname.includes('frame'),
-        hostname: window.location.hostname.includes('farcaster'),
-        parentPostMessage: window.parent !== window && window.location.origin !== 'http://localhost:3000'
+      // Hide Warpcast splash and enable in-app flow
+      await sdk.actions.ready()
+      console.log('✅ sdk.actions.ready() succeeded')
+
+      setIsInFarcaster(true)
+      setSdkReady(true)
+
+      // Load user context if available
+      if (sdk.context?.user) {
+        setUser(sdk.context.user)
+        console.log('👤 User loaded:', sdk.context.user)
       }
-      console.log('🔍 Detection results:', checks)
-
-      const inFarcaster = Object.values(checks).some(Boolean)
-      setIsInFarcaster(inFarcaster)
-      console.log('🎯 FINAL DECISION - In Farcaster:', inFarcaster)
-
-      if (inFarcaster) {
-        console.log('🎬 Calling sdk.actions.ready()...')
-        try {
-          await sdk.actions.ready()
-          console.log('✅ Splash hidden, SDK is ready')
-        } catch (e) {
-          console.warn('ready() failed but continuing', e)
-        }
-        setSdkReady(true)
-
-        // grab user if available
-        if (sdk.context?.user) {
-          setUser(sdk.context.user)
-          console.log('👤 User loaded:', sdk.context.user)
-        } else {
-          console.log('ℹ️ No user context available')
-        }
-      } else {
-        setSdkReady(true)
-        console.log('🌐 Web environment - skipping ready()')
-      }
-
-    } catch (error) {
-      console.error('❌ Init failure:', error)
+    } catch (e) {
+      console.warn('⚠️ ready() failed but continuing anyway', e)
+      // Even on error, treat us as in-app
+      setIsInFarcaster(true)
       setSdkReady(true)
     }
   }
