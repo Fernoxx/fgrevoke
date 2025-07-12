@@ -1,9 +1,13 @@
 {
-  "redirects": [
+  "routes": [
+    { "handle": "filesystem" },                               // 1️⃣ static files first
     {
-      "source": "/.well-known/farcaster.json",
-      "destination": "https://api.farcaster.xyz/miniapps/hosted-manifest/0197fb99-dc1a-6e95-f054-569d1eb366c4",
-      "permanent": false
+      "src": "/\\.well-known/farcaster\\.json",                // 2️⃣ exact‐match manifest
+      "dest": "/.well-known/farcaster.json"
+    },
+    {
+      "src": "/.*",                                            // 3️⃣ everything else
+      "dest": "/index.html"
     }
   ]
 }

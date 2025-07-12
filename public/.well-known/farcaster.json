@@ -1,0 +1,15 @@
+{
+  "version": "2",                            // bump this on each update
+  "frame": {
+    "name": "FarGuard",
+    "version": "2",                          // should match top‐level version
+    "iconUrl": "https://fgrevoke.vercel.app/farguard-logo.png",
+    "homeUrl": "https://fgrevoke.vercel.app",
+    "imageUrl": "https://fgrevoke.vercel.app/frame-image.png",
+    "buttonTitle": "Start Revoking",
+    "splashImageUrl": "https://fgrevoke.vercel.app/splash.png",
+    "splashBackgroundColor": "#1e1b4b",
+    "webhookUrl": "https://fgrevoke.vercel.app/api/webhook",
+    "description": "FarGuard helps you find and revoke all your ERC-20/NFT approvals safely."
+  }
+}
