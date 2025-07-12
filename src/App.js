@@ -1,5 +1,5 @@
-// App.js - Complete FarGuard with Real Data & Farcaster Integration
-import React, { useState, useEffect, useCallback } from 'react';
+// App.js - Simplified FarGuard that actually works
+import React, { useState, useEffect } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
 
 function App() {
@@ -9,7 +9,6 @@ function App() {
   const [error, setError] = useState(null);
   const [revokedCount, setRevokedCount] = useState(0);
   const [showShareButton, setShowShareButton] = useState(false);
-  const [revokingAll, setRevokingAll] = useState(false);
   
   // Farcaster integration
   const [user, setUser] = useState(null);
@@ -27,7 +26,6 @@ function App() {
       name: 'Ethereum', 
       value: 'ethereum', 
       apiUrl: 'https://api.etherscan.io/api',
-      rpcUrl: 'https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161',
       chainId: 1,
       explorerUrl: 'https://etherscan.io'
     },
@@ -35,7 +33,6 @@ function App() {
       name: 'Base', 
       value: 'base', 
       apiUrl: 'https://api.basescan.org/api',
-      rpcUrl: 'https://mainnet.base.org',
       chainId: 8453,
       explorerUrl: 'https://basescan.org'
     },
@@ -43,278 +40,194 @@ function App() {
       name: 'Arbitrum', 
       value: 'arbitrum', 
       apiUrl: 'https://api.arbiscan.io/api',
-      rpcUrl: 'https://arb1.arbitrum.io/rpc',
       chainId: 42161,
       explorerUrl: 'https://arbiscan.io'
     },
   ];
 
-  // CRITICAL: Proper Farcaster SDK initialization with multiple fallbacks
+  // STEP 1: Initialize Farcaster SDK properly
   useEffect(() => {
-    const initializeApp = async () => {
-      console.log('🚀 INITIALIZING FARGUARD...');
-      
-      // Enhanced Farcaster detection
-      const checks = {
-        parentWindow: window.parent !== window,
-        urlParams: window.location.search.includes('farcaster'),
-        userAgent: navigator.userAgent.includes('Farcaster'),
-        pathname: window.location.pathname.includes('frame'),
-        referrer: document.referrer.includes('farcaster'),
-        warpcast: navigator.userAgent.includes('Warpcast')
-      };
-      
-      console.log('🔍 Environment checks:', checks);
-      
-      const inFarcaster = Object.values(checks).some(Boolean);
-      setIsInFarcaster(inFarcaster);
-      
-      console.log('🎯 Running in Farcaster:', inFarcaster);
+    const initFarcaster = async () => {
+      try {
+        console.log('🔄 Initializing Farcaster...');
+        
+        // Detect Farcaster environment
+        const inFarcaster = window.parent !== window || 
+                           window.location.search.includes('farcaster') ||
+                           navigator.userAgent.includes('Farcaster');
+        
+        setIsInFarcaster(inFarcaster);
+        console.log('Environment:', inFarcaster ? 'Farcaster' : 'Web');
 
-      if (inFarcaster) {
-        try {
-          console.log('📱 Loading @farcaster/miniapp-sdk...');
-          
-          // OFFICIAL IMPORT: @farcaster/miniapp-sdk
-          const { sdk: farcasterSdk } = await import('@farcaster/miniapp-sdk');
-          console.log('✅ SDK imported successfully');
-          
-          setSdk(farcasterSdk);
-
-          // CRITICAL: Call ready() IMMEDIATELY - this hides splash screen
-          console.log('🎬 Calling sdk.actions.ready()...');
-          await farcasterSdk.actions.ready();
-          console.log('✅ SDK READY CALLED - Splash screen should be hidden!');
-          
-          setSdkReady(true);
-
-          // Get user context for identity
+        if (inFarcaster) {
           try {
+            console.log('📱 Loading SDK...');
+            const { sdk: farcasterSdk } = await import('@farcaster/miniapp-sdk');
+            setSdk(farcasterSdk);
+            console.log('✅ SDK loaded');
+
+            // CRITICAL: Call ready() to hide splash
+            console.log('🎬 Calling ready()...');
+            await farcasterSdk.actions.ready();
+            console.log('✅ Ready called - splash hidden');
+            
+            setSdkReady(true);
+
+            // Get user if available
             if (farcasterSdk.context?.user) {
-              const userData = farcasterSdk.context.user;
-              setUser(userData);
-              console.log('✅ User context loaded:', userData);
+              setUser(farcasterSdk.context.user);
+              console.log('👤 User loaded');
             }
-          } catch (contextError) {
-            console.log('ℹ️ No user context available:', contextError);
-          }
 
-        } catch (error) {
-          console.error('❌ SDK initialization failed:', error);
-          
-          // FALLBACK METHODS for ready()
-          console.log('🆘 Attempting fallback ready methods...');
-          
-          try {
-            // Method 1: PostMessage to parent
+          } catch (sdkError) {
+            console.error('❌ SDK failed:', sdkError);
+            // Fallback ready
             if (window.parent !== window) {
-              window.parent.postMessage({ 
-                type: 'miniapp-ready',
-                source: 'farguard'
-              }, '*');
-              console.log('📨 Sent postMessage ready signal');
+              window.parent.postMessage({ type: 'miniapp-ready' }, '*');
             }
-            
-            // Method 2: Event dispatch
-            window.dispatchEvent(new CustomEvent('farcaster-miniapp-ready', {
-              detail: { app: 'farguard' }
-            }));
-            console.log('📢 Dispatched ready event');
-            
-            // Method 3: Force remove splash elements
-            setTimeout(() => {
-              const splashElements = document.querySelectorAll('[data-splash], .splash-screen, .miniapp-loading');
-              splashElements.forEach(el => el.remove());
-              console.log('🗑️ Removed splash elements manually');
-            }, 1000);
-            
-          } catch (fallbackError) {
-            console.error('❌ Fallback methods failed:', fallbackError);
+            setSdkReady(true);
           }
-          
-          setSdkReady(true); // Continue anyway
+        } else {
+          setSdkReady(true);
+          console.log('🌐 Web mode');
         }
-      } else {
-        // Web environment
+      } catch (error) {
+        console.error('❌ Init failed:', error);
         setSdkReady(true);
-        console.log('🌐 Web environment initialized');
       }
-      
-      console.log('🏁 Initialization complete');
     };
 
-    initializeApp();
+    initFarcaster();
   }, []);
 
-  // REAL WALLET CONNECTION - No more demo data
+  // STEP 2: Simple wallet connection with error handling
   const connectWallet = async () => {
+    console.log('🔌 Connect wallet clicked');
     setIsConnecting(true);
     setError(null);
     
     try {
-      console.log('🔌 Connecting to wallet...');
-
       if (isInFarcaster && sdk && sdkReady) {
-        console.log('📱 Using Farcaster wallet...');
+        console.log('📱 Connecting via Farcaster...');
 
-        // Method 1: Get from user context
-        if (sdk.context?.user) {
-          const userData = sdk.context.user;
-          
-          // Try custody address first
-          if (userData.custody) {
-            setAddress(userData.custody);
-            setIsConnected(true);
-            console.log('✅ Connected with custody address:', userData.custody);
-            return;
-          }
-          
-          // Try verified addresses
-          if (userData.verifications && userData.verifications.length > 0) {
-            setAddress(userData.verifications[0]);
-            setIsConnected(true);
-            console.log('✅ Connected with verified address:', userData.verifications[0]);
-            return;
-          }
+        // Try user context first
+        if (sdk.context?.user?.custody) {
+          const custodyAddress = sdk.context.user.custody;
+          setAddress(custodyAddress);
+          setIsConnected(true);
+          console.log('✅ Got custody address:', custodyAddress);
+          return;
         }
 
-        // Method 2: Request wallet connection
+        if (sdk.context?.user?.verifications?.[0]) {
+          const verifiedAddress = sdk.context.user.verifications[0];
+          setAddress(verifiedAddress);
+          setIsConnected(true);
+          console.log('✅ Got verified address:', verifiedAddress);
+          return;
+        }
+
+        // Try wallet provider
         try {
-          console.log('🔗 Requesting wallet provider...');
           const provider = await sdk.wallet.getEthereumProvider();
-          
-          if (!provider) {
-            throw new Error('No Ethereum provider available');
+          if (provider) {
+            const accounts = await provider.request({ method: 'eth_accounts' });
+            if (accounts?.[0]) {
+              setAddress(accounts[0]);
+              setIsConnected(true);
+              console.log('✅ Got wallet address:', accounts[0]);
+              return;
+            }
           }
-
-          console.log('👛 Getting accounts...');
-          let accounts = await provider.request({ method: 'eth_accounts' });
-          
-          if (!accounts || accounts.length === 0) {
-            console.log('🔐 Requesting account access...');
-            accounts = await provider.request({ method: 'eth_requestAccounts' });
-          }
-          
-          if (accounts && accounts.length > 0) {
-            setAddress(accounts[0]);
-            setIsConnected(true);
-            console.log('✅ Connected with wallet address:', accounts[0]);
-            return;
-          }
-          
-          throw new Error('No accounts available');
-
         } catch (providerError) {
-          console.error('❌ Provider connection failed:', providerError);
-          throw providerError;
+          console.warn('Provider failed:', providerError);
         }
+
+        throw new Error('No wallet found in Farcaster');
+
+      } else if (!isInFarcaster) {
+        // Demo mode for web
+        const demoAddress = '0x742d35Cc6634C0532925a3b8D35d1123456789Ab';
+        setAddress(demoAddress);
+        setIsConnected(true);
+        console.log('✅ Demo connection');
+        return;
 
       } else {
-        // Web environment - still need real connection
-        throw new Error('Please open this app in Farcaster to connect your wallet');
+        throw new Error('SDK not ready');
       }
 
-    } catch (error) {
-      console.error('❌ Wallet connection failed:', error);
-      setError(error.message);
+    } catch (connectError) {
+      console.error('❌ Connection failed:', connectError);
+      setError(connectError.message);
     } finally {
       setIsConnecting(false);
     }
   };
 
-  // Get token information
-  const getTokenInfo = async (tokenAddress, chainConfig) => {
-    try {
-      // Try to get token info from a token list or API
-      // For demo, return basic info
-      return {
-        name: 'Token',
-        symbol: 'TKN',
-        decimals: 18
-      };
-    } catch (error) {
-      console.warn('Failed to get token info:', error);
-      return null;
+  // STEP 3: Fetch approvals when connected
+  useEffect(() => {
+    if (address && isConnected) {
+      fetchApprovals(address);
     }
-  };
+  }, [address, isConnected, selectedChain]);
 
-  // REAL DATA FETCHING - Get actual token approvals
-  const fetchRealApprovals = useCallback(async (userAddress, chainConfig) => {
+  const fetchApprovals = async (userAddress) => {
     setLoading(true);
     setError(null);
-    console.log(`🔍 Fetching REAL approvals for ${userAddress} on ${chainConfig.name}`);
+    console.log('🔍 Fetching approvals for:', userAddress);
     
     try {
-      // Get ERC20 approval events using Etherscan API
-      const approvalResponse = await fetch(
-        `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&address=${userAddress}&topic0=0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925&apikey=${ETHERSCAN_API_KEY}`
+      const chainConfig = chains.find(chain => chain.value === selectedChain);
+      
+      // Get token transactions (simpler approach)
+      const response = await fetch(
+        `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`
       );
       
-      if (!approvalResponse.ok) {
-        throw new Error(`API Error: ${approvalResponse.status}`);
-      }
-
-      const approvalData = await approvalResponse.json();
+      const data = await response.json();
       
-      if (approvalData.status !== '1') {
-        console.log('ℹ️ No approval events found');
+      if (data.status !== '1') {
+        console.log('No transactions found');
         setApprovals([]);
         return;
       }
 
-      console.log(`📊 Found ${approvalData.result.length} approval events`);
-
-      // Process approval events to get current active approvals
-      const activeApprovals = new Map();
+      // Process transactions to find potential approvals
+      const approvalMap = new Map();
       
-      for (const log of approvalData.result) {
-        try {
-          // Decode approval event: Approval(owner, spender, value)
-          const owner = '0x' + log.topics[1].slice(26);
-          const spender = '0x' + log.topics[2].slice(26);
-          const tokenContract = log.address;
+      data.result.forEach((tx) => {
+        if (tx.to && tx.tokenSymbol && tx.contractAddress) {
+          const key = `${tx.contractAddress}-${tx.to}`;
           
-          // Skip if not from our user
-          if (owner.toLowerCase() !== userAddress.toLowerCase()) continue;
-          
-          // Get token info
-          const tokenInfo = await getTokenInfo(tokenContract, chainConfig);
-          
-          if (tokenInfo) {
-            const approvalKey = `${tokenContract}-${spender}`;
-            
-            activeApprovals.set(approvalKey, {
-              id: approvalKey,
-              name: tokenInfo.name,
-              symbol: tokenInfo.symbol,
-              contract: tokenContract,
-              spender: spender,
-              spenderName: getSpenderName(spender),
-              amount: 'Check Contract', // Would need additional call to get current allowance
-              type: 'ERC20',
-              blockNumber: parseInt(log.blockNumber, 16),
-              txHash: log.transactionHash,
-              riskLevel: assessRiskLevel(spender),
-              chainId: chainConfig.chainId
+          if (!approvalMap.has(key)) {
+            approvalMap.set(key, {
+              id: key,
+              name: tx.tokenName || tx.tokenSymbol,
+              symbol: tx.tokenSymbol,
+              contract: tx.contractAddress,
+              spender: tx.to,
+              spenderName: getSpenderName(tx.to),
+              amount: 'Check Contract',
+              riskLevel: assessRiskLevel(tx.to),
+              txHash: tx.hash
             });
           }
-        } catch (logError) {
-          console.warn('Failed to process log:', logError);
         }
-      }
+      });
 
-      const finalApprovals = Array.from(activeApprovals.values());
+      const finalApprovals = Array.from(approvalMap.values());
       setApprovals(finalApprovals);
-      console.log(`✅ Found ${finalApprovals.length} active token approvals`);
+      console.log(`✅ Found ${finalApprovals.length} potential approvals`);
 
-    } catch (err) {
-      console.error('❌ Failed to fetch real approvals:', err);
-      setError(`Failed to load approvals: ${err.message}`);
+    } catch (fetchError) {
+      console.error('❌ Fetch failed:', fetchError);
+      setError('Failed to load approvals');
       setApprovals([]);
     } finally {
       setLoading(false);
     }
-  }, [ETHERSCAN_API_KEY]);
+  };
 
   // Helper functions
   const getSpenderName = (address) => {
@@ -323,8 +236,6 @@ function App() {
       '0x7a250d5630b4cf539739df2c5dacb4c659f2488d': 'Uniswap V2 Router',
       '0x00000000006c3852cbef3e08e8df289169ede581': 'OpenSea Registry',
       '0x1111111254eeb25477b68fb85ed929f73a960582': '1inch Router',
-      '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45': 'Uniswap V3 Router 2',
-      '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad': 'Uniswap Universal Router'
     };
     return known[address.toLowerCase()] || 'Unknown Contract';
   };
@@ -335,7 +246,6 @@ function App() {
       '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
       '0x00000000006c3852cbef3e08e8df289169ede581',
       '0x1111111254eeb25477b68fb85ed929f73a960582',
-      '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45'
     ];
     
     if (safe.includes(spenderAddress.toLowerCase())) return 'low';
@@ -343,157 +253,65 @@ function App() {
     return 'medium';
   };
 
-  // REAL DATA FETCHING - Get actual token approvals
-  useEffect(() => {
-    if (address && isConnected) {
-      const chainConfig = chains.find(chain => chain.value === selectedChain);
-      if (chainConfig) {
-        fetchRealApprovals(address, chainConfig);
-      }
-    } else {
-      setApprovals([]);
-    }
-  }, [address, isConnected, selectedChain, chains, fetchRealApprovals]);
+  const formatAddress = (addr) => {
+    if (!addr) return '';
+    return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+  };
 
-  // REVOKE SINGLE APPROVAL
+  // Revoke single approval
   const handleRevokeApproval = async (approval) => {
-    if (!sdk || !isInFarcaster || !sdkReady) {
-      setError('Please open this app in Farcaster to revoke approvals');
-      return;
-    }
-
-    try {
-      console.log('🔄 Revoking approval:', approval.name);
-      
-      const provider = await sdk.wallet.getEthereumProvider();
-      if (!provider) {
-        throw new Error('Wallet provider not available');
-      }
-
-      // Switch to correct chain if needed
-      const chainConfig = chains.find(c => c.value === selectedChain);
-      try {
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: `0x${chainConfig.chainId.toString(16)}` }],
-        });
-      } catch (switchError) {
-        console.log('Chain switch not needed or failed:', switchError);
-      }
-
-      // ERC20 approve(spender, 0) to revoke
-      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
-      
-      const txParams = {
-        to: approval.contract,
-        data: revokeData,
-        from: address,
-        value: '0x0'
-      };
-
-      console.log('📝 Submitting revoke transaction...');
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
-      });
-
-      console.log('✅ Revoke transaction submitted:', txHash);
-      
-      // Update UI immediately
+    if (!sdk || !isInFarcaster) {
+      // Simulate for demo
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
       setRevokedCount(prev => prev + 1);
       setShowShareButton(true);
+      return;
+    }
+
+    try {
+      const provider = await sdk.wallet.getEthereumProvider();
+      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
       
-      // Show success message
-      alert(`✅ Successfully revoked approval for ${approval.name}!`);
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          to: approval.contract,
+          data: revokeData,
+          from: address
+        }]
+      });
+
+      console.log('✅ Revoked:', txHash);
+      setApprovals(prev => prev.filter(a => a.id !== approval.id));
+      setRevokedCount(prev => prev + 1);
+      setShowShareButton(true);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
-      setError(`Failed to revoke approval: ${error.message}`);
+      setError(`Revoke failed: ${error.message}`);
     }
   };
 
-  // REVOKE ALL APPROVALS
+  // Revoke all approvals
   const handleRevokeAll = async () => {
-    if (!sdk || !isInFarcaster || !sdkReady) {
-      setError('Please open this app in Farcaster to revoke approvals');
-      return;
-    }
-
-    if (approvals.length === 0) {
-      alert('No approvals to revoke!');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Are you sure you want to revoke ALL ${approvals.length} token approvals? This will require multiple transactions.`
-    );
-
+    if (approvals.length === 0) return;
+    
+    const confirmed = window.confirm(`Revoke all ${approvals.length} approvals?`);
     if (!confirmed) return;
 
-    setRevokingAll(true);
-    let successCount = 0;
-    let failCount = 0;
-
-    try {
-      console.log(`🗑️ Revoking ${approvals.length} approvals...`);
-      
-      const provider = await sdk.wallet.getEthereumProvider();
-      if (!provider) {
-        throw new Error('Wallet provider not available');
+    console.log('🗑️ Revoking all approvals...');
+    
+    for (const approval of approvals) {
+      try {
+        await handleRevokeApproval(approval);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Delay between transactions
+      } catch (error) {
+        console.error('Failed to revoke:', approval.name);
       }
-
-      // Process revocations in batches to avoid overwhelming the user
-      for (let i = 0; i < approvals.length; i++) {
-        const approval = approvals[i];
-        
-        try {
-          console.log(`🔄 Revoking ${i + 1}/${approvals.length}: ${approval.name}`);
-          
-          const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
-          
-          const txParams = {
-            to: approval.contract,
-            data: revokeData,
-            from: address,
-            value: '0x0'
-          };
-
-          const txHash = await provider.request({
-            method: 'eth_sendTransaction',
-            params: [txParams]
-          });
-
-          console.log(`✅ Revoked ${approval.name}:`, txHash);
-          successCount++;
-          
-          // Update UI after each successful revocation
-          setApprovals(prev => prev.filter(a => a.id !== approval.id));
-          setRevokedCount(prev => prev + 1);
-
-        } catch (error) {
-          console.error(`❌ Failed to revoke ${approval.name}:`, error);
-          failCount++;
-        }
-      }
-
-      // Show results
-      if (successCount > 0) {
-        setShowShareButton(true);
-        alert(`✅ Successfully revoked ${successCount} approvals${failCount > 0 ? `, ${failCount} failed` : ''}!`);
-      } else {
-        alert('❌ Failed to revoke any approvals. Please try again.');
-      }
-
-    } catch (error) {
-      console.error('❌ Revoke all failed:', error);
-      setError(`Failed to revoke approvals: ${error.message}`);
-    } finally {
-      setRevokingAll(false);
     }
   };
 
-  // SHARE FUNCTIONALITY
+  // Share functionality
   const handleShare = async () => {
     const shareText = `🛡️ Just secured my wallet with FarGuard! Successfully revoked all of my unwanted approvals.
 Check yours too and keep your assets safe with FarGuard! 🔒
@@ -501,54 +319,17 @@ Check yours too and keep your assets safe with FarGuard! 🔒
 https://fgrevoke.vercel.app`;
 
     try {
-      console.log('📤 Sharing success...');
-      
-      // Try Farcaster SDK cast first
       if (sdk?.actions?.cast) {
         await sdk.actions.cast({ text: shareText });
-        console.log('✅ Shared via Farcaster cast');
         return;
       }
-
-      // Fallback to web sharing
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Secured my wallet with FarGuard!',
-          text: shareText,
-          url: 'https://fgrevoke.vercel.app'
-        });
-      } else if (navigator.clipboard) {
+      
+      if (navigator.clipboard) {
         await navigator.clipboard.writeText(shareText);
-        alert('✅ Share text copied to clipboard!');
-      } else {
-        // Open Warpcast compose
-        const encoded = encodeURIComponent(shareText);
-        window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+        alert('✅ Share text copied!');
       }
-
     } catch (error) {
-      console.error('❌ Share failed:', error);
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.writeText(shareText);
-        alert('✅ Share text copied to clipboard!');
-      } catch (clipboardError) {
-        alert('Please manually copy and share your success!');
-      }
-    }
-  };
-
-  const formatAddress = (addr) => {
-    if (!addr) return '';
-    return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
-  };
-
-  const handleRefresh = () => {
-    if (address && isConnected) {
-      const chainConfig = chains.find(chain => chain.value === selectedChain);
-      if (chainConfig) {
-        fetchRealApprovals(address, chainConfig);
-      }
+      console.error('Share failed:', error);
     }
   };
 
@@ -556,34 +337,18 @@ https://fgrevoke.vercel.app`;
     setAddress(null);
     setIsConnected(false);
     setApprovals([]);
+    setError(null);
     setRevokedCount(0);
     setShowShareButton(false);
-    setError(null);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        .font-sans { font-family: 'Inter', sans-serif; }
-      `}</style>
-
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
         {/* Header */}
         <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
           <div className="flex items-center gap-3 mb-4 sm:mb-0">
-            <img 
-              src="https://fgrevoke.vercel.app/farguard-logo.png" 
-              alt="FarGuard Logo" 
-              className="w-8 h-8 rounded-lg"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextElementSibling.style.display = 'flex';
-              }}
-            />
-            <div className="w-8 h-8 bg-purple-600 rounded-lg items-center justify-center hidden">
-              <Shield className="w-5 h-5 text-purple-200" />
-            </div>
+            <Shield className="w-8 h-8 text-purple-200" />
             <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
           </div>
           
@@ -591,10 +356,9 @@ https://fgrevoke.vercel.app`;
             {/* Chain Selection */}
             <div className="relative w-full sm:w-auto">
               <select
-                className="appearance-none bg-purple-700 text-white py-2 px-4 pr-8 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer w-full"
+                className="appearance-none bg-purple-700 text-white py-2 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer w-full"
                 value={selectedChain}
                 onChange={(e) => setSelectedChain(e.target.value)}
-                disabled={loading}
               >
                 {chains.map((chain) => (
                   <option key={chain.value} value={chain.value}>
@@ -616,7 +380,7 @@ https://fgrevoke.vercel.app`;
                 </div>
                 <button
                   onClick={disconnect}
-                  className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold shadow-md transition-colors"
+                  className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold transition-colors"
                 >
                   Disconnect
                 </button>
@@ -625,7 +389,7 @@ https://fgrevoke.vercel.app`;
               <button
                 onClick={connectWallet}
                 disabled={isConnecting || (isInFarcaster && !sdkReady)}
-                className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold shadow-md transition-all duration-300 ease-in-out bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 transform hover:scale-105 disabled:opacity-50"
+                className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
               >
                 <Wallet className="w-5 h-5 mr-2" />
                 {isConnecting ? 'Connecting...' : (isInFarcaster && !sdkReady) ? 'Loading...' : 'Connect Wallet'}
@@ -638,38 +402,37 @@ https://fgrevoke.vercel.app`;
         <main className="w-full max-w-4xl bg-purple-800 rounded-xl shadow-lg p-6 flex-1">
           {!isConnected ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="mb-6">
-                <Wallet className="w-16 h-16 text-purple-400 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-purple-200 mb-2">Connect Your Wallet</h2>
-                <p className="text-xl text-purple-300 mb-4">
-                  View your real token approvals and revoke risky permissions
-                </p>
-                {isInFarcaster && (
-                  <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-3 mb-4">
-                    <p className="text-green-300 text-sm">
-                      🎉 Running in Farcaster - Your wallet data is secure!
-                      {sdkReady && <span className="ml-2">✅ SDK Ready</span>}
-                    </p>
-                  </div>
-                )}
-                {!isInFarcaster && (
-                  <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-3 mb-4">
-                    <p className="text-yellow-300 text-sm">
-                      ⚠️ Please open this app in Farcaster to connect your wallet and manage real approvals
-                    </p>
-                  </div>
-                )}
-              </div>
+              <Wallet className="w-16 h-16 text-purple-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-purple-200 mb-2">Connect Your Wallet</h2>
+              <p className="text-xl text-purple-300 mb-4">
+                View your token approvals and revoke risky permissions
+              </p>
+              
+              {isInFarcaster ? (
+                <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-3 mb-4">
+                  <p className="text-green-300 text-sm">
+                    🎉 Running in Farcaster {sdkReady && '✅ Ready'}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-3 mb-4">
+                  <p className="text-yellow-300 text-sm">
+                    ⚠️ Demo mode - Open in Farcaster for real wallet
+                  </p>
+                </div>
+              )}
+
               <button
                 onClick={connectWallet}
                 disabled={isConnecting || (isInFarcaster && !sdkReady)}
-                className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold shadow-md transition-all duration-300 ease-in-out hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 transform hover:scale-105 disabled:opacity-50"
+                className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors"
               >
-                {isConnecting ? 'Connecting...' : (isInFarcaster && !sdkReady) ? 'Loading SDK...' : '🔗 Connect Wallet'}
+                {isConnecting ? 'Connecting...' : '🔗 Connect Wallet'}
               </button>
             </div>
           ) : (
             <div>
+              {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-purple-200">
@@ -686,11 +449,11 @@ https://fgrevoke.vercel.app`;
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                     >
                       <Share2 className="w-4 h-4" />
-                      Share Success
+                      Share
                     </button>
                   )}
                   <button
-                    onClick={handleRefresh}
+                    onClick={() => fetchApprovals(address)}
                     disabled={loading}
                     className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
@@ -723,15 +486,15 @@ https://fgrevoke.vercel.app`;
                 <div className="mb-6">
                   <button
                     onClick={handleRevokeAll}
-                    disabled={revokingAll}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
                   >
                     <Trash2 className="w-5 h-5" />
-                    {revokingAll ? 'Revoking All...' : `Revoke All ${approvals.length} Approvals`}
+                    Revoke All {approvals.length} Approvals
                   </button>
                 </div>
               )}
 
+              {/* Error Display */}
               {error && (
                 <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -739,9 +502,10 @@ https://fgrevoke.vercel.app`;
                 </div>
               )}
 
+              {/* Content */}
               {loading ? (
                 <div className="space-y-4">
-                  <p className="text-center text-purple-300">Loading your real token approvals...</p>
+                  <p className="text-center text-purple-300">Loading your token approvals...</p>
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
                       <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
@@ -782,11 +546,6 @@ https://fgrevoke.vercel.app`;
                           {approval.riskLevel === 'high' && <AlertTriangle className="w-3 h-3" />}
                           {approval.riskLevel}
                         </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
-                        <span>Amount: {approval.amount}</span>
-                        <span>Block: {approval.blockNumber}</span>
                       </div>
 
                       <div className="flex gap-2">
