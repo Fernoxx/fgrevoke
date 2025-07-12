@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@farcaster/miniapp-sdk": "^0.1.6",
+    "@farcaster/miniapp-sdk": "latest",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -13,7 +13,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "verify": "echo 'Testing manifest...' && curl -s https://fgrevoke.vercel.app/.well-known/farcaster.json | head -20"
   },
   "eslintConfig": {
     "extends": [

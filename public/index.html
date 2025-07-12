@@ -9,20 +9,34 @@
     <title>FarGuard - Token Approval Manager</title>
     <meta name="description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
     
-    <!-- Farcaster Frame Meta Tags -->
-    <meta property="fc:frame" content="vNext" />
-    <meta property="fc:frame:image" content="https://fgrevoke.vercel.app/farguard-logo.png" />
-    <meta property="fc:frame:button:1" content="🛡️ Open FarGuard" />
-    <meta property="fc:frame:button:1:action" content="link" />
-    <meta property="fc:frame:button:1:target" content="https://fgrevoke.vercel.app" />
+    <!-- CRITICAL: Correct Farcaster Miniapp Meta Tags (NOT Frame v1 syntax) -->
+    <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://fgrevoke.vercel.app/og-image.png","button":{"title":"Open FarGuard","action":{"type":"launch_frame","name":"FarGuard","url":"https://fgrevoke.vercel.app","splashImageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","splashBackgroundColor":"#7c3aed"}}}' />
     
     <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="FarGuard - Token Approval Manager" />
-    <meta property="og:description" content="Manage your token approvals securely on Farcaster" />
-    <meta property="og:image" content="https://fgrevoke.vercel.app/farguard-logo.png" />
+    <meta property="og:description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
+    <meta property="og:image" content="https://fgrevoke.vercel.app/og-image.png" />
+    <meta property="og:url" content="https://fgrevoke.vercel.app" />
+    <meta property="og:type" content="website" />
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FarGuard - Token Approval Manager" />
+    <meta name="twitter:description" content="Manage your token approvals securely on Farcaster" />
+    <meta name="twitter:image" content="https://fgrevoke.vercel.app/og-image.png" />
     
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Prevent splash screen display issues -->
+    <style>
+      .splash-screen, [data-splash] { 
+        display: none !important; 
+      }
+      .miniapp-loading { 
+        display: none !important; 
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
