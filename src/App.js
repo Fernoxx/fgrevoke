@@ -18,6 +18,9 @@ function App() {
   const [isInFarcaster, setIsInFarcaster] = useState(false);
   const [farcasterSdk, setFarcasterSdk] = useState(null);
 
+  // Add loading state
+  const [isInitializing, setIsInitializing] = useState(true);
+
   const ETHERSCAN_API_KEY = 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
 
   const chains = [
@@ -44,91 +47,141 @@ function App() {
     },
   ];
 
-  // Initialize Farcaster - Simplified approach
+  // OFFICIAL FARCASTER PATTERN: Load SDK and call ready() properly
   useEffect(() => {
-    const initApp = async () => {
-      try {
-        // Detect Farcaster environment
-        const inFarcaster = window.parent !== window || 
-                           window.location.search.includes('farcaster') ||
-                           navigator.userAgent.includes('Farcaster');
-        
-        setIsInFarcaster(inFarcaster);
-        console.log('Environment:', inFarcaster ? 'Farcaster' : 'Web');
+    const initFarcasterApp = async () => {
+      // Detect Farcaster environment first
+      const inFarcaster = window.parent !== window || 
+                         window.location.search.includes('farcaster') ||
+                         navigator.userAgent.includes('Farcaster') ||
+                         document.referrer.includes('farcaster');
+      
+      setIsInFarcaster(inFarcaster);
+      console.log('🔍 Environment check:', inFarcaster ? 'Farcaster' : 'Web');
 
+      // If not in Farcaster, finish initialization immediately
+      if (!inFarcaster) {
+        setIsInitializing(false);
+        console.log('🌐 Running in web mode - no SDK needed');
+        return;
+      }
+
+      try {
         if (inFarcaster) {
-          // Load Farcaster SDK
-          let sdk = null;
+          console.log('📱 Loading Farcaster SDK...');
           
+          // OFFICIAL METHOD 1: ESM import (preferred)
           try {
-            // Try ES module import
-            const { sdk: importedSdk } = await import('@farcaster/miniapp-sdk');
-            sdk = importedSdk;
-          } catch (importError) {
-            console.log('Import failed, trying script load...');
+            const { sdk } = await import('@farcaster/miniapp-sdk');
+            setFarcasterSdk(sdk);
+            console.log('✅ SDK loaded via ESM import');
             
-            // Fallback to script loading
-            await new Promise((resolve, reject) => {
+            // CRITICAL: Call ready() immediately after SDK loads
+            await sdk.actions.ready();
+            console.log('✅ sdk.actions.ready() called successfully!');
+            setIsInitializing(false); // Success - show app immediately
+            
+            // Get user context after ready()
+            if (sdk.context && sdk.context.user) {
+              const userData = sdk.context.user;
+              setUser(userData);
+              console.log('✅ User context loaded:', userData.username || userData.displayName);
+            }
+            
+            return; // Success, exit here
+            
+          } catch (esmError) {
+            console.log('⚠️ ESM import failed, trying CDN fallback:', esmError);
+          }
+          
+          // FALLBACK METHOD 2: CDN script loading
+          try {
+            console.log('📡 Loading SDK from CDN...');
+            
+            const sdk = await new Promise((resolve, reject) => {
+              // Try to load from the official ESM CDN
               const script = document.createElement('script');
-              script.src = 'https://unpkg.com/@farcaster/miniapp-sdk@latest/dist/index.global.js';
-              script.onload = resolve;
-              script.onerror = reject;
+              script.type = 'module';
+              script.textContent = `
+                import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
+                window.__farcasterSdk = sdk;
+                window.dispatchEvent(new CustomEvent('farcaster-sdk-loaded'));
+              `;
+              
+              const handleLoad = () => {
+                if (window.__farcasterSdk) {
+                  resolve(window.__farcasterSdk);
+                } else {
+                  reject(new Error('SDK not found after script load'));
+                }
+              };
+              
+              window.addEventListener('farcaster-sdk-loaded', handleLoad, { once: true });
               document.head.appendChild(script);
               
+              // Timeout after 10 seconds
               setTimeout(() => {
-                if (window.farcasterSdk) {
-                  resolve();
-                } else {
-                  reject(new Error('SDK not found on window'));
-                }
-              }, 3000);
+                window.removeEventListener('farcaster-sdk-loaded', handleLoad);
+                reject(new Error('SDK loading timeout'));
+              }, 10000);
             });
             
-            sdk = window.farcasterSdk;
-          }
-
-          if (sdk) {
             setFarcasterSdk(sdk);
-            console.log('✅ SDK loaded');
-
-            // Call ready() - CRITICAL for hiding splash screen
+            console.log('✅ SDK loaded via CDN');
+            
+            // CRITICAL: Call ready() after CDN load
+            await sdk.actions.ready();
+            console.log('✅ sdk.actions.ready() called successfully via CDN!');
+            setIsInitializing(false); // Success - show app immediately
+            
+            // Get user context
+            if (sdk.context && sdk.context.user) {
+              const userData = sdk.context.user;
+              setUser(userData);
+              console.log('✅ User context loaded via CDN');
+            }
+            
+          } catch (cdnError) {
+            console.error('❌ All SDK loading methods failed:', cdnError);
+            
+            // LAST RESORT: Manual postMessage to hide splash
             try {
-              await sdk.actions.ready();
-              console.log('✅ Ready called');
-            } catch (readyError) {
-              console.log('Ready failed, trying alternatives...');
-              
-              // Alternative ready methods
               if (window.parent !== window) {
                 window.parent.postMessage({ type: 'miniapp-ready' }, '*');
+                console.log('📨 Sent manual ready message to parent');
               }
               
-              // Force hide splash with CSS
-              const style = document.createElement('style');
-              style.textContent = '.splash-screen { display: none !important; }';
-              document.head.appendChild(style);
-            }
-
-            // Get user context (for identity, not wallet reading)
-            try {
-              if (sdk.context && sdk.context.user) {
-                const userData = sdk.context.user;
-                setUser(userData);
-                console.log('✅ User context:', userData.username || userData.displayName);
+              // Also try global ready function if it exists
+              if (window.farcasterReady) {
+                window.farcasterReady();
+                console.log('📞 Called global farcasterReady()');
               }
-            } catch (contextError) {
-              console.log('Context not available:', contextError);
+              
+              // Show app anyway after manual ready attempt
+              setIsInitializing(false);
+              
+            } catch (postMessageError) {
+              console.error('❌ Even manual ready failed:', postMessageError);
+              setIsInitializing(false); // Show app anyway
             }
           }
         }
 
       } catch (error) {
-        console.error('Initialization failed:', error);
+        console.error('❌ Complete initialization failure:', error);
+        setIsInitializing(false); // Show app anyway
       }
+      
+      // Safety timeout to always show app after 5 seconds
+      setTimeout(() => {
+        setIsInitializing(false);
+        console.log('✅ Initialization completed (safety timeout)');
+      }, 5000);
     };
 
-    initApp();
-  }, []);
+    // Run initialization
+    initFarcasterApp();
+  }, []); // Empty dependency array - run once on mount
 
   // Connect wallet - Gets address for reading data
   const connectWallet = async () => {
@@ -406,7 +459,65 @@ Check your approvals: https://fgrevoke.vercel.app`;
         .font-sans { font-family: 'Inter', sans-serif; }
       `}</style>
 
+      {/* Show loading screen only while initializing in Farcaster */}
+      {isInitializing && isInFarcaster && (
+        <div className="fixed inset-0 bg-gradient-to-br from-purple-900 to-indigo-900 flex items-center justify-center z-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-300 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-purple-200 mb-2">Loading FarGuard...</h2>
+            <p className="text-purple-400">Initializing Farcaster SDK</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
+        {/* Debug Panel for Farcaster (only show in dev/testing) */}
+        {isInFarcaster && process.env.NODE_ENV !== 'production' && (
+          <div className="w-full max-w-4xl mb-4 text-xs text-purple-300 bg-purple-900/30 rounded p-2">
+            <div className="flex items-center justify-between mb-2">
+              <span>🔍 Debug Panel (Farcaster Development)</span>
+              <span className={`px-2 py-1 rounded text-xs ${farcasterSdk ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                SDK: {farcasterSdk ? 'Loaded' : 'Not Loaded'}
+              </span>
+            </div>
+            <p>Environment: Farcaster | Connected: {isConnected.toString()}</p>
+            {user && <p>User: {user.username || user.displayName || 'Unknown'} | FID: {user.fid}</p>}
+            {address && <p>Address: {formatAddress(address)}</p>}
+            <div className="flex gap-2 mt-2">
+              <button 
+                onClick={async () => {
+                  try {
+                    if (farcasterSdk?.actions?.ready) {
+                      await farcasterSdk.actions.ready();
+                      console.log('✅ Manual ready() successful');
+                    } else {
+                      console.log('❌ SDK not available for manual ready()');
+                    }
+                  } catch (e) {
+                    console.error('Manual ready() failed:', e);
+                  }
+                }}
+                className="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700"
+              >
+                Manual Ready()
+              </button>
+              <button 
+                onClick={() => {
+                  console.log('=== DEBUG INFO ===');
+                  console.log('farcasterSdk:', farcasterSdk);
+                  console.log('window.__farcasterSdk:', window.__farcasterSdk);
+                  console.log('user:', user);
+                  console.log('address:', address);
+                  console.log('isInFarcaster:', isInFarcaster);
+                  console.log('================');
+                }}
+                className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700"
+              >
+                Log Debug Info
+              </button>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
           <div className="flex items-center gap-3 mb-4 sm:mb-0">
