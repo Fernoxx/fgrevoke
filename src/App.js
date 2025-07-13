@@ -167,11 +167,20 @@ function App() {
       console.log('🚀 FIXED Initializing Farcaster miniapp...');
       
       try {
-        // Detect Farcaster environment
+        // Detect Farcaster environment - improved detection
         const isFarcasterEnv = typeof window !== 'undefined' && (
+          // Check if SDK is available (most reliable method)
+          typeof sdk !== 'undefined' ||
+          // Check URL patterns
           window.location.href.includes('farcaster') || 
           window.location.href.includes('warpcast') ||
-          window.parent !== window
+          // Check if in iframe
+          window.parent !== window ||
+          // Check user agent for Farcaster/Warpcast
+          navigator.userAgent.includes('Farcaster') ||
+          navigator.userAgent.includes('Warpcast') ||
+          // Check if we're in a miniapp context
+          window.location.pathname.includes('miniapp')
         );
         
         setIsInFarcaster(isFarcasterEnv);
@@ -580,7 +589,7 @@ https://fgrevoke.vercel.app`;
         {/* Header */}
         <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
           <div className="flex items-center gap-3 mb-4 sm:mb-0">
-            <Shield className="w-8 h-8 text-purple-200" />
+            <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
             <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
           </div>
           
@@ -634,7 +643,7 @@ https://fgrevoke.vercel.app`;
         <main className="w-full max-w-4xl bg-purple-800 rounded-xl shadow-lg p-6 flex-1">
           {!isConnected ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
-              <Wallet className="w-16 h-16 text-purple-400 mx-auto mb-4" />
+              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-16 h-16 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-purple-200 mb-2">Connect Your Farcaster Wallet</h2>
               <p className="text-xl text-purple-300 mb-4">
                 View your REAL token approvals and revoke risky permissions
@@ -652,13 +661,7 @@ https://fgrevoke.vercel.app`;
                     🎉 Running in Farcaster {sdkReady && '✅ SDK Ready'}
                   </p>
                 </div>
-              ) : (
-                <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-3 mb-4">
-                  <p className="text-red-300 text-sm">
-                    ❌ Must open in Farcaster app to connect real wallet
-                  </p>
-                </div>
-              )}
+              ) : null}
 
               {error && (
                 <div className="bg-red-900/50 border border-red-500 rounded-lg p-3 mb-4">
