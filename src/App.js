@@ -18,6 +18,7 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isInFarcaster, setIsInFarcaster] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
+  const [appReady, setAppReady] = useState(false);
 
   // Coinbase API configuration for REAL data
   const COINBASE_API_KEY = 'organizations/0c0e9e7c-8f8f-4c0e-8f8f-8f8f8f8f8f8f/apiKeys/8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f';
@@ -150,6 +151,55 @@ function App() {
       setIsConnecting(false);
     }
   };
+
+  // 🔥 PROPER SDK INITIALIZATION - Call ready() after app is fully loaded
+  useEffect(() => {
+    const initializeApp = async () => {
+      console.log('🚀 Initializing Farcaster miniapp...');
+      
+      try {
+        // Check if we're in Farcaster environment
+        if (typeof window !== 'undefined' && window.location.href.includes('farcaster')) {
+          setIsInFarcaster(true);
+          console.log('✅ Running in Farcaster environment');
+        } else {
+          console.log('⚠️ Not in Farcaster environment');
+          setIsInFarcaster(false);
+        }
+
+        // Initialize SDK
+        if (sdk) {
+          console.log('🔧 SDK available, marking as ready');
+          setSdkReady(true);
+          
+          // Check if we have context available
+          if (sdk.context) {
+            console.log('📱 SDK context available:', sdk.context);
+            
+            // Check for user data
+            if (sdk.context.user) {
+              console.log('👤 User data found:', sdk.context.user);
+              setUser(sdk.context.user);
+            }
+          }
+        }
+
+        // Mark app as ready and call sdk.actions.ready()
+        console.log('✅ App fully loaded, calling sdk.actions.ready()');
+        setAppReady(true);
+        
+        // This is the critical call that was missing!
+        await sdk.actions.ready();
+        console.log('🎉 SDK ready call completed successfully');
+        
+      } catch (error) {
+        console.error('❌ App initialization failed:', error);
+        setError('Failed to initialize app: ' + error.message);
+      }
+    };
+
+    initializeApp();
+  }, []);
 
   // REAL DATA FETCHING using Coinbase APIs + Etherscan
   useEffect(() => {
@@ -586,7 +636,13 @@ https://fgrevoke.vercel.app`;
                 View your REAL token approvals and revoke risky permissions
               </p>
               
-              {isInFarcaster ? (
+              {!appReady ? (
+                <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4">
+                  <p className="text-blue-300 text-sm">
+                    🔄 Initializing Farcaster miniapp...
+                  </p>
+                </div>
+              ) : isInFarcaster ? (
                 <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-3 mb-4">
                   <p className="text-green-300 text-sm">
                     🎉 Running in Farcaster {sdkReady && '✅ SDK Ready'}
@@ -608,10 +664,10 @@ https://fgrevoke.vercel.app`;
 
               <button
                 onClick={connectWallet}
-                disabled={isConnecting || !isInFarcaster}
+                disabled={isConnecting || !isInFarcaster || !appReady}
                 className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors"
               >
-                {isConnecting ? 'Connecting...' : '🔗 Connect Farcaster Wallet'}
+                {!appReady ? 'Initializing...' : isConnecting ? 'Connecting...' : '🔗 Connect Farcaster Wallet'}
               </button>
             </div>
           ) : (

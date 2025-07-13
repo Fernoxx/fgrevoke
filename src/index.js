@@ -1,10 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import App from './App'
-import { sdk } from '@farcaster/miniapp-sdk'
 
-// 🔥 Hide Warpcast’s splash immediately
-sdk.actions.ready()
+// 🔥 SDK ready call moved to App.js after full load
 
 ReactDOM.render(
   <React.StrictMode>
