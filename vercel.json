@@ -1,12 +1,12 @@
 {
   "routes": [
-    { "handle": "filesystem" },                               // 1️⃣ static files first
+    { "handle": "filesystem" },
     {
-      "src": "/\\.well-known/farcaster\\.json",                // 2️⃣ exact‐match manifest
+      "src": "/\\.well-known/farcaster\\.json",
       "dest": "/.well-known/farcaster.json"
     },
     {
-      "src": "/.*",                                            // 3️⃣ everything else
+      "src": "/.*",
       "dest": "/index.html"
     }
   ]
