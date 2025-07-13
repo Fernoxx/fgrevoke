@@ -1,22 +1,20 @@
-// App.js - FarGuard with ENHANCED Wallet Connection and API Configuration
+// App.js - FarGuard with FIXED API Configuration and Simplified Wallet Connection
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { createPublicClient, http } from 'viem';
-import { mainnet, base, arbitrum } from 'viem/chains';
 
 function App() {
   const [selectedChain, setSelectedChain] = useState('ethereum');
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showApprovals, setShowApprovals] = useState(false);
-  const [userBalance, setUserBalance] = useState(null);
-  const [balanceLoading, setBalanceLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showMockData, setShowMockData] = useState(false);
-  const [selectedRisk, setSelectedRisk] = useState('all');
-  const [showDetails, setShowDetails] = useState({});
+  // const [showApprovals, setShowApprovals] = useState(false);
+  // const [userBalance, setUserBalance] = useState(null);
+  // const [balanceLoading, setBalanceLoading] = useState(false);
+  // const [searchTerm, setSearchTerm] = useState('');
+  // const [showMockData, setShowMockData] = useState(false);
+  // const [selectedRisk, setSelectedRisk] = useState('all');
+  // const [showDetails, setShowDetails] = useState({});
 
   // Farcaster integration
   const [user, setUser] = useState(null);
@@ -27,21 +25,24 @@ function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [appReady, setAppReady] = useState(false);
 
-  // 🔑 ENHANCED API CONFIGURATION
-  // Add your API keys here for better functionality
-  const ETHERSCAN_API_KEY = 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
-  const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_KEY || 'YOUR_ALCHEMY_KEY_HERE';
-  const COINBASE_API_KEY = process.env.REACT_APP_COINBASE_KEY || 'YOUR_COINBASE_KEY_HERE';
+  // 🔑 FIXED API CONFIGURATION using user's environment variables
+  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
+  const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
+  const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
+  const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
+  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
 
-  // 🚀 IMPROVED CHAIN CONFIGURATION with multiple RPC providers
+  // 🚀 ENHANCED CHAIN CONFIGURATION with your API keys
   const chains = [
     { 
       name: 'Ethereum', 
       value: 'ethereum', 
       apiUrl: 'https://api.etherscan.io/api',
-      rpcUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-      publicRpcUrl: 'https://ethereum-rpc.publicnode.com',
-      viemChain: mainnet,
+      rpcUrls: [
+        `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+        `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
+        'https://ethereum-rpc.publicnode.com'
+      ],
       coinbaseNetwork: 'ethereum-mainnet',
       chainId: 1,
       explorerUrl: 'https://etherscan.io'
@@ -50,9 +51,11 @@ function App() {
       name: 'Base', 
       value: 'base', 
       apiUrl: 'https://api.basescan.org/api',
-      rpcUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-      publicRpcUrl: 'https://base-rpc.publicnode.com',
-      viemChain: base,
+      rpcUrls: [
+        `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+        'https://base-mainnet.publicnode.com',
+        'https://base.meowrpc.com'
+      ],
       coinbaseNetwork: 'base-mainnet',
       chainId: 8453,
       explorerUrl: 'https://basescan.org'
@@ -61,18 +64,20 @@ function App() {
       name: 'Arbitrum', 
       value: 'arbitrum', 
       apiUrl: 'https://api.arbiscan.io/api',
-      rpcUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-      publicRpcUrl: 'https://arbitrum-rpc.publicnode.com',
-      viemChain: arbitrum,
+      rpcUrls: [
+        `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+        'https://arb1.arbitrum.io/rpc',
+        'https://arbitrum-rpc.publicnode.com'
+      ],
       coinbaseNetwork: 'arbitrum-mainnet',
       chainId: 42161,
       explorerUrl: 'https://arbiscan.io'
     }
   ];
 
-  // 🔄 ENHANCED WALLET CONNECTION
+  // 🔄 SIMPLIFIED WALLET CONNECTION (without viem conflicts)
   const connectWallet = async () => {
-    console.log('🔌 ENHANCED Connect wallet clicked');
+    console.log('🔌 FIXED Connect wallet clicked');
     console.log('📊 State:', { isInFarcaster, sdk: !!sdk, sdkReady, appReady });
     
     setIsConnecting(true);
@@ -80,31 +85,29 @@ function App() {
 
     try {
       if (isInFarcaster && sdk && sdkReady && appReady) {
-        console.log('📱 Attempting ENHANCED Farcaster wallet connection...');
+        console.log('📱 Attempting FIXED Farcaster wallet connection...');
 
-        // 🎯 Method 1: Modern SDK approach - Get user info first
-        console.log('🔍 Method 1: Getting user context...');
+        // 🎯 Method 1: Try SDK context first
+        console.log('🔍 Method 1: Checking SDK context...');
         try {
-          const context = await sdk.context;
-          console.log('📱 Context received:', context);
-          
-          if (context?.user) {
-            const userData = context.user;
-            console.log('� User data:', userData);
+          if (sdk.context?.user) {
+            const userData = sdk.context.user;
+            console.log('👤 User data found:', userData);
             setUser(userData);
             
-            // Try to get wallet address from user context
+            // Try custody address first
             if (userData.custody) {
-              console.log('💰 Found custody address:', userData.custody);
+              console.log('💰 Using custody address:', userData.custody);
               setAddress(userData.custody);
               setIsConnected(true);
               console.log('✅ SUCCESS - Connected via custody!');
               return;
             }
             
+            // Try verified addresses
             if (userData.verifications && userData.verifications.length > 0) {
               const verifiedAddr = userData.verifications[0];
-              console.log('🔐 Found verified address:', verifiedAddr);
+              console.log('🔐 Using verified address:', verifiedAddr);
               setAddress(verifiedAddr);
               setIsConnected(true);
               console.log('✅ SUCCESS - Connected via verification!');
@@ -125,7 +128,7 @@ function App() {
             
             if (accounts && accounts.length > 0) {
               const walletAddr = accounts[0];
-              console.log('👛 Got wallet address:', walletAddr);
+              console.log('👛 Got wallet address from provider:', walletAddr);
               setAddress(walletAddr);
               setIsConnected(true);
               setUser({ address: walletAddr, fid: sdk.context?.user?.fid });
@@ -137,33 +140,17 @@ function App() {
           console.log('⚠️ Provider method failed:', providerError.message);
         }
 
-        // 🎯 Method 3: Try wallet connection directly
-        console.log('🔍 Method 3: Direct wallet connection...');
-        try {
-          const walletResponse = await sdk.wallet.connect();
-          if (walletResponse && walletResponse.address) {
-            console.log('🔗 Direct wallet connection successful:', walletResponse.address);
-            setAddress(walletResponse.address);
-            setIsConnected(true);
-            setUser({ address: walletResponse.address, ...sdk.context?.user });
-            console.log('✅ SUCCESS - Connected directly!');
-            return;
-          }
-        } catch (directError) {
-          console.log('⚠️ Direct method failed:', directError.message);
-        }
-
-        // If all methods fail, show helpful error
-        throw new Error('Unable to connect wallet. Please make sure you have a wallet set up in Farcaster and try again.');
+        // Show helpful error if all methods fail
+        throw new Error('Unable to connect wallet. Please ensure you have a wallet connected in Farcaster and try again.');
 
       } else {
         // Not in Farcaster environment
-        const missingRequirements = [];
-        if (!isInFarcaster) missingRequirements.push('Must be in Farcaster app');
-        if (!sdkReady) missingRequirements.push('SDK not ready');
-        if (!appReady) missingRequirements.push('App not ready');
+        const missing = [];
+        if (!isInFarcaster) missing.push('Must be in Farcaster app');
+        if (!sdkReady) missing.push('SDK not ready');
+        if (!appReady) missing.push('App not ready');
         
-        throw new Error(`❌ ${missingRequirements.join(', ')}`);
+        throw new Error(`❌ ${missing.join(', ')}`);
       }
 
     } catch (err) {
@@ -174,17 +161,17 @@ function App() {
     }
   };
 
-  // � ENHANCED APP INITIALIZATION
+  // 🔄 PROPER APP INITIALIZATION
   useEffect(() => {
     const initializeApp = async () => {
-      console.log('🚀 ENHANCED Initializing Farcaster miniapp...');
+      console.log('🚀 FIXED Initializing Farcaster miniapp...');
       
       try {
-        // Check environment
+        // Detect Farcaster environment
         const isFarcasterEnv = typeof window !== 'undefined' && (
           window.location.href.includes('farcaster') || 
           window.location.href.includes('warpcast') ||
-          window.parent !== window // in iframe
+          window.parent !== window
         );
         
         setIsInFarcaster(isFarcasterEnv);
@@ -195,12 +182,12 @@ function App() {
           console.log('🔧 SDK available, initializing...');
           setSdkReady(true);
           
-          // Wait a moment for SDK to fully initialize
+          // Wait for SDK to be ready
           await new Promise(resolve => setTimeout(resolve, 1000));
           
-          // Call ready after initialization
+          // Call SDK ready
           if (typeof sdk.actions?.ready === 'function') {
-            console.log('� Calling sdk.actions.ready()...');
+            console.log('📞 Calling sdk.actions.ready()...');
             await sdk.actions.ready();
             console.log('✅ SDK ready called successfully!');
           }
@@ -209,89 +196,58 @@ function App() {
           console.log('✅ App initialization complete!');
         } else {
           console.log('❌ SDK not available');
-          setAppReady(true); // Set ready anyway for testing
+          setAppReady(true);
         }
       } catch (error) {
         console.error('❌ App initialization failed:', error);
         setError(`Initialization failed: ${error.message}`);
-        setAppReady(true); // Set ready anyway to prevent infinite loading
+        setAppReady(true);
       }
     };
 
     initializeApp();
   }, []);
 
-  // 🔄 ENHANCED APPROVAL FETCHING with multiple RPC providers
+  // 🔄 SIMPLIFIED APPROVAL FETCHING with your API keys
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchRealApprovals = useCallback(async (userAddress) => {
     setLoading(true);
     setError(null);
-    console.log('🔍 ENHANCED Fetching approvals for:', userAddress);
+    console.log('🔍 FIXED Fetching approvals for:', userAddress);
     
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
       console.log('🌐 Using chain config:', chainConfig);
 
-      // 🎯 Method 1: Try Etherscan API with rate limiting
-      console.log('📡 Method 1: Trying Etherscan API...');
+      // Get appropriate API key for chain
+      let apiKey = ETHERSCAN_API_KEY;
+      if (selectedChain === 'base') apiKey = BASESCAN_KEY;
+      if (selectedChain === 'arbitrum') apiKey = ARBISCAN_KEY;
+
+      // 🎯 Method 1: Try scan API
+      console.log('📡 Method 1: Trying scan API with key:', apiKey.slice(0, 10) + '...');
       
       const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
       const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
       
-      const etherscanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=${paddedAddress}&apikey=${ETHERSCAN_API_KEY}`;
+      const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=${paddedAddress}&apikey=${apiKey}`;
       
       try {
-        const response = await fetch(etherscanUrl);
+        const response = await fetch(scanUrl);
         const data = await response.json();
         
         if (data.status === '1' && data.result && data.result.length > 0) {
-          console.log(`📊 Etherscan: Found ${data.result.length} approval events`);
-          await processApprovals(data.result, userAddress, chainConfig);
-          return; // Success, exit early
-        } else if (data.status === '0' && data.message === 'NOTOK') {
-          console.log('⚠️ Etherscan rate limit hit, trying alternative...');
+          console.log(`📊 Scan API: Found ${data.result.length} approval events`);
+          await processApprovals(data.result, userAddress, chainConfig, apiKey);
+          return;
+        } else {
+          console.log('⚠️ Scan API: No results or rate limited');
         }
-      } catch (etherscanError) {
-        console.log('⚠️ Etherscan failed:', etherscanError.message);
+      } catch (scanError) {
+        console.log('⚠️ Scan API failed:', scanError.message);
       }
 
-      // 🎯 Method 2: Try RPC with viem (fallback)
-      console.log('🔄 Method 2: Trying RPC with viem...');
-      try {
-        const rpcUrl = ALCHEMY_API_KEY !== 'YOUR_ALCHEMY_KEY_HERE' ? 
-          chainConfig.rpcUrl : chainConfig.publicRpcUrl;
-        
-        const client = createPublicClient({
-          chain: chainConfig.viemChain,
-          transport: http(rpcUrl)
-        });
-
-        const logs = await client.getLogs({
-          address: undefined, // Get from all contracts
-          event: {
-            name: 'Approval',
-            inputs: [
-              { name: 'owner', type: 'address', indexed: true },
-              { name: 'spender', type: 'address', indexed: true },
-              { name: 'value', type: 'uint256', indexed: false }
-            ]
-          },
-          args: {
-            owner: userAddress
-          },
-          fromBlock: 'earliest',
-          toBlock: 'latest'
-        });
-
-        console.log(`📊 RPC: Found ${logs.length} approval events`);
-        if (logs.length > 0) {
-          await processApprovals(logs, userAddress, chainConfig);
-          return; // Success
-        }
-      } catch (rpcError) {
-        console.log('⚠️ RPC failed:', rpcError.message);
-      }
-
-      // 🎯 Method 3: Show test data if no real data found
+      // 🎯 Method 2: Show test data if no real data
       console.log('🧪 No real data found, showing test approval...');
       const testApproval = {
         id: 'test-approval-' + Date.now(),
@@ -316,32 +272,30 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [selectedChain]);
+  }, [selectedChain, ETHERSCAN_API_KEY, BASESCAN_KEY, ARBISCAN_KEY]);
 
   // 🔄 Process approvals from API response
-  const processApprovals = async (logs, userAddress, chainConfig) => {
+  const processApprovals = async (logs, userAddress, chainConfig, apiKey) => {
     console.log('🔄 Processing approvals...');
     const approvalMap = new Map();
     
-    for (const log of logs.slice(-50)) { // Process last 50 for performance
+    for (const log of logs.slice(-50)) {
       try {
         const tokenContract = log.address.toLowerCase();
         const spenderAddress = log.topics && log.topics[2] ? 
-          '0x' + log.topics[2].slice(26) : log.args?.spender;
+          '0x' + log.topics[2].slice(26) : null;
         
         if (!spenderAddress) continue;
         
         const key = `${tokenContract}-${spenderAddress}`;
-        
-        // Check if we already processed this approval
         if (approvalMap.has(key)) continue;
         
-        // Get current allowance
-        const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig);
+        // Check current allowance
+        const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig, apiKey);
         
         if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
           // Get token info
-          const tokenInfo = await getTokenInfo(tokenContract, chainConfig);
+          const tokenInfo = await getTokenInfo(tokenContract, chainConfig, apiKey);
           
           const approval = {
             id: key,
@@ -369,23 +323,21 @@ function App() {
     console.log(`✅ Processed ${finalApprovals.length} active approvals`);
   };
 
-  // REAL DATA FETCHING using enhanced APIs
+  // REAL DATA FETCHING using your API keys
   useEffect(() => {
     if (address && isConnected) {
       fetchRealApprovals(address);
     }
   }, [address, isConnected, fetchRealApprovals]);
 
-  // 🔄 ENHANCED ALLOWANCE CHECKING with multiple providers
-  const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig) => {
+  // 🔄 ALLOWANCE CHECKING with your API keys
+  const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig, apiKey) => {
     try {
-      // ERC20 allowance(owner, spender) function signature: 0xdd62ed3e
       const ownerPadded = owner.slice(2).padStart(64, '0');
       const spenderPadded = spender.slice(2).padStart(64, '0');
       const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
       
-      // Try Etherscan first
-      const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${ETHERSCAN_API_KEY}`;
+      const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`;
       
       const response = await fetch(url);
       const result = await response.json();
@@ -402,10 +354,10 @@ function App() {
     }
   };
 
-  // Get REAL token information
-  const getTokenInfo = async (tokenAddress, chainConfig) => {
+  // Get REAL token information using scan API
+  const getTokenInfo = async (tokenAddress, chainConfig, apiKey) => {
     try {
-      // Get token name, symbol, decimals from contract
+      // Get token name, symbol, decimals from contract using scan API
       const calls = [
         { method: '0x06fdde03', property: 'name' },     // name()
         { method: '0x95d89b41', property: 'symbol' },   // symbol()
@@ -416,26 +368,22 @@ function App() {
       
       for (const call of calls) {
         try {
-          const response = await fetch(chainConfig.apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              method: 'eth_call',
-              params: [{ to: tokenAddress, data: call.method }, 'latest'],
-              id: 1
-            })
-          });
-          
+          const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`;
+          const response = await fetch(url);
           const data = await response.json();
-          if (data.result && data.result !== '0x') {
+          
+          if (data.status === '1' && data.result && data.result !== '0x') {
             if (call.property === 'decimals') {
               results[call.property] = parseInt(data.result, 16);
             } else {
               // Decode string result
-              const hex = data.result.slice(2);
-              const decoded = Buffer.from(hex, 'hex').toString('utf8').replace(/\0/g, '');
-              results[call.property] = decoded || `Token${call.property.toUpperCase()}`;
+              try {
+                const hex = data.result.slice(2);
+                const decoded = Buffer.from(hex, 'hex').toString('utf8').replace(/\0/g, '');
+                results[call.property] = decoded || `Token${call.property.toUpperCase()}`;
+              } catch (decodeError) {
+                results[call.property] = `Token${call.property.toUpperCase()}`;
+              }
             }
           }
         } catch (callError) {
