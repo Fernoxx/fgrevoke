@@ -1,5 +1,5 @@
 // App.js - FarGuard with REAL Coinbase APIs and Fixed Wallet Connection
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 
@@ -21,7 +21,7 @@ function App() {
   const [appReady, setAppReady] = useState(false);
 
   // Coinbase API configuration for REAL data
-  const COINBASE_API_KEY = 'organizations/0c0e9e7c-8f8f-4c0e-8f8f-8f8f8f8f8f8f/apiKeys/8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f';
+  // const COINBASE_API_KEY = 'organizations/0c0e9e7c-8f8f-4c0e-8f8f-8f8f8f8f8f8f/apiKeys/8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f';
   const ETHERSCAN_API_KEY = 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
 
   const chains = [
@@ -182,14 +182,7 @@ function App() {
     initializeApp();
   }, []);
 
-  // REAL DATA FETCHING using Coinbase APIs + Etherscan
-  useEffect(() => {
-    if (address && isConnected) {
-      fetchRealApprovals(address);
-    }
-  }, [address, isConnected, selectedChain]);
-
-  const fetchRealApprovals = async (userAddress) => {
+  const fetchRealApprovals = useCallback(async (userAddress) => {
     setLoading(true);
     setError(null);
     console.log('🔍 Fetching approvals for:', userAddress);
@@ -228,7 +221,7 @@ function App() {
 
       // Process approval events and get current allowances
       const approvalMap = new Map();
-      const processedApprovals = [];
+      // const processedApprovals = []; // Keeping for future use
       
       for (const log of data.result.slice(-50)) { // Limit to last 50 events for performance
         try {
@@ -306,7 +299,14 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedChain]);
+
+  // REAL DATA FETCHING using Coinbase APIs + Etherscan  
+  useEffect(() => {
+    if (address && isConnected) {
+      fetchRealApprovals(address);
+    }
+  }, [address, isConnected, fetchRealApprovals]);
 
   // Check current allowance using Etherscan API
   const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig) => {
