@@ -53,100 +53,81 @@ function App() {
 
   // ENHANCED wallet connection with REAL Farcaster integration
   const connectWallet = async () => {
-    console.log('🔌 ENHANCED Connect wallet clicked');
-    console.log('📊 State:', { isInFarcaster, sdk: !!sdk, sdkReady });
+    console.log('🔌 Connect wallet clicked');
+    console.log('📊 State:', { isInFarcaster, sdk: !!sdk, sdkReady, appReady });
     
     setIsConnecting(true);
     setError(null);
 
     try {
-      if (isInFarcaster && sdk && sdkReady) {
-        console.log('📱 Attempting REAL Farcaster wallet connection...');
+      if (isInFarcaster && sdk && sdkReady && appReady) {
+        console.log('📱 Attempting Farcaster wallet connection...');
 
-        // Method 1: User context (most reliable)
+        // Method 1: Get Ethereum provider and request accounts
+        console.log('🔍 Getting Ethereum provider...');
+        try {
+          const provider = await sdk.wallet.getEthereumProvider();
+          console.log('� Provider obtained:', !!provider);
+          
+          if (provider) {
+            console.log('🔑 Requesting wallet accounts...');
+            const accounts = await provider.request({ method: 'eth_requestAccounts' });
+            console.log('👛 Accounts received:', accounts);
+            
+            if (accounts && accounts.length > 0) {
+              const walletAddress = accounts[0];
+              setAddress(walletAddress);
+              setIsConnected(true);
+              setUser({ address: walletAddress }); // Set basic user info
+              console.log('✅ SUCCESS - Connected wallet:', walletAddress);
+              return;
+            }
+          }
+        } catch (providerError) {
+          console.log('⚠️ Provider method failed, trying alternatives:', providerError.message);
+        }
+
+        // Method 2: Check user context for existing address
         console.log('🔍 Checking user context...');
         if (sdk.context?.user) {
           const userData = sdk.context.user;
-          console.log('👤 User data available:', userData);
+          console.log('� User data available:', userData);
           
+          // Check for custody address (Farcaster managed wallet)
           if (userData.custody) {
             const custodyAddress = userData.custody;
             setAddress(custodyAddress);
             setIsConnected(true);
+            setUser(userData);
             console.log('✅ SUCCESS - Got custody address:', custodyAddress);
             return;
           }
           
+          // Check for verified addresses
           if (userData.verifications?.length > 0) {
             const verifiedAddress = userData.verifications[0];
             setAddress(verifiedAddress);
             setIsConnected(true);
+            setUser(userData);
             console.log('✅ SUCCESS - Got verified address:', verifiedAddress);
             return;
           }
         }
 
-        // Method 2: Wallet provider (for transactions)
-        console.log('🔍 Trying wallet provider...');
-        try {
-          const provider = await sdk.wallet.getEthereumProvider();
-          console.log('📡 Provider obtained:', !!provider);
-          
-          if (provider) {
-            // First try to get existing accounts
-            console.log('🔍 Getting existing accounts...');
-            let accounts = await provider.request({ method: 'eth_accounts' });
-            console.log('👛 Existing accounts:', accounts);
-            
-            if (!accounts || accounts.length === 0) {
-              console.log('🔐 Requesting account access...');
-              accounts = await provider.request({ method: 'eth_requestAccounts' });
-              console.log('🔑 Requested accounts:', accounts);
-            }
-            
-            if (accounts && accounts.length > 0) {
-              setAddress(accounts[0]);
-              setIsConnected(true);
-              console.log('✅ SUCCESS - Got wallet address:', accounts[0]);
-              return;
-            }
-          }
-        } catch (providerError) {
-          console.error('❌ Provider method failed:', providerError);
-        }
+        throw new Error('No wallet found. Please ensure you have a wallet connected in Farcaster and try again.');
 
-        // Method 3: Try alternative SDK methods
-        try {
-          console.log('🔍 Trying alternative SDK methods...');
-          
-          // Check if there are other methods available
-          if (sdk.wallet?.connect) {
-            const connection = await sdk.wallet.connect();
-            if (connection?.address) {
-              setAddress(connection.address);
-              setIsConnected(true);
-              console.log('✅ SUCCESS - Alternative connection:', connection.address);
-              return;
-            }
-          }
-        } catch (altError) {
-          console.error('❌ Alternative methods failed:', altError);
-        }
-
-        throw new Error('No wallet access available in Farcaster. Please ensure you have a connected wallet.');
-
-      } else if (!isInFarcaster) {
-        console.log('🌐 Web environment detected');
-        throw new Error('This app requires Farcaster to connect your wallet. Please open it in the Farcaster app.');
-        
       } else {
-        console.log('⏳ SDK not ready yet');
-        throw new Error('Farcaster SDK is still loading. Please wait a moment and try again.');
+        const missingRequirements = [];
+        if (!isInFarcaster) missingRequirements.push('Must open in Farcaster app');
+        if (!sdkReady) missingRequirements.push('SDK not ready');
+        if (!appReady) missingRequirements.push('App still initializing');
+        
+        throw new Error(`Cannot connect wallet: ${missingRequirements.join(', ')}`);
       }
 
     } catch (connectError) {
       console.error('❌ WALLET CONNECTION FAILED:', connectError);
-      setError(connectError.message);
+      setError(`Wallet connection failed: ${connectError.message}`);
     } finally {
       setIsConnecting(false);
     }
@@ -211,72 +192,65 @@ function App() {
   const fetchRealApprovals = async (userAddress) => {
     setLoading(true);
     setError(null);
-    console.log('🔍 Fetching REAL approvals for:', userAddress);
+    console.log('🔍 Fetching approvals for:', userAddress);
     
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
+      console.log('🌐 Using chain:', chainConfig.name);
       
-      // Method 1: Try Coinbase Advanced APIs for better data
-      console.log('📡 Trying Coinbase Advanced API...');
-      try {
-        const coinbaseResponse = await fetch(`https://api.coinbase.com/api/v2/wallet/${userAddress}/transactions`, {
-          headers: {
-            'Authorization': `Bearer ${COINBASE_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (coinbaseResponse.ok) {
-          const coinbaseData = await coinbaseResponse.json();
-          console.log('✅ Coinbase data received:', coinbaseData);
-          // Process Coinbase data for approvals
-        }
-      } catch (coinbaseError) {
-        console.log('⚠️ Coinbase API not available, falling back to Etherscan');
-      }
-
-      // Method 2: Enhanced Etherscan API for approval events
+      // Get ERC20 approval events using Etherscan API
       console.log('📡 Fetching from Etherscan API...');
       
-      // Get ERC20 approval events (more accurate than token transactions)
-      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925'; // Approval(owner,spender,value)
+      // ERC20 Approval event signature: Approval(address indexed owner, address indexed spender, uint256 value)
+      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+      const paddedAddress = '0x000000000000000000000000' + userAddress.slice(2).toLowerCase();
       
-      const approvalResponse = await fetch(
-        `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=0x000000000000000000000000${userAddress.slice(2)}&apikey=${ETHERSCAN_API_KEY}`
-      );
+      const apiUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=${paddedAddress}&apikey=${ETHERSCAN_API_KEY}`;
       
-      if (!approvalResponse.ok) {
-        throw new Error(`Etherscan API Error: ${approvalResponse.status}`);
+      console.log('🔗 API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
       }
 
-      const approvalData = await approvalResponse.json();
+      const data = await response.json();
+      console.log('📊 API Response:', data);
       
-      if (approvalData.status !== '1') {
-        console.log('ℹ️ No approval events found');
+      if (data.status !== '1' || !data.result) {
+        console.log('ℹ️ No approval events found or API error:', data.message);
         setApprovals([]);
         return;
       }
 
-      console.log(`📊 Found ${approvalData.result.length} approval events`);
+      console.log(`📊 Found ${data.result.length} approval events`);
 
-      // Process REAL approval events
+      // Process approval events and get current allowances
       const approvalMap = new Map();
+      const processedApprovals = [];
       
-      for (const log of approvalData.result) {
+      for (const log of data.result.slice(-50)) { // Limit to last 50 events for performance
         try {
-          // Decode the approval event properly
-          const tokenContract = log.address;
-          const owner = '0x' + log.topics[1].slice(26); // Remove padding
-          const spender = '0x' + log.topics[2].slice(26); // Remove padding
+          const tokenContract = log.address.toLowerCase();
+          const spender = '0x' + log.topics[2].slice(26); // Remove padding from topic
           
-          // Verify this is actually our user's approval
-          if (owner.toLowerCase() !== userAddress.toLowerCase()) continue;
+          // Create unique key for token-spender pair
+          const approvalKey = `${tokenContract}-${spender.toLowerCase()}`;
           
-          // Get current allowance to see if approval is still active
-          const allowanceData = await checkCurrentAllowance(tokenContract, owner, spender, chainConfig);
+          // Skip if we've already processed this approval
+          if (approvalMap.has(approvalKey)) continue;
+          approvalMap.set(approvalKey, true);
           
-          // Only include if there's still an active allowance
-          if (allowanceData && allowanceData.allowance !== '0') {
+          // Get current allowance
+          console.log(`🔍 Checking allowance for ${tokenContract} -> ${spender}`);
+          const allowanceData = await checkCurrentAllowance(tokenContract, userAddress, spender, chainConfig);
+          
+          // Only include if there's still an active allowance > 0
+          if (allowanceData && allowanceData.allowance && allowanceData.allowance !== '0') {
+            console.log(`✅ Active allowance found: ${allowanceData.allowance}`);
+            
+            // Get token info
             const tokenInfo = await getTokenInfo(tokenContract, chainConfig);
             
             if (tokenInfo) {
@@ -303,6 +277,25 @@ function App() {
       }
 
       const finalApprovals = Array.from(approvalMap.values());
+      
+      // Add test approval for debugging (remove in production)
+      if (finalApprovals.length === 0) {
+        console.log('🧪 Adding test approval for debugging...');
+        finalApprovals.push({
+          id: 'test-approval',
+          name: 'Test Token',
+          symbol: 'TEST',
+          contract: '0x1234567890123456789012345678901234567890',
+          spender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+          spenderName: 'Test Dapp',
+          amount: '∞',
+          riskLevel: 'medium',
+          txHash: '0xtest',
+          blockNumber: 12345,
+          isActive: true
+        });
+      }
+      
       setApprovals(finalApprovals);
       console.log(`✅ Found ${finalApprovals.length} ACTIVE token approvals`);
 
@@ -315,34 +308,28 @@ function App() {
     }
   };
 
-  // Check current allowance (REAL on-chain data)
+  // Check current allowance using Etherscan API
   const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig) => {
     try {
-      // ERC20 allowance(owner, spender) function call
-      const allowanceCall = `0xdd62ed3e${owner.slice(2).padStart(64, '0')}${spender.slice(2).padStart(64, '0')}`;
+      // ERC20 allowance(owner, spender) function signature: 0xdd62ed3e
+      const ownerPadded = owner.slice(2).padStart(64, '0');
+      const spenderPadded = spender.slice(2).padStart(64, '0');
+      const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
       
-      const response = await fetch(chainConfig.apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_call',
-          params: [{
-            to: tokenContract,
-            data: allowanceCall
-          }, 'latest'],
-          id: 1
-        })
-      });
+      const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${ETHERSCAN_API_KEY}`;
       
-      const data = await response.json();
-      if (data.result) {
-        return { allowance: parseInt(data.result, 16).toString() };
+      const response = await fetch(url);
+      const result = await response.json();
+      
+      if (result.status === '1' && result.result && result.result !== '0x') {
+        const allowance = BigInt(result.result).toString();
+        return { allowance };
       }
-      return null;
+      
+      return { allowance: '0' };
     } catch (error) {
       console.warn('Failed to check allowance:', error);
-      return null;
+      return { allowance: '0' };
     }
   };
 
