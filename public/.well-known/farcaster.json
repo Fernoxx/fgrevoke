@@ -1,14 +1,26 @@
 {
-  "version": "4",                            // bump this on each update
-  "frame": {
+  "miniapp": {
+    "version": "1",
     "name": "FarGuard",
-    "version": "4",                          // should match top‐level version
     "iconUrl": "https://fgrevoke.vercel.app/farguard-logo.png",
     "homeUrl": "https://fgrevoke.vercel.app",
-    "imageUrl": "https://fgrevoke.vercel.app/frame-image.png",
-    "buttonTitle": "Start Revoking",
+    "imageUrl": "https://fgrevoke.vercel.app/og-image.png",
+    "buttonTitle": "🛡️ Start Securing",
     "splashImageUrl": "https://fgrevoke.vercel.app/farguard-logo.png",
     "splashBackgroundColor": "#1e1b4b",
-    "description": "FarGuard helps you find and revoke all your ERC-20/NFT approvals safely."
+    "description": "FarGuard helps you find and revoke all your ERC-20/NFT approvals safely. Protect your wallet from risky token approvals.",
+    "requiredChains": [
+      "eip155:1",
+      "eip155:8453", 
+      "eip155:42161"
+    ],
+    "requiredCapabilities": [
+      "wallet.getEthereumProvider"
+    ],
+    "categories": ["finance", "utilities", "security"],
+    "screenshots": [
+      "https://fgrevoke.vercel.app/screenshot-1.png",
+      "https://fgrevoke.vercel.app/screenshot-2.png"
+    ]
   }
 }
