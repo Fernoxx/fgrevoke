@@ -9,8 +9,11 @@
     <title>FarGuard - Token Approval Manager</title>
     <meta name="description" content="Manage your token approvals securely on Farcaster. Track and revoke risky contract approvals to protect your wallet." />
     
-    <!-- CRITICAL: Correct Farcaster Miniapp Meta Tags (NOT Frame v1 syntax) -->
-    <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://fgrevoke.vercel.app/og-image.png","button":{"title":"Open FarGuard","action":{"type":"launch_frame","name":"FarGuard","url":"https://fgrevoke.vercel.app","splashImageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","splashBackgroundColor":"#7c3aed"}}}' />
+    <!-- CORRECT Farcaster Miniapp Meta Tags -->
+    <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://fgrevoke.vercel.app/og-image.png","button":{"title":"🛡️ Start Securing","action":{"type":"launch_frame","name":"FarGuard","url":"https://fgrevoke.vercel.app","splashImageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","splashBackgroundColor":"#1e1b4b"}}}' />
+    
+    <!-- Backward compatibility frame tag -->
+    <meta name="fc:frame" content='{"version":"1","imageUrl":"https://fgrevoke.vercel.app/og-image.png","button":{"title":"🛡️ Start Securing","action":{"type":"launch_frame","name":"FarGuard","url":"https://fgrevoke.vercel.app","splashImageUrl":"https://fgrevoke.vercel.app/farguard-logo.png","splashBackgroundColor":"#1e1b4b"}}}' />
     
     <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="FarGuard - Token Approval Manager" />
@@ -28,18 +31,39 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Prevent splash screen display issues -->
+    <!-- Prevent any splash screen display issues -->
     <style>
-      .splash-screen, [data-splash] { 
+      body {
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+      
+      /* Hide any potential splash screens that might interfere */
+      .splash-screen, 
+      [data-splash], 
+      .miniapp-loading,
+      .loading-screen {
         display: none !important; 
       }
-      .miniapp-loading { 
-        display: none !important; 
+      
+      /* Ensure app renders immediately */
+      #root {
+        min-height: 100vh;
+        width: 100%;
       }
     </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    
+    <!-- Debug info (remove in production) -->
+    <script>
+      console.log('🚀 FarGuard loading...');
+      console.log('📱 User agent:', navigator.userAgent);
+      console.log('🌐 URL:', window.location.href);
+      console.log('🔗 Referrer:', document.referrer);
+    </script>
   </body>
 </html>
