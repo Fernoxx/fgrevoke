@@ -198,134 +198,189 @@ function App() {
     setLoading(true);
     setError(null);
     console.log('🔍 Fetching REAL approvals for:', userAddress);
+    console.log('🔍 Selected chain:', selectedChain);
+    console.log('🔍 Available APIs:', {
+      etherscan: ETHERSCAN_API_KEY ? 'Available' : 'Missing',
+      alchemy: ALCHEMY_API_KEY ? 'Available' : 'Missing',
+      infura: INFURA_API_KEY ? 'Available' : 'Missing',
+      basescan: BASESCAN_KEY ? 'Available' : 'Missing',
+      arbiscan: ARBISCAN_KEY ? 'Available' : 'Missing'
+    });
     
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
+      console.log('🔍 Chain config:', chainConfig);
       
       let apiKey = ETHERSCAN_API_KEY;
       if (selectedChain === 'base') apiKey = BASESCAN_KEY;
       if (selectedChain === 'arbitrum') apiKey = ARBISCAN_KEY;
+      
+      console.log('🔍 Using API key:', apiKey ? 'Available' : 'Missing');
 
       const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
       const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
       
+      console.log('🔍 Padded address:', paddedAddress);
+      console.log('🔍 Approval topic:', approvalTopic);
+      
       // Method 1: Try Block Explorer API
       console.log('🔍 Method 1: Trying Block Explorer API...');
       const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=${paddedAddress}&apikey=${apiKey}`;
+      console.log('🔍 Scan URL:', scanUrl);
       
       try {
         const response = await fetch(scanUrl);
         const data = await response.json();
+        console.log('🔍 Block Explorer API response:', data);
         
         if (data.status === '1' && data.result && data.result.length > 0) {
           console.log(`📊 Found ${data.result.length} approval events from Block Explorer`);
+          console.log('📊 First few events:', data.result.slice(0, 3));
           await processApprovals(data.result, userAddress, chainConfig, apiKey);
           return;
         } else {
           console.log('⚠️ No results from Block Explorer API, trying alternatives...');
+          console.log('⚠️ Data status:', data.status);
+          console.log('⚠️ Data result:', data.result);
         }
       } catch (scanError) {
         console.log('⚠️ Block Explorer API failed:', scanError.message);
+        console.log('⚠️ Full error:', scanError);
       }
 
-             // Method 2: Try using Alchemy API for more comprehensive data
+       // Method 2: Try using Alchemy API for more comprehensive data
        console.log('🔍 Method 2: Trying Alchemy API...');
        try {
          const alchemyApprovals = await fetchApprovalsFromAlchemy(userAddress, chainConfig);
+         console.log('🔍 Alchemy approvals result:', alchemyApprovals);
          if (alchemyApprovals && alchemyApprovals.length > 0) {
            console.log(`📊 Found ${alchemyApprovals.length} approvals from Alchemy`);
            setApprovals(alchemyApprovals);
            return;
+         } else {
+           console.log('⚠️ No approvals from Alchemy API');
          }
        } catch (alchemyError) {
          console.log('⚠️ Alchemy API failed:', alchemyError.message);
+         console.log('⚠️ Full Alchemy error:', alchemyError);
        }
 
        // Method 3: Try direct RPC calls for approval events
        console.log('🔍 Method 3: Trying direct RPC calls...');
        try {
          const rpcApprovals = await fetchApprovalsFromRPC(userAddress, chainConfig);
+         console.log('🔍 RPC approvals result:', rpcApprovals);
          if (rpcApprovals && rpcApprovals.length > 0) {
            console.log(`📊 Found ${rpcApprovals.length} approvals from RPC`);
            setApprovals(rpcApprovals);
            return;
+         } else {
+           console.log('⚠️ No approvals from RPC');
          }
        } catch (rpcError) {
          console.log('⚠️ RPC API failed:', rpcError.message);
+         console.log('⚠️ Full RPC error:', rpcError);
        }
 
        // Method 4: Try checking common DeFi protocols directly
        console.log('🔍 Method 4: Checking common DeFi protocols...');
        try {
          const commonProtocolApprovals = await checkCommonProtocols(userAddress, chainConfig);
+         console.log('🔍 Common protocol approvals result:', commonProtocolApprovals);
          if (commonProtocolApprovals && commonProtocolApprovals.length > 0) {
            console.log(`📊 Found ${commonProtocolApprovals.length} approvals from common protocols`);
            setApprovals(commonProtocolApprovals);
            return;
+         } else {
+           console.log('⚠️ No approvals from common protocols');
          }
        } catch (protocolError) {
          console.log('⚠️ Common protocols check failed:', protocolError.message);
+         console.log('⚠️ Full protocol error:', protocolError);
        }
 
        // If no approvals found, show empty state (not test data)
        console.log('✅ No active approvals found - wallet is secure!');
        setApprovals([]);
-      
-    } catch (error) {
-      console.error('❌ Approval fetching failed:', error);
-      setError(`Failed to fetch approvals: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedChain, ETHERSCAN_API_KEY, BASESCAN_KEY, ARBISCAN_KEY]);
+       
+     } catch (error) {
+       console.error('❌ Approval fetching failed:', error);
+       setError(`Failed to fetch approvals: ${error.message}`);
+     } finally {
+       setLoading(false);
+     }
+       }, [selectedChain, ETHERSCAN_API_KEY, BASESCAN_KEY, ARBISCAN_KEY, ALCHEMY_API_KEY, INFURA_API_KEY]);
 
-  // Process approvals from API response
-  const processApprovals = async (logs, userAddress, chainConfig, apiKey) => {
-    console.log('🔄 Processing approvals...');
-    const approvalMap = new Map();
-    
-    for (const log of logs.slice(-50)) {
-      try {
-        const tokenContract = log.address.toLowerCase();
-        const spenderAddress = log.topics && log.topics[2] ? 
-          '0x' + log.topics[2].slice(26) : null;
-        
-        if (!spenderAddress) continue;
-        
-        const key = `${tokenContract}-${spenderAddress}`;
-        if (approvalMap.has(key)) continue;
-        
-        // Check current allowance
-        const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig, apiKey);
-        
-        if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
-          const tokenInfo = await getTokenInfo(tokenContract, chainConfig, apiKey);
-          
-          const approval = {
-            id: key,
-            name: tokenInfo.name || 'Unknown Token',
-            symbol: tokenInfo.symbol || 'UNK',
-            contract: tokenContract,
-            spender: spenderAddress,
-            spenderName: getSpenderName(spenderAddress),
-            amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
-            riskLevel: assessRiskLevel(spenderAddress),
-            txHash: log.transactionHash,
-            blockNumber: log.blockNumber,
-            isActive: true
-          };
-          
-          approvalMap.set(key, approval);
-        }
-      } catch (error) {
-        console.warn('⚠️ Error processing approval:', error);
-      }
-    }
-    
-    const finalApprovals = Array.from(approvalMap.values());
-    setApprovals(finalApprovals);
-    console.log(`✅ Processed ${finalApprovals.length} active approvals`);
-  };
+   // Process approvals from API response
+   const processApprovals = async (logs, userAddress, chainConfig, apiKey) => {
+     console.log('🔄 Processing approvals...');
+     console.log('🔄 Processing logs count:', logs.length);
+     console.log('🔄 Processing for address:', userAddress);
+     const approvalMap = new Map();
+     
+     for (const log of logs.slice(-50)) {
+       try {
+         const tokenContract = log.address.toLowerCase();
+         const spenderAddress = log.topics && log.topics[2] ? 
+           '0x' + log.topics[2].slice(26) : null;
+         
+         console.log('🔄 Processing log:', {
+           tokenContract,
+           spenderAddress,
+           txHash: log.transactionHash,
+           blockNumber: log.blockNumber
+         });
+         
+         if (!spenderAddress) {
+           console.log('⚠️ No spender address found, skipping');
+           continue;
+         }
+         
+         const key = `${tokenContract}-${spenderAddress}`;
+         if (approvalMap.has(key)) {
+           console.log('⚠️ Duplicate approval, skipping');
+           continue;
+         }
+         
+         // Check current allowance
+         console.log('🔄 Checking allowance for:', { tokenContract, userAddress, spenderAddress });
+         const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig, apiKey);
+         console.log('🔄 Allowance info:', allowanceInfo);
+         
+         if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
+           console.log('✅ Active allowance found, getting token info...');
+           const tokenInfo = await getTokenInfo(tokenContract, chainConfig, apiKey);
+           console.log('🔄 Token info:', tokenInfo);
+           
+           const approval = {
+             id: key,
+             name: tokenInfo.name || 'Unknown Token',
+             symbol: tokenInfo.symbol || 'UNK',
+             contract: tokenContract,
+             spender: spenderAddress,
+             spenderName: getSpenderName(spenderAddress),
+             amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
+             riskLevel: assessRiskLevel(spenderAddress),
+             txHash: log.transactionHash,
+             blockNumber: log.blockNumber,
+             isActive: true
+           };
+           
+           console.log('✅ Created approval:', approval);
+           approvalMap.set(key, approval);
+         } else {
+           console.log('⚠️ No active allowance, skipping');
+         }
+       } catch (error) {
+         console.warn('⚠️ Error processing approval:', error);
+       }
+     }
+     
+     const finalApprovals = Array.from(approvalMap.values());
+     console.log(`✅ Processed ${finalApprovals.length} active approvals`);
+     console.log('✅ Final approvals:', finalApprovals);
+     setApprovals(finalApprovals);
+   };
 
   // Fetch approvals when wallet connects
   useEffect(() => {
