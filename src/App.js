@@ -139,12 +139,21 @@ function App() {
         throw new Error('No accounts returned from wallet');
       }
 
-      const walletAddress = accounts[0];
+      const walletAddress = accounts[0].toLowerCase(); // Normalize to lowercase
       console.log('👛 Wallet connected:', walletAddress);
 
       // Get current chain
       const chainId = await ethProvider.request({ method: 'eth_chainId' });
       console.log('🔗 Current chain ID:', chainId);
+
+      // Map chainId to our supported chains
+      const chainIdNum = parseInt(chainId, 16);
+      let detectedChain = 'ethereum'; // default
+      if (chainIdNum === 8453) detectedChain = 'base';
+      if (chainIdNum === 42161) detectedChain = 'arbitrum';
+      
+      console.log(`🔗 Detected chain: ${detectedChain} (${chainIdNum})`);
+      setSelectedChain(detectedChain);
 
       setAddress(walletAddress);
       setIsConnected(true);
@@ -152,11 +161,13 @@ function App() {
       // If we have user context, use it, otherwise create minimal user object
       if (!user && context?.user) {
         setUser(context.user);
+        console.log('👤 Using context user:', context.user);
       } else if (!user) {
         setUser({ address: walletAddress });
+        console.log('👤 Created user object with address');
       }
 
-      console.log('🎉 Wallet connection successful!');
+      console.log('🎉 Wallet connection successful! Ready to fetch real data...');
 
     } catch (error) {
       console.error('❌ Wallet connection failed:', error);
@@ -197,7 +208,7 @@ function App() {
   const fetchRealApprovals = useCallback(async (userAddress) => {
     setLoading(true);
     setError(null);
-    console.log('🔍 Fetching approvals for:', userAddress);
+    console.log('🔍 Fetching approvals for:', userAddress, 'on chain:', selectedChain);
     
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
@@ -209,41 +220,63 @@ function App() {
       const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
       const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
       
-      const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=${paddedAddress}&apikey=${apiKey}`;
+      console.log(`🔍 Search parameters:
+        - Address: ${userAddress}
+        - Padded: ${paddedAddress}
+        - Chain: ${selectedChain}
+        - API: ${chainConfig.apiUrl}`);
+      
+      
+      // Use different block ranges to avoid rate limits
+      const latestBlockUrl = `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`;
+      let fromBlock = '0';
+      
+      try {
+        const blockResponse = await fetch(latestBlockUrl);
+        const blockData = await blockResponse.json();
+        if (blockData.result) {
+          const latestBlock = parseInt(blockData.result, 16);
+          fromBlock = Math.max(0, latestBlock - 500000); // Look back ~500k blocks
+          console.log(`📊 Using block range: ${fromBlock} to latest`);
+        }
+      } catch (blockError) {
+        console.log('⚠️ Could not get latest block, using fromBlock=0');
+      }
+      
+      const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
+      
+      console.log('🌐 Making API request to:', scanUrl.split('&apikey=')[0] + '&apikey=***');
       
       try {
         const response = await fetch(scanUrl);
+        console.log('📡 Response status:', response.status);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('📊 API Response:', { 
+          status: data.status, 
+          message: data.message,
+          resultCount: data.result?.length || 0 
+        });
         
         if (data.status === '1' && data.result && data.result.length > 0) {
-          console.log(`📊 Found ${data.result.length} approval events`);
+          console.log(`✅ Found ${data.result.length} approval events - processing...`);
           await processApprovals(data.result, userAddress, chainConfig, apiKey);
           return;
+        } else if (data.status === '0') {
+          console.log('⚠️ API returned status 0:', data.message);
+          setError(`API Error: ${data.message || 'Unknown error'}`);
         } else {
-          console.log('⚠️ No results from scan API');
+          console.log('ℹ️ No approval events found for this address on', selectedChain);
+          setApprovals([]); // Clear any existing approvals
         }
       } catch (scanError) {
-        console.log('⚠️ Scan API failed:', scanError.message);
+        console.error('❌ Scan API failed:', scanError);
+        setError(`Failed to fetch data from ${selectedChain} explorer: ${scanError.message}`);
       }
-
-      // Show test data if no real data
-      console.log('🧪 Showing test approval...');
-      const testApproval = {
-        id: 'test-approval-' + Date.now(),
-        name: 'Test Token',
-        symbol: 'TEST',
-        contract: '0x1234567890123456789012345678901234567890',
-        spender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
-        spenderName: 'Test Dapp',
-        amount: '∞',
-        riskLevel: 'medium',
-        txHash: '0xtest' + Date.now(),
-        blockNumber: 12345,
-        isActive: true,
-        note: 'This is test data. Connect your wallet in Farcaster to see real approvals.'
-      };
-      
-      setApprovals([testApproval]);
       
     } catch (error) {
       console.error('❌ Approval fetching failed:', error);
@@ -255,25 +288,44 @@ function App() {
 
   // Process approvals from API response
   const processApprovals = async (logs, userAddress, chainConfig, apiKey) => {
-    console.log('🔄 Processing approvals...');
+    console.log('🔄 Processing approvals...', { logsCount: logs.length });
     const approvalMap = new Map();
     
-    for (const log of logs.slice(-50)) {
+    // Process more recent logs first (reverse order)
+    const recentLogs = logs.slice(-100).reverse();
+    let processedCount = 0;
+    
+    for (const log of recentLogs) {
       try {
-        const tokenContract = log.address.toLowerCase();
-        const spenderAddress = log.topics && log.topics[2] ? 
-          '0x' + log.topics[2].slice(26) : null;
+        if (processedCount >= 20) break; // Limit to prevent overwhelming
         
-        if (!spenderAddress) continue;
+        const tokenContract = log.address?.toLowerCase();
+        const spenderAddress = log.topics && log.topics[2] ? 
+          '0x' + log.topics[2].slice(26).toLowerCase() : null;
+        
+        if (!tokenContract || !spenderAddress || spenderAddress === '0x0000000000000000000000000000000000000000') {
+          continue;
+        }
         
         const key = `${tokenContract}-${spenderAddress}`;
         if (approvalMap.has(key)) continue;
         
-        // Check current allowance
-        const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig, apiKey);
+        console.log(`🔍 Checking approval: ${tokenContract.slice(0,8)}... -> ${spenderAddress.slice(0,8)}...`);
+        
+        // Check current allowance with timeout
+        const allowanceInfo = await Promise.race([
+          checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig, apiKey),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+        ]);
         
         if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
-          const tokenInfo = await getTokenInfo(tokenContract, chainConfig, apiKey);
+          console.log(`✅ Active allowance found: ${allowanceInfo.allowance}`);
+          
+          // Get token info with timeout
+          const tokenInfo = await Promise.race([
+            getTokenInfo(tokenContract, chainConfig, apiKey),
+            new Promise(resolve => setTimeout(() => resolve({ name: 'Unknown Token', symbol: 'UNK', decimals: 18 }), 8000))
+          ]);
           
           const approval = {
             id: key,
@@ -285,20 +337,27 @@ function App() {
             amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
             riskLevel: assessRiskLevel(spenderAddress),
             txHash: log.transactionHash,
-            blockNumber: log.blockNumber,
+            blockNumber: parseInt(log.blockNumber, 16) || log.blockNumber,
             isActive: true
           };
           
           approvalMap.set(key, approval);
+          processedCount++;
+          
+          console.log(`📝 Added approval: ${approval.name} (${approval.symbol}) -> ${approval.spenderName}`);
         }
+        
+        // Small delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
       } catch (error) {
-        console.warn('⚠️ Error processing approval:', error);
+        console.warn('⚠️ Error processing approval:', error.message);
       }
     }
     
     const finalApprovals = Array.from(approvalMap.values());
     setApprovals(finalApprovals);
-    console.log(`✅ Processed ${finalApprovals.length} active approvals`);
+    console.log(`✅ Processed ${finalApprovals.length} active approvals from ${logs.length} total logs`);
   };
 
   // Fetch approvals when wallet connects
@@ -311,23 +370,34 @@ function App() {
   // Helper functions for token data
   const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig, apiKey) => {
     try {
-      const ownerPadded = owner.slice(2).padStart(64, '0');
-      const spenderPadded = spender.slice(2).padStart(64, '0');
+      const ownerPadded = owner.slice(2).toLowerCase().padStart(64, '0');
+      const spenderPadded = spender.slice(2).toLowerCase().padStart(64, '0');
       const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
       
       const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`;
       
       const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const result = await response.json();
       
-      if (result.status === '1' && result.result && result.result !== '0x') {
-        const allowance = BigInt(result.result).toString();
-        return { allowance };
+      if (result.status === '1' && result.result && result.result !== '0x' && result.result !== '0x0') {
+        try {
+          const allowance = BigInt(result.result).toString();
+          console.log(`💰 Allowance check: ${allowance} for ${tokenContract.slice(0,8)}...`);
+          return { allowance };
+        } catch (bigintError) {
+          console.warn('BigInt conversion failed:', bigintError);
+          return { allowance: '0' };
+        }
       }
       
       return { allowance: '0' };
     } catch (error) {
-      console.warn('Failed to check allowance:', error);
+      console.warn(`Failed to check allowance for ${tokenContract.slice(0,8)}...:`, error.message);
       return { allowance: '0' };
     }
   };
@@ -354,8 +424,15 @@ function App() {
             } else {
               try {
                 const hex = data.result.slice(2);
-                const decoded = Buffer.from(hex, 'hex').toString('utf8').replace(/\0/g, '');
-                results[call.property] = decoded || `Token${call.property.toUpperCase()}`;
+                // Browser-compatible hex to string conversion
+                let decoded = '';
+                for (let i = 0; i < hex.length; i += 2) {
+                  const charCode = parseInt(hex.slice(i, i + 2), 16);
+                  if (charCode > 0) { // Skip null bytes
+                    decoded += String.fromCharCode(charCode);
+                  }
+                }
+                results[call.property] = decoded.trim() || `Token${call.property.toUpperCase()}`;
               } catch (decodeError) {
                 results[call.property] = `Token${call.property.toUpperCase()}`;
               }
@@ -713,6 +790,23 @@ https://fgrevoke.vercel.app`;
                 </div>
               )}
 
+              {/* Debug Info */}
+              {isConnected && (
+                <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4 text-xs">
+                  <details>
+                    <summary className="text-blue-300 cursor-pointer">🔍 Debug Info</summary>
+                    <div className="mt-2 space-y-1 text-blue-200">
+                      <p><strong>Address:</strong> {address}</p>
+                      <p><strong>Chain:</strong> {selectedChain}</p>
+                      <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
+                      <p><strong>User:</strong> {user ? JSON.stringify(user) : 'None'}</p>
+                      <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
+                      <p><strong>Approvals Count:</strong> {approvals.length}</p>
+                    </div>
+                  </details>
+                </div>
+              )}
+
               {/* Content */}
               {loading ? (
                 <div className="space-y-4">
@@ -728,7 +822,12 @@ https://fgrevoke.vercel.app`;
                 <div className="text-center py-8">
                   <Shield className="w-12 h-12 text-green-400 mx-auto mb-3" />
                   <p className="text-green-300 text-lg font-semibold">Your wallet is secure! 🎉</p>
-                  <p className="text-purple-400 text-sm mt-2">No active token approvals found</p>
+                  <p className="text-purple-400 text-sm mt-2">
+                    No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
+                  </p>
+                  <p className="text-purple-500 text-xs mt-2">
+                    Try switching to a different chain or refreshing to check again
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
