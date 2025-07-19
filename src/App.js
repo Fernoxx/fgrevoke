@@ -1,4 +1,4 @@
-// Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
+// Fixed App.js - FarGuard with Complete Activity Tracking for All Chains
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, BarChart3, ArrowLeft, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
@@ -19,17 +19,18 @@ function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
 
-  // Base activity states
-  const [baseActivity, setBaseActivity] = useState([]);
+  // Activity states for all chains
+  const [chainActivity, setChainActivity] = useState([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [activityStats, setActivityStats] = useState({
     totalTransactions: 0,
     totalValue: 0,
+    totalGasFees: 0,
     dappsUsed: 0,
     lastActivity: null
   });
 
-  // API Configuration with rate limiting
+  // API Configuration with better rate limiting
   const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
   const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
@@ -46,49 +47,45 @@ function App() {
       name: 'Ethereum', 
       value: 'ethereum', 
       apiUrl: 'https://api.etherscan.io/api',
-      rpcUrls: [
-        `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-        `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-        'https://ethereum-rpc.publicnode.com'
-      ],
       chainId: 1,
-      explorerUrl: 'https://etherscan.io'
+      explorerUrl: 'https://etherscan.io',
+      nativeCurrency: 'ETH'
     },
     { 
       name: 'Base', 
       value: 'base', 
       apiUrl: 'https://api.basescan.org/api',
-      rpcUrls: [
-        `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-        'https://base-mainnet.publicnode.com',
-        'https://base.meowrpc.com'
-      ],
       chainId: 8453,
-      explorerUrl: 'https://basescan.org'
+      explorerUrl: 'https://basescan.org',
+      nativeCurrency: 'ETH'
     },
     { 
       name: 'Arbitrum', 
       value: 'arbitrum', 
       apiUrl: 'https://api.arbiscan.io/api',
-      rpcUrls: [
-        `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-        'https://arb1.arbitrum.io/rpc',
-        'https://arbitrum-rpc.publicnode.com'
-      ],
       chainId: 42161,
-      explorerUrl: 'https://arbiscan.io'
+      explorerUrl: 'https://arbiscan.io',
+      nativeCurrency: 'ETH'
     }
   ];
+
+  // Get API key for current chain
+  const getApiKey = (chain) => {
+    switch(chain) {
+      case 'base': return BASESCAN_KEY;
+      case 'arbitrum': return ARBISCAN_KEY;
+      default: return ETHERSCAN_API_KEY;
+    }
+  };
 
   // Rate limiting helper
   const respectRateLimit = async () => {
     const now = Date.now();
     const timeSinceLastCall = now - lastApiCall;
-    const minInterval = 250; // Minimum 250ms between calls
+    const minInterval = 300; // Increased to 300ms for better reliability
 
     if (timeSinceLastCall < minInterval) {
       const waitTime = minInterval - timeSinceLastCall;
-      console.log(`⏱️ Rate limiting: waiting ${waitTime}ms`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
 
@@ -96,61 +93,87 @@ function App() {
     setApiCallCount(prev => prev + 1);
   };
 
-  // Enhanced API call wrapper with proper error handling
-  const makeApiCall = async (url, context = 'API call') => {
-    await respectRateLimit();
-    
-    console.log(`🌐 Making ${context}:`, url.split('&apikey=')[0] + '&apikey=***');
-    
-    try {
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  // Enhanced API call wrapper with better error handling
+  const makeApiCall = async (url, context = 'API call', retries = 2) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await respectRateLimit();
+        
+        console.log(`🌐 ${context} (attempt ${attempt}):`, url.split('&apikey=')[0] + '&apikey=***');
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        
+        const response = await fetch(url, { 
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log(`📊 ${context} response:`, { 
+          status: data.status, 
+          message: data.message,
+          resultCount: Array.isArray(data.result) ? data.result.length : 'N/A'
+        });
+        
+        // Handle different types of responses
+        if (data.status === '0') {
+          const errorMessage = data.message || data.result || 'Unknown API error';
+          
+          // Handle specific errors
+          if (errorMessage.includes('rate limit') || errorMessage.includes('Max rate limit')) {
+            if (attempt < retries) {
+              console.log(`⏳ Rate limit hit, waiting before retry...`);
+              await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+              continue;
+            }
+            throw new Error('Rate limit reached. Please wait and try again.');
+          }
+          
+          if (errorMessage.includes('No transactions found') || errorMessage.includes('No records found')) {
+            return { status: '1', result: [] }; // Return empty result for no data
+          }
+          
+          if (errorMessage.includes('Invalid API Key')) {
+            throw new Error('Invalid API key configuration.');
+          }
+          
+          throw new Error(`API Error: ${errorMessage}`);
+        }
+        
+        return data;
+        
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.warn(`⏰ ${context} timed out (attempt ${attempt})`);
+          if (attempt < retries) continue;
+          throw new Error('Request timed out. Please try again.');
+        }
+        
+        console.error(`❌ ${context} failed (attempt ${attempt}):`, error.message);
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+        throw error;
       }
-      
-      const data = await response.json();
-      console.log(`📊 ${context} response:`, { 
-        status: data.status, 
-        message: data.message,
-        resultCount: data.result?.length || 0 
-      });
-      
-      // Handle NOTOK responses properly
-      if (data.status === '0') {
-        const errorMessage = data.message || data.result || 'Unknown API error';
-        
-        // Check for specific rate limit errors
-        if (errorMessage.includes('rate limit') || errorMessage.includes('Max rate limit')) {
-          throw new Error('API rate limit reached. Please wait a moment and try again.');
-        }
-        
-        // Check for other common errors
-        if (errorMessage.includes('Invalid API Key')) {
-          throw new Error('Invalid API key. Please check your configuration.');
-        }
-        
-        if (errorMessage.includes('No transactions found')) {
-          return { status: '1', result: [] }; // Return empty result for no data
-        }
-        
-        throw new Error(`API Error: ${errorMessage}`);
-      }
-      
-      return data;
-    } catch (error) {
-      console.error(`❌ ${context} failed:`, error);
-      throw error;
     }
   };
 
-  // PROPER SDK Initialization following the documentation patterns
+  // PROPER SDK Initialization
   useEffect(() => {
     const initializeSDK = async () => {
       console.log('🚀 Initializing Farcaster SDK...');
       
       try {
-        // Check if we're in a miniapp context
         const isInMiniApp = await sdk.isInMiniApp();
         console.log('📱 Is in MiniApp:', isInMiniApp);
         
@@ -160,18 +183,15 @@ function App() {
           return;
         }
 
-        // Get context data
         const contextData = await sdk.context;
         console.log('📊 Context data:', contextData);
         setContext(contextData);
 
-        // Set user data if available
         if (contextData?.user) {
           console.log('👤 User found in context:', contextData.user);
           setUser(contextData.user);
         }
 
-        // CRITICAL: Call ready() to hide splash screen
         console.log('📞 Calling sdk.actions.ready()...');
         await sdk.actions.ready();
         console.log('✅ SDK ready called successfully!');
@@ -187,7 +207,7 @@ function App() {
     initializeSDK();
   }, []);
 
-  // PROPER Wallet Connection using the documented approach
+  // Wallet Connection
   const connectWallet = async () => {
     console.log('🔌 Starting wallet connection...');
     setIsConnecting(true);
@@ -198,7 +218,6 @@ function App() {
         throw new Error('SDK not ready. Please wait for initialization.');
       }
 
-      // Get Ethereum provider using the proper SDK method
       console.log('🌐 Getting Ethereum provider...');
       const ethProvider = await sdk.wallet.getEthereumProvider();
       
@@ -209,7 +228,6 @@ function App() {
       console.log('✅ Provider obtained, requesting accounts...');
       setProvider(ethProvider);
 
-      // Request account access
       const accounts = await ethProvider.request({ 
         method: 'eth_requestAccounts' 
       });
@@ -218,16 +236,14 @@ function App() {
         throw new Error('No accounts returned from wallet');
       }
 
-      const walletAddress = accounts[0].toLowerCase(); // Normalize to lowercase
+      const walletAddress = accounts[0].toLowerCase();
       console.log('👛 Wallet connected:', walletAddress);
 
-      // Get current chain
       const chainId = await ethProvider.request({ method: 'eth_chainId' });
       console.log('🔗 Current chain ID:', chainId);
 
-      // Map chainId to our supported chains
       const chainIdNum = parseInt(chainId, 16);
-      let detectedChain = 'ethereum'; // default
+      let detectedChain = 'ethereum';
       if (chainIdNum === 8453) detectedChain = 'base';
       if (chainIdNum === 42161) detectedChain = 'arbitrum';
       
@@ -237,16 +253,13 @@ function App() {
       setAddress(walletAddress);
       setIsConnected(true);
       
-      // If we have user context, use it, otherwise create minimal user object
       if (!user && context?.user) {
         setUser(context.user);
-        console.log('👤 Using context user:', context.user);
       } else if (!user) {
         setUser({ address: walletAddress });
-        console.log('👤 Created user object with address');
       }
 
-      console.log('🎉 Wallet connection successful! Ready to fetch real data...');
+      console.log('🎉 Wallet connection successful!');
 
     } catch (error) {
       console.error('❌ Wallet connection failed:', error);
@@ -256,209 +269,323 @@ function App() {
     }
   };
 
-  // Listen for account changes
-  useEffect(() => {
-    if (provider) {
-      const handleAccountsChanged = (accounts) => {
-        console.log('👥 Accounts changed:', accounts);
-        if (accounts.length === 0) {
-          disconnect();
-        } else if (accounts[0] !== address) {
-          setAddress(accounts[0]);
-        }
-      };
-
-      const handleChainChanged = (chainId) => {
-        console.log('🔗 Chain changed:', chainId);
-        // Optionally update selectedChain based on chainId
-      };
-
-      provider.on('accountsChanged', handleAccountsChanged);
-      provider.on('chainChanged', handleChainChanged);
-
-      return () => {
-        provider.removeListener('accountsChanged', handleAccountsChanged);
-        provider.removeListener('chainChanged', handleChainChanged);
-      };
-    }
-  }, [provider, address]);
-
   // Fetch approvals function
   const fetchRealApprovals = useCallback(async (userAddress) => {
+    if (!userAddress || !selectedChain) return;
+    
     setLoading(true);
     setError(null);
     console.log('🔍 Fetching approvals for:', userAddress, 'on chain:', selectedChain);
     
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
-      
-      let apiKey = ETHERSCAN_API_KEY;
-      if (selectedChain === 'base') apiKey = BASESCAN_KEY;
-      if (selectedChain === 'arbitrum') apiKey = ARBISCAN_KEY;
+      const apiKey = getApiKey(selectedChain);
 
-      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
-      const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
+      // Use a broader block range and different approach for reliability
+      let fromBlock = 'earliest';
       
-      console.log(`🔍 Search parameters:
-        - Address: ${userAddress}
-        - Padded: ${paddedAddress}
-        - Chain: ${selectedChain}
-        - API: ${chainConfig.apiUrl}`);
-      
-      
-      // Use different block ranges to avoid rate limits
-      const latestBlockUrl = `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`;
-      let fromBlock = '0';
-      
+      // For recent activity, use last 100k blocks
       try {
-        const blockResponse = await makeApiCall(latestBlockUrl, 'Latest Block');
-        const blockData = blockResponse;
-        if (blockData.result) {
-          const latestBlock = parseInt(blockData.result, 16);
-          fromBlock = Math.max(0, latestBlock - 500000); // Look back ~500k blocks
+        const latestBlockResponse = await makeApiCall(
+          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
+          'Latest Block'
+        );
+        
+        if (latestBlockResponse.result) {
+          const latestBlock = parseInt(latestBlockResponse.result, 16);
+          fromBlock = Math.max(0, latestBlock - 100000).toString();
           console.log(`📊 Using block range: ${fromBlock} to latest`);
         }
       } catch (blockError) {
-        console.log('⚠️ Could not get latest block, using fromBlock=0');
+        console.log('⚠️ Using earliest block as fallback');
+        fromBlock = 'earliest';
       }
+
+      // Get ERC20 token transfers to find tokens user has interacted with
+      const transferResponse = await makeApiCall(
+        `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=100&sort=desc&apikey=${apiKey}`,
+        'Token Transfers'
+      );
+
+      let tokensToCheck = new Set();
       
-      const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
-      
-      console.log('🌐 Making API request to:', scanUrl.split('&apikey=')[0] + '&apikey=***');
-      
-      try {
-        const response = await makeApiCall(scanUrl, 'Approval Logs');
+      if (transferResponse.result && transferResponse.result.length > 0) {
+        // Get unique token contracts from transfers
+        transferResponse.result.forEach(transfer => {
+          if (transfer.contractAddress) {
+            tokensToCheck.add(transfer.contractAddress.toLowerCase());
+          }
+        });
+        console.log(`🎯 Found ${tokensToCheck.size} tokens from transfers`);
+      }
+
+      // If no token transfers found, try approval events
+      if (tokensToCheck.size === 0) {
+        const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+        const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
         
-        if (response.status === '1' && response.result && response.result.length > 0) {
-          console.log(`✅ Found ${response.result.length} approval events - processing...`);
-          await processApprovals(response.result, userAddress, chainConfig, apiKey);
-          return;
-        } else if (response.status === '0') {
-          console.log('⚠️ API returned status 0:', response.message);
-          setError(`API Error: ${response.message || 'Unknown error'}`);
-        } else {
-          console.log('ℹ️ No approval events found for this address on', selectedChain);
-          setApprovals([]); // Clear any existing approvals
+        const logsResponse = await makeApiCall(
+          `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`,
+          'Approval Logs'
+        );
+        
+        if (logsResponse.result && logsResponse.result.length > 0) {
+          logsResponse.result.forEach(log => {
+            if (log.address) {
+              tokensToCheck.add(log.address.toLowerCase());
+            }
+          });
+          console.log(`📝 Found ${tokensToCheck.size} tokens from approval logs`);
         }
-      } catch (scanError) {
-        console.error('❌ Scan API failed:', scanError);
-        setError(`Failed to fetch data from ${selectedChain} explorer: ${scanError.message}`);
       }
+
+      if (tokensToCheck.size === 0) {
+        console.log('ℹ️ No token interactions found for this address');
+        setApprovals([]);
+        return;
+      }
+
+      // Check current allowances for found tokens
+      const activeApprovals = [];
+      let processedCount = 0;
+      
+      for (const tokenContract of Array.from(tokensToCheck).slice(0, 20)) { // Limit to 20 tokens
+        try {
+          console.log(`🔍 Checking token ${processedCount + 1}/${Math.min(tokensToCheck.size, 20)}: ${tokenContract.slice(0,8)}...`);
+          
+          // Get token info first
+          const tokenInfo = await getTokenInfo(tokenContract, chainConfig, apiKey);
+          
+          // Check for common spenders
+          const commonSpenders = [
+            '0xe592427a0aece92de3edee1f18e0157c05861564', // Uniswap V3 Router
+            '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', // Uniswap V2 Router
+            '0x1111111254eeb25477b68fb85ed929f73a960582', // 1inch Router
+            '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45', // Uniswap V3 Router 2
+            '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad', // Uniswap Universal Router
+          ];
+          
+          for (const spender of commonSpenders) {
+            try {
+              const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spender, chainConfig, apiKey);
+              
+              if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
+                const approval = {
+                  id: `${tokenContract}-${spender}`,
+                  name: tokenInfo.name || 'Unknown Token',
+                  symbol: tokenInfo.symbol || 'UNK',
+                  contract: tokenContract,
+                  spender: spender,
+                  spenderName: getSpenderName(spender),
+                  amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
+                  riskLevel: assessRiskLevel(spender),
+                  isActive: true
+                };
+                
+                activeApprovals.push(approval);
+                console.log(`✅ Active approval: ${approval.name} -> ${approval.spenderName}`);
+              }
+            } catch (allowanceError) {
+              console.warn(`⚠️ Allowance check failed for ${spender}:`, allowanceError.message);
+            }
+          }
+          
+          processedCount++;
+          
+          // Rate limiting between token checks
+          if (processedCount < tokensToCheck.size) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+          
+        } catch (tokenError) {
+          console.warn(`⚠️ Token check failed for ${tokenContract}:`, tokenError.message);
+        }
+      }
+      
+      setApprovals(activeApprovals);
+      console.log(`✅ Found ${activeApprovals.length} active approvals`);
       
     } catch (error) {
       console.error('❌ Approval fetching failed:', error);
       setError(`Failed to fetch approvals: ${error.message}`);
+      setApprovals([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedChain, ETHERSCAN_API_KEY, BASESCAN_KEY, ARBISCAN_KEY]);
+  }, [selectedChain]);
 
-  // Process approvals from API response
-  const processApprovals = async (logs, userAddress, chainConfig, apiKey) => {
-    console.log('🔄 Processing approvals...', { logsCount: logs.length });
-    const approvalMap = new Map();
+  // Fetch activity for the selected chain
+  const fetchChainActivity = useCallback(async (userAddress) => {
+    if (!userAddress || !selectedChain) return;
     
-    // Process more recent logs first (reverse order)
-    const recentLogs = logs.slice(-100).reverse();
-    let processedCount = 0;
+    setLoadingActivity(true);
+    setError(null);
+    console.log('🔍 Fetching activity for:', userAddress, 'on chain:', selectedChain);
     
-    for (const log of recentLogs) {
+    try {
+      const chainConfig = chains.find(c => c.value === selectedChain);
+      const apiKey = getApiKey(selectedChain);
+      
+      // Get latest block for range
+      let fromBlock = '0';
       try {
-        if (processedCount >= 20) break; // Limit to prevent overwhelming
-        
-        const tokenContract = log.address?.toLowerCase();
-        const spenderAddress = log.topics && log.topics[2] ? 
-          '0x' + log.topics[2].slice(26).toLowerCase() : null;
-        
-        if (!tokenContract || !spenderAddress || spenderAddress === '0x0000000000000000000000000000000000000000') {
-          continue;
+        const blockResponse = await makeApiCall(
+          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
+          'Latest Block for Activity'
+        );
+        if (blockResponse.result) {
+          const latestBlock = parseInt(blockResponse.result, 16);
+          fromBlock = Math.max(0, latestBlock - 50000).toString(); // Last ~50k blocks for better performance
+          console.log(`📊 Activity block range: ${fromBlock} to latest`);
         }
-        
-        const key = `${tokenContract}-${spenderAddress}`;
-        if (approvalMap.has(key)) continue;
-        
-        console.log(`🔍 Checking approval: ${tokenContract.slice(0,8)}... -> ${spenderAddress.slice(0,8)}...`);
-        
-        // Check current allowance with timeout
-        const allowanceInfo = await Promise.race([
-          checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig, apiKey),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-        ]);
-        
-        if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
-          console.log(`✅ Active allowance found: ${allowanceInfo.allowance}`);
-          
-          // Get token info with timeout
-          const tokenInfo = await Promise.race([
-            getTokenInfo(tokenContract, chainConfig, apiKey),
-            new Promise(resolve => setTimeout(() => resolve({ name: 'Unknown Token', symbol: 'UNK', decimals: 18 }), 8000))
-          ]);
-          
-          const approval = {
-            id: key,
-            name: tokenInfo.name || 'Unknown Token',
-            symbol: tokenInfo.symbol || 'UNK',
-            contract: tokenContract,
-            spender: spenderAddress,
-            spenderName: getSpenderName(spenderAddress),
-            amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
-            riskLevel: assessRiskLevel(spenderAddress),
-            txHash: log.transactionHash,
-            blockNumber: parseInt(log.blockNumber, 16) || log.blockNumber,
-            isActive: true
-          };
-          
-          approvalMap.set(key, approval);
-          processedCount++;
-          
-          console.log(`📝 Added approval: ${approval.name} (${approval.symbol}) -> ${approval.spenderName}`);
-        }
-        
-        // Small delay between requests to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-      } catch (error) {
-        console.warn('⚠️ Error processing approval:', error.message);
+      } catch (blockError) {
+        console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
       }
-    }
-    
-    const finalApprovals = Array.from(approvalMap.values());
-    setApprovals(finalApprovals);
-    console.log(`✅ Processed ${finalApprovals.length} active approvals from ${logs.length} total logs`);
-  };
 
-  // Fetch approvals when wallet connects
+      // Get normal transactions
+      const txResponse = await makeApiCall(
+        `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
+        `${chainConfig.name} Transactions`
+      );
+      
+      let allActivity = [];
+      
+      if (txResponse.result && txResponse.result.length > 0) {
+        const transactions = txResponse.result.map(tx => {
+          const value = parseFloat(tx.value || '0') / Math.pow(10, 18);
+          const gasUsed = parseInt(tx.gasUsed || '0');
+          const gasPrice = parseInt(tx.gasPrice || '0');
+          const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
+          
+          return {
+            hash: tx.hash,
+            timeStamp: parseInt(tx.timeStamp) * 1000,
+            from: tx.from?.toLowerCase() || '',
+            to: tx.to?.toLowerCase() || '',
+            value: value,
+            gasFee: gasFee,
+            gasUsed: gasUsed,
+            methodId: tx.methodId || '0x',
+            functionName: tx.functionName || (value > 0 ? 'Transfer' : 'Contract Call'),
+            isError: tx.isError === '1',
+            blockNumber: parseInt(tx.blockNumber || '0'),
+            type: 'transaction'
+          };
+        });
+        
+        allActivity = transactions;
+      }
+
+      // Get ERC20 token transfers
+      try {
+        const tokenResponse = await makeApiCall(
+          `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
+          `${chainConfig.name} Token Transfers`
+        );
+        
+        if (tokenResponse.result && tokenResponse.result.length > 0) {
+          const tokenTransfers = tokenResponse.result.map(tx => {
+            const value = parseFloat(tx.value || '0') / Math.pow(10, parseInt(tx.tokenDecimal || '18'));
+            const gasUsed = parseInt(tx.gasUsed || '0');
+            const gasPrice = parseInt(tx.gasPrice || '0');
+            const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
+            
+            return {
+              hash: tx.hash,
+              timeStamp: parseInt(tx.timeStamp) * 1000,
+              from: tx.from?.toLowerCase() || '',
+              to: tx.to?.toLowerCase() || '',
+              value: 0, // Token transfers don't count toward ETH value
+              tokenValue: value,
+              tokenSymbol: tx.tokenSymbol || 'TOKEN',
+              gasFee: gasFee,
+              gasUsed: gasUsed,
+              functionName: `${tx.tokenSymbol || 'TOKEN'} Transfer`,
+              isError: false,
+              blockNumber: parseInt(tx.blockNumber || '0'),
+              type: 'token_transfer',
+              contractAddress: tx.contractAddress
+            };
+          });
+          
+          // Merge with existing activity
+          allActivity = [...allActivity, ...tokenTransfers];
+        }
+      } catch (tokenError) {
+        console.warn('⚠️ Token transfer fetch failed:', tokenError.message);
+      }
+
+      // Sort by timestamp (newest first)
+      allActivity.sort((a, b) => b.timeStamp - a.timeStamp);
+      
+      // Calculate stats
+      const totalValue = allActivity.reduce((sum, tx) => sum + (tx.value || 0), 0);
+      const totalGasFees = allActivity.reduce((sum, tx) => sum + (tx.gasFee || 0), 0);
+      const uniqueContracts = new Set(
+        allActivity
+          .filter(tx => tx.to !== userAddress.toLowerCase() && tx.to && tx.to !== '0x0000000000000000000000000000000000000000')
+          .map(tx => tx.to)
+      );
+      const lastActivity = allActivity.length > 0 ? new Date(allActivity[0].timeStamp) : null;
+
+      setActivityStats({
+        totalTransactions: allActivity.length,
+        totalValue: totalValue,
+        totalGasFees: totalGasFees,
+        dappsUsed: uniqueContracts.size,
+        lastActivity: lastActivity
+      });
+
+      setChainActivity(allActivity);
+      console.log(`✅ Processed ${allActivity.length} activities on ${chainConfig.name}`);
+      
+    } catch (error) {
+      console.error('❌ Activity fetching failed:', error);
+      setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
+      setChainActivity([]);
+      setActivityStats({
+        totalTransactions: 0,
+        totalValue: 0,
+        totalGasFees: 0,
+        dappsUsed: 0,
+        lastActivity: null
+      });
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, [selectedChain]);
+
+  // Auto-fetch data when conditions change
   useEffect(() => {
     if (address && isConnected) {
-      fetchRealApprovals(address);
+      if (currentPage === 'approvals') {
+        fetchRealApprovals(address);
+      } else if (currentPage === 'activity') {
+        fetchChainActivity(address);
+      }
     }
-  }, [address, isConnected, fetchRealApprovals]);
+  }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
 
-  // Helper functions for token data
+  // Helper functions
   const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig, apiKey) => {
     try {
       const ownerPadded = owner.slice(2).toLowerCase().padStart(64, '0');
       const spenderPadded = spender.slice(2).toLowerCase().padStart(64, '0');
       const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
       
-      const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`;
+      const response = await makeApiCall(
+        `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`,
+        'Allowance Check'
+      );
       
-      const response = await makeApiCall(url, 'Allowance Check');
-      
-      if (response.status === '1' && response.result && response.result !== '0x' && response.result !== '0x0') {
-        try {
-          const allowance = BigInt(response.result).toString();
-          console.log(`💰 Allowance check: ${allowance} for ${tokenContract.slice(0,8)}...`);
-          return { allowance };
-        } catch (bigintError) {
-          console.warn('BigInt conversion failed:', bigintError);
-          return { allowance: '0' };
-        }
+      if (response.result && response.result !== '0x' && response.result !== '0x0') {
+        const allowance = BigInt(response.result).toString();
+        return { allowance };
       }
       
       return { allowance: '0' };
     } catch (error) {
-      console.warn(`Failed to check allowance for ${tokenContract.slice(0,8)}...:`, error.message);
+      console.warn(`Allowance check failed:`, error.message);
       return { allowance: '0' };
     }
   };
@@ -466,41 +593,38 @@ function App() {
   const getTokenInfo = async (tokenAddress, chainConfig, apiKey) => {
     try {
       const calls = [
-        { method: '0x06fdde03', property: 'name' },
-        { method: '0x95d89b41', property: 'symbol' },
-        { method: '0x313ce567', property: 'decimals' }
+        { method: '0x06fdde03', property: 'name' },    // name()
+        { method: '0x95d89b41', property: 'symbol' },  // symbol()
+        { method: '0x313ce567', property: 'decimals' } // decimals()
       ];
       
       const results = {};
       
       for (const call of calls) {
         try {
-          const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`;
-          const response = await makeApiCall(url, `Token Info: ${call.property}`);
-          const data = response;
+          const response = await makeApiCall(
+            `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`,
+            `Token ${call.property}`
+          );
           
-          if (data.status === '1' && data.result && data.result !== '0x') {
+          if (response.result && response.result !== '0x') {
             if (call.property === 'decimals') {
-              results[call.property] = parseInt(data.result, 16);
+              results[call.property] = parseInt(response.result, 16);
             } else {
-              try {
-                const hex = data.result.slice(2);
-                // Browser-compatible hex to string conversion
-                let decoded = '';
-                for (let i = 0; i < hex.length; i += 2) {
-                  const charCode = parseInt(hex.slice(i, i + 2), 16);
-                  if (charCode > 0) { // Skip null bytes
-                    decoded += String.fromCharCode(charCode);
-                  }
+              // Decode hex string
+              const hex = response.result.slice(2);
+              let decoded = '';
+              for (let i = 0; i < hex.length; i += 2) {
+                const charCode = parseInt(hex.slice(i, i + 2), 16);
+                if (charCode > 0) {
+                  decoded += String.fromCharCode(charCode);
                 }
-                results[call.property] = decoded.trim() || `Token${call.property.toUpperCase()}`;
-              } catch (decodeError) {
-                results[call.property] = `Token${call.property.toUpperCase()}`;
               }
+              results[call.property] = decoded.trim() || `Unknown ${call.property}`;
             }
           }
         } catch (callError) {
-          console.warn(`Failed to get ${call.property}:`, callError);
+          console.warn(`Failed to get ${call.property}:`, callError.message);
         }
       }
       
@@ -510,7 +634,6 @@ function App() {
         decimals: results.decimals || 18
       };
     } catch (error) {
-      console.warn('Failed to get token info:', error);
       return { name: 'Unknown Token', symbol: 'UNK', decimals: 18 };
     }
   };
@@ -545,7 +668,6 @@ function App() {
     const safe = [
       '0xe592427a0aece92de3edee1f18e0157c05861564',
       '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
-      '0x00000000006c3852cbef3e08e8df289169ede581',
       '0x1111111254eeb25477b68fb85ed929f73a960582',
       '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45'
     ];
@@ -560,7 +682,7 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
-  // PROPER revoke function using the connected provider
+  // Revoke approval function
   const handleRevokeApproval = async (approval) => {
     if (!provider || !isConnected) {
       setError('Please connect your wallet first');
@@ -570,24 +692,21 @@ function App() {
     try {
       console.log('🔄 Revoking approval:', approval.name);
       
-      // Ensure we're on the right chain
       const chainConfig = chains.find(c => c.value === selectedChain);
       const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
       
       try {
         const currentChainId = await provider.request({ method: 'eth_chainId' });
         if (currentChainId !== expectedChainId) {
-          console.log('🔄 Switching to correct chain...');
           await provider.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: expectedChainId }],
           });
         }
       } catch (switchError) {
-        console.log('Chain switch error (might be expected):', switchError);
+        console.log('Chain switch error:', switchError);
       }
 
-      // ERC20 approve(spender, 0) call data
       const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
       
       const txParams = {
@@ -597,15 +716,12 @@ function App() {
         value: '0x0'
       };
 
-      console.log('📝 Submitting revoke transaction...');
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [txParams]
       });
 
       console.log('✅ Revoke transaction submitted:', txHash);
-      
-      // Update UI optimistically
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
 
     } catch (error) {
@@ -614,7 +730,7 @@ function App() {
     }
   };
 
-  // Revoke ALL approvals
+  // Revoke all approvals
   const handleRevokeAll = async () => {
     if (approvals.length === 0) {
       alert('No approvals to revoke!');
@@ -622,164 +738,46 @@ function App() {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to revoke ALL ${approvals.length} token approvals? This will require ${approvals.length} separate transactions.`
+      `Are you sure you want to revoke ALL ${approvals.length} token approvals?`
     );
 
     if (!confirmed) return;
 
-    console.log(`🗑️ Starting to revoke ${approvals.length} approvals...`);
-    
-    let successCount = 0;
     for (const approval of approvals) {
       try {
         await handleRevokeApproval(approval);
-        successCount++;
-        console.log(`✅ Revoked ${successCount}/${approvals.length}: ${approval.name}`);
-        
-        // Small delay between transactions
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (error) {
-        console.error(`❌ Failed to revoke ${approval.name}:`, error);
+        console.error(`Failed to revoke ${approval.name}:`, error);
       }
     }
-
-    alert(`✅ Successfully revoked ${successCount} out of ${approvals.length} approvals!`);
   };
 
-  // Fetch Base activity data
-  const fetchBaseActivity = useCallback(async (userAddress) => {
-    if (selectedChain !== 'base') {
-      setError('Base activity tracking is only available on Base network');
-      return;
-    }
-
-    setLoadingActivity(true);
-    setError(null);
-    console.log('🔍 Fetching Base activity for:', userAddress);
-    
-    try {
-      const chainConfig = chains.find(c => c.value === 'base');
-      
-      // Get latest block for range
-      const latestBlockUrl = `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${BASESCAN_KEY}`;
-      let fromBlock = '0';
-      
-      try {
-        const blockResponse = await makeApiCall(latestBlockUrl, 'Latest Block for Activity');
-        if (blockResponse.result) {
-          const latestBlock = parseInt(blockResponse.result, 16);
-          fromBlock = Math.max(0, latestBlock - 100000); // Last ~100k blocks
-          console.log(`📊 Activity block range: ${fromBlock} to latest`);
-        }
-      } catch (blockError) {
-        console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
-      }
-
-      // Get normal transactions
-      const txListUrl = `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${BASESCAN_KEY}`;
-      
-      try {
-        const txResponse = await makeApiCall(txListUrl, 'Base Transactions');
-        
-        if (txResponse.status === '1' && txResponse.result && txResponse.result.length > 0) {
-          const transactions = txResponse.result;
-          console.log(`✅ Found ${transactions.length} transactions on Base`);
-          
-          // Process transactions
-          const processedActivity = transactions.map(tx => {
-            const value = parseFloat(tx.value) / Math.pow(10, 18); // Convert to ETH
-            const gasUsed = parseInt(tx.gasUsed) || 0;
-            const gasPrice = parseInt(tx.gasPrice) || 0;
-            const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
-            
-            return {
-              hash: tx.hash,
-              timeStamp: parseInt(tx.timeStamp) * 1000,
-              from: tx.from.toLowerCase(),
-              to: tx.to.toLowerCase(),
-              value: value,
-              gasFee: gasFee,
-              gasUsed: gasUsed,
-              methodId: tx.methodId || '0x',
-              functionName: tx.functionName || 'Transfer',
-              isError: tx.isError === '1',
-              contractAddress: tx.contractAddress,
-              blockNumber: parseInt(tx.blockNumber)
-            };
-          });
-
-          // Calculate stats
-          const totalValue = processedActivity.reduce((sum, tx) => sum + tx.value, 0);
-          const totalGasFees = processedActivity.reduce((sum, tx) => sum + tx.gasFee, 0);
-          const uniqueContracts = new Set(processedActivity.filter(tx => tx.to !== userAddress.toLowerCase()).map(tx => tx.to));
-          const lastActivity = processedActivity.length > 0 ? new Date(processedActivity[0].timeStamp) : null;
-
-          setActivityStats({
-            totalTransactions: processedActivity.length,
-            totalValue: totalValue,
-            totalGasFees: totalGasFees,
-            dappsUsed: uniqueContracts.size,
-            lastActivity: lastActivity
-          });
-
-          setBaseActivity(processedActivity);
-          console.log(`✅ Processed ${processedActivity.length} Base activities`);
-        } else {
-          console.log('ℹ️ No transactions found for this address on Base');
-          setBaseActivity([]);
-          setActivityStats({
-            totalTransactions: 0,
-            totalValue: 0,
-            totalGasFees: 0,
-            dappsUsed: 0,
-            lastActivity: null
-          });
-        }
-      } catch (txError) {
-        console.error('❌ Transaction fetching failed:', txError);
-        setError(`Failed to fetch Base activity: ${txError.message}`);
-      }
-      
-    } catch (error) {
-      console.error('❌ Base activity fetching failed:', error);
-      setError(`Failed to fetch Base activity: ${error.message}`);
-    } finally {
-      setLoadingActivity(false);
-    }
-  }, [BASESCAN_KEY, selectedChain]);
-
-  // Fetch Base activity when switching to activity page
-  useEffect(() => {
-    if (currentPage === 'activity' && address && isConnected) {
-      fetchBaseActivity(address);
-    }
-  }, [currentPage, address, isConnected, fetchBaseActivity]);
-
-  // Share to Farcaster using proper SDK method
+  // Share function
   const handleShare = async () => {
+    const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
+    
     const shareText = currentPage === 'activity' 
-      ? `📊 Just checked my complete Base activity with FarGuard! 
+      ? `📊 Just checked my complete ${currentChainName} activity with FarGuard! 
 
 💰 ${activityStats.totalTransactions} transactions
 🏗️ ${activityStats.dappsUsed} dApps used
-⛽ ${activityStats.totalGasFees.toFixed(4)} ETH in gas fees
+⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
 
-Track your Base journey: https://fgrevoke.vercel.app`
-      : `🛡️ Just secured my wallet with FarGuard! Successfully revoked all of my unwanted approvals.
+Track your journey: https://fgrevoke.vercel.app`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! 
 
-Check yours too and keep your assets safe! 🔒
+✅ Reviewed ${approvals.length} token approvals
+🔒 Protecting my assets from risky permissions
 
-https://fgrevoke.vercel.app`;
+Secure yours too: https://fgrevoke.vercel.app`;
 
     try {
       if (sdk?.actions?.composeCast) {
-        console.log('📝 Composing cast via SDK...');
         await sdk.actions.composeCast({ text: shareText });
-        console.log('✅ Shared to Farcaster');
         return;
       }
       
-      // Fallback to clipboard
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(shareText);
         alert('✅ Share text copied to clipboard!');
@@ -800,90 +798,94 @@ https://fgrevoke.vercel.app`;
     setAddress(null);
     setIsConnected(false);
     setApprovals([]);
+    setChainActivity([]);
     setError(null);
     setProvider(null);
+    setCurrentPage('approvals');
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
         {/* Header */}
-        <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
-          <div className="flex items-center gap-3 mb-4 sm:mb-0">
-            <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
-            <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
-            {/* Chain Selection */}
-            <div className="relative w-full sm:w-auto">
-              <select
-                className="appearance-none bg-purple-700 text-white py-2 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer w-full"
-                value={selectedChain}
-                onChange={(e) => setSelectedChain(e.target.value)}
-              >
-                {chains.map((chain) => (
-                  <option key={chain.value} value={chain.value}>
-                    {chain.name}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-purple-200">
-                <ChevronDown className="h-5 w-5" />
-              </div>
+        <header className="w-full max-w-4xl flex flex-col space-y-4 py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between">
+            <div className="flex items-center gap-3 mb-4 sm:mb-0">
+              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
+              <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
             </div>
-
-            {/* Navigation */}
-            {isConnected && (
-              <div className="flex gap-2 mb-4 sm:mb-0">
-                <button
-                  onClick={() => setCurrentPage('approvals')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    currentPage === 'approvals' 
-                      ? 'bg-purple-600 text-white' 
-                      : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
-                  }`}
+            
+            <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
+              {/* Chain Selection */}
+              <div className="relative w-full sm:w-auto">
+                <select
+                  className="appearance-none bg-purple-700 text-white py-2 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer w-full"
+                  value={selectedChain}
+                  onChange={(e) => setSelectedChain(e.target.value)}
                 >
-                  🛡️ Approvals
-                </button>
-                <button
-                  onClick={() => setCurrentPage('activity')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    currentPage === 'activity' 
-                      ? 'bg-purple-600 text-white' 
-                      : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
-                  }`}
-                >
-                  📊 Base Activity
-                </button>
-              </div>
-            )}
-
-            {/* Wallet Connection */}
-            {isConnected ? (
-              <div className="flex items-center space-x-2">
-                <div className="bg-purple-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  {user?.username ? `@${user.username}` : formatAddress(address)}
+                  {chains.map((chain) => (
+                    <option key={chain.value} value={chain.value}>
+                      {chain.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-purple-200">
+                  <ChevronDown className="h-5 w-5" />
                 </div>
-                <button
-                  onClick={disconnect}
-                  className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold transition-colors"
-                >
-                  Disconnect
-                </button>
               </div>
-            ) : (
-              <button
-                onClick={connectWallet}
-                disabled={isConnecting || !sdkReady}
-                className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
-              >
-                <Wallet className="w-5 h-5 mr-2" />
-                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-              </button>
-            )}
+
+              {/* Wallet Connection */}
+              {isConnected ? (
+                <div className="flex items-center space-x-2">
+                  <div className="bg-purple-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    {user?.username ? `@${user.username}` : formatAddress(address)}
+                  </div>
+                  <button
+                    onClick={disconnect}
+                    className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={connectWallet}
+                  disabled={isConnecting || !sdkReady}
+                  className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                >
+                  <Wallet className="w-5 h-5 mr-2" />
+                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Navigation */}
+          {isConnected && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage('approvals')}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                  currentPage === 'approvals' 
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
+                }`}
+              >
+                🛡️ Approvals
+              </button>
+              <button
+                onClick={() => setCurrentPage('activity')}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                  currentPage === 'activity' 
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
+                }`}
+              >
+                📊 {chains.find(c => c.value === selectedChain)?.name} Activity
+              </button>
+            </div>
+          )}
         </header>
 
         {/* Main Content */}
@@ -893,20 +895,16 @@ https://fgrevoke.vercel.app`;
               <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-16 h-16 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-purple-200 mb-2">Connect Your Farcaster Wallet</h2>
               <p className="text-xl text-purple-300 mb-4">
-                View your REAL token approvals and revoke risky permissions
+                View your REAL token approvals and complete blockchain activity
               </p>
               
               {!sdkReady ? (
                 <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4">
-                  <p className="text-blue-300 text-sm">
-                    🔄 Initializing Farcaster SDK...
-                  </p>
+                  <p className="text-blue-300 text-sm">🔄 Initializing Farcaster SDK...</p>
                 </div>
               ) : (
                 <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-3 mb-4">
-                  <p className="text-green-300 text-sm">
-                    🎉 SDK Ready! {context?.client?.name && `(${context.client.name})`}
-                  </p>
+                  <p className="text-green-300 text-sm">✅ SDK Ready!</p>
                 </div>
               )}
 
@@ -926,68 +924,63 @@ https://fgrevoke.vercel.app`;
             </div>
           ) : (
             <div>
-              {/* Connected View */}
+              {/* Page Headers */}
               {currentPage === 'approvals' ? (
-                <>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className="text-2xl font-bold text-purple-200">
-                        Active Token Approvals ({chains.find(c => c.value === selectedChain)?.name})
-                      </h2>
-                      <p className="text-sm text-purple-400 mt-1">
-                        Real data from: {formatAddress(address)}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleShare}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                      >
-                        <Share2 className="w-4 h-4" />
-                        Share Success
-                      </button>
-                      <button
-                        onClick={() => fetchRealApprovals(address)}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh
-                      </button>
-                    </div>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-purple-200">
+                      Token Approvals ({chains.find(c => c.value === selectedChain)?.name})
+                    </h2>
+                    <p className="text-sm text-purple-400 mt-1">
+                      Real approval data from: {formatAddress(address)}
+                    </p>
                   </div>
-                </>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share
+                    </button>
+                    <button
+                      onClick={() => fetchRealApprovals(address)}
+                      disabled={loading}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <>
-                  {/* Base Activity Page */}
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className="text-2xl font-bold text-purple-200">
-                        Your Complete Base Activity
-                      </h2>
-                      <p className="text-sm text-purple-400 mt-1">
-                        Track your journey on Base: {formatAddress(address)}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleShare}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                      >
-                        <Share2 className="w-4 h-4" />
-                        Share Activity
-                      </button>
-                      <button
-                        onClick={() => fetchBaseActivity(address)}
-                        disabled={loadingActivity}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${loadingActivity ? 'animate-spin' : ''}`} />
-                        Refresh
-                      </button>
-                    </div>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-purple-200">
+                      {chains.find(c => c.value === selectedChain)?.name} Activity
+                    </h2>
+                    <p className="text-sm text-purple-400 mt-1">
+                      Complete activity history: {formatAddress(address)}
+                    </p>
                   </div>
-                </>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share Activity
+                    </button>
+                    <button
+                      onClick={() => fetchChainActivity(address)}
+                      disabled={loadingActivity}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loadingActivity ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
               )}
 
               {/* Stats */}
@@ -1004,8 +997,8 @@ https://fgrevoke.vercel.app`;
                     <p className="text-sm text-purple-200">High Risk</p>
                   </div>
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-orange-400">0</p>
-                    <p className="text-sm text-purple-200">Revoked</p>
+                    <p className="text-2xl font-bold text-blue-400">{apiCallCount}</p>
+                    <p className="text-sm text-purple-200">API Calls</p>
                   </div>
                 </div>
               ) : (
@@ -1020,11 +1013,11 @@ https://fgrevoke.vercel.app`;
                   </div>
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-green-400">{activityStats.totalValue.toFixed(3)}</p>
-                    <p className="text-sm text-purple-200">ETH Transferred</p>
+                    <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Transferred</p>
                   </div>
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-orange-400">{activityStats.totalGasFees.toFixed(4)}</p>
-                    <p className="text-sm text-purple-200">ETH Gas Fees</p>
+                    <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
                   </div>
                 </div>
               )}
@@ -1059,7 +1052,6 @@ https://fgrevoke.vercel.app`;
                       <p><strong>Address:</strong> {address}</p>
                       <p><strong>Chain:</strong> {selectedChain}</p>
                       <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
-                      <p><strong>User:</strong> {user ? JSON.stringify(user) : 'None'}</p>
                       <p><strong>Current Page:</strong> {currentPage}</p>
                       <p><strong>API Calls Made:</strong> {apiCallCount}</p>
                       {currentPage === 'approvals' ? (
@@ -1070,7 +1062,7 @@ https://fgrevoke.vercel.app`;
                       ) : (
                         <>
                           <p><strong>Loading Activity:</strong> {loadingActivity ? 'Yes' : 'No'}</p>
-                          <p><strong>Base Transactions:</strong> {baseActivity.length}</p>
+                          <p><strong>Activities Count:</strong> {chainActivity.length}</p>
                           <p><strong>dApps Used:</strong> {activityStats.dappsUsed}</p>
                         </>
                       )}
@@ -1097,9 +1089,6 @@ https://fgrevoke.vercel.app`;
                     <p className="text-green-300 text-lg font-semibold">Your wallet is secure! 🎉</p>
                     <p className="text-purple-400 text-sm mt-2">
                       No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
-                    </p>
-                    <p className="text-purple-500 text-xs mt-2">
-                      Try switching to a different chain or refreshing to check again
                     </p>
                   </div>
                 ) : (
@@ -1133,7 +1122,6 @@ https://fgrevoke.vercel.app`;
 
                         <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
                           <span>Amount: {approval.amount}</span>
-                          <span>Block: {approval.blockNumber}</span>
                         </div>
 
                         <div className="flex gap-2">
@@ -1146,10 +1134,10 @@ https://fgrevoke.vercel.app`;
                           <button 
                             onClick={() => {
                               const chainConfig = chains.find(c => c.value === selectedChain);
-                              window.open(`${chainConfig.explorerUrl}/tx/${approval.txHash}`, '_blank');
+                              window.open(`${chainConfig.explorerUrl}/address/${approval.contract}`, '_blank');
                             }}
                             className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
-                            title="View Transaction"
+                            title="View Contract"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
@@ -1159,10 +1147,10 @@ https://fgrevoke.vercel.app`;
                   </div>
                 )
               ) : (
-                // Base Activity Page Content
+                // Activity Page Content
                 loadingActivity ? (
                   <div className="space-y-4">
-                    <p className="text-center text-purple-300">Loading your Base activity...</p>
+                    <p className="text-center text-purple-300">Loading your {chains.find(c => c.value === selectedChain)?.name} activity...</p>
                     {[...Array(5)].map((_, i) => (
                       <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
                         <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
@@ -1171,15 +1159,12 @@ https://fgrevoke.vercel.app`;
                       </div>
                     ))}
                   </div>
-                ) : baseActivity.length === 0 ? (
+                ) : chainActivity.length === 0 ? (
                   <div className="text-center py-8">
                     <Activity className="w-12 h-12 text-blue-400 mx-auto mb-3" />
-                    <p className="text-blue-300 text-lg font-semibold">No Base activity found</p>
+                    <p className="text-blue-300 text-lg font-semibold">No activity found</p>
                     <p className="text-purple-400 text-sm mt-2">
-                      No transactions found for this address on Base network
-                    </p>
-                    <p className="text-purple-500 text-xs mt-2">
-                      Try switching to Base network in your wallet or make some transactions first
+                      No transactions found for this address on {chains.find(c => c.value === selectedChain)?.name}
                     </p>
                   </div>
                 ) : (
@@ -1192,8 +1177,8 @@ https://fgrevoke.vercel.app`;
                       </div>
                     )}
                     
-                    {baseActivity.map((tx, index) => (
-                      <div key={tx.hash} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
+                    {chainActivity.map((tx, index) => (
+                      <div key={`${tx.hash}-${index}`} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center flex-1">
                             <Activity className={`w-5 h-5 mr-3 flex-shrink-0 ${tx.isError ? 'text-red-400' : 'text-green-400'}`} />
@@ -1211,10 +1196,15 @@ https://fgrevoke.vercel.app`;
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-white">
-                              {tx.value > 0 ? `${tx.value.toFixed(4)} ETH` : 'Contract Call'}
+                              {tx.type === 'token_transfer' 
+                                ? `${tx.tokenValue?.toFixed(4) || '0'} ${tx.tokenSymbol}` 
+                                : tx.value > 0 
+                                  ? `${tx.value.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency}` 
+                                  : 'Contract Call'
+                              }
                             </p>
                             <p className="text-xs text-purple-300">
-                              Gas: {tx.gasFee.toFixed(6)} ETH
+                              Gas: {tx.gasFee?.toFixed(6) || '0'} {chains.find(c => c.value === selectedChain)?.nativeCurrency}
                             </p>
                           </div>
                         </div>
@@ -1229,10 +1219,11 @@ https://fgrevoke.vercel.app`;
                         <div className="flex justify-end">
                           <button 
                             onClick={() => {
-                              window.open(`https://basescan.org/tx/${tx.hash}`, '_blank');
+                              const chainConfig = chains.find(c => c.value === selectedChain);
+                              window.open(`${chainConfig.explorerUrl}/tx/${tx.hash}`, '_blank');
                             }}
                             className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
-                            title="View on BaseScan"
+                            title={`View on ${chains.find(c => c.value === selectedChain)?.name} Explorer`}
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
