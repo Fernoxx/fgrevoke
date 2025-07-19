@@ -40,6 +40,11 @@ function App() {
   // Current API key index for rotation
   const [currentKeyIndex, setCurrentKeyIndex] = useState(0);
 
+  // Pagination state
+  const [currentActivityPage, setCurrentActivityPage] = useState(1);
+  const [totalActivityPages, setTotalActivityPages] = useState(1);
+  const ITEMS_PER_PAGE = 50;
+
   // Rate limiting state
   const [lastApiCall, setLastApiCall] = useState(0);
   const [apiCallCount, setApiCallCount] = useState(0);
@@ -343,62 +348,62 @@ function App() {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
       const apiKey = getApiKey();
 
-      // Directly search for approval events - much more efficient
-      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
-      const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
+      // Simplified approach: Get token transfers and check top tokens for approvals
+      console.log('🔍 Getting token interactions to find approvals...');
       
-      console.log('🔍 Searching for approval events...');
-      
-      // Get approval events from the last 1M blocks to catch recent activity
-      const fromBlock = selectedChain === 'ethereum' ? '18000000' : 
-                       selectedChain === 'base' ? '10000000' : 
-                       selectedChain === 'arbitrum' ? '150000000' : '0';
-      
-      const logsResponse = await makeApiCall(
-        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`,
-        'Approval Events'
+      // Get all token transfers (both sent and received) to find tokens user has interacted with
+      const transferResponse = await makeApiCall(
+        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=latest&page=1&offset=100&sort=desc&apikey=${apiKey}`,
+        'Token Transfers'
       );
 
-      let tokensWithApprovals = new Set();
+      let tokensToCheck = new Set();
       
-      if (logsResponse.result && logsResponse.result.length > 0) {
-        logsResponse.result.forEach(log => {
-          if (log.address) {
-            tokensWithApprovals.add(log.address.toLowerCase());
+      if (transferResponse.result && transferResponse.result.length > 0) {
+        // Get all unique token contracts from transfers
+        transferResponse.result.forEach(transfer => {
+          if (transfer.contractAddress) {
+            tokensToCheck.add(transfer.contractAddress.toLowerCase());
           }
         });
-        console.log(`✅ Found approval events for ${tokensWithApprovals.size} tokens`);
+        console.log(`✅ Found ${tokensToCheck.size} tokens from transfers`);
       }
 
-      // If no approval events found, try a quick token transfer check
-      if (tokensWithApprovals.size === 0) {
-        console.log('🔍 No direct approvals found, checking recent token transfers...');
-        
-        const transferResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=20&sort=desc&apikey=${apiKey}`,
-          'Recent Token Transfers'
-        );
-        
-        if (transferResponse.result && transferResponse.result.length > 0) {
-          // Add tokens from recent transfers to check for approvals
-          transferResponse.result.slice(0, 10).forEach(transfer => {
-            if (transfer.contractAddress) {
-              tokensWithApprovals.add(transfer.contractAddress.toLowerCase());
-            }
-          });
-          console.log(`📝 Added ${tokensWithApprovals.size} tokens from recent transfers to check`);
-        }
+      // Also add some common tokens that users often approve
+      const commonTokens = {
+        'ethereum': [
+          '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT  
+          '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+          '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599', // WBTC
+          '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', // UNI
+        ],
+        'base': [
+          '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDC
+          '0x4200000000000000000000000000000000000006', // WETH
+        ],
+        'arbitrum': [
+          '0xaf88d065e77c8cc2239327c5edb3a432268e5831', // USDC  
+          '0x82af49447d8a07e3bd95bd0d56f35241523fbab1', // WETH
+        ]
+      };
+
+      if (commonTokens[selectedChain]) {
+        commonTokens[selectedChain].forEach(token => {
+          tokensToCheck.add(token.toLowerCase());
+        });
       }
 
-      if (tokensWithApprovals.size === 0) {
-        console.log('ℹ️ No token activity found');
+      if (tokensToCheck.size === 0) {
+        console.log('ℹ️ No token interactions found');
         setApprovals([]);
         return;
       }
 
+      console.log(`🔍 Will check ${tokensToCheck.size} tokens for approvals`);
+
       // Check actual allowances for the most relevant tokens (optimized)
       const activeApprovals = [];
-      const tokensToCheckArray = Array.from(tokensWithApprovals).slice(0, 10); // Limit to 10 most relevant
+      const tokensToCheckArray = Array.from(tokensToCheck).slice(0, 15); // Check top 15 tokens
       
       console.log(`🔍 Checking allowances for ${tokensToCheckArray.length} tokens...`);
       
@@ -476,8 +481,8 @@ function App() {
     }
   }, [selectedChain]);
 
-  // Fetch activity for the selected chain
-  const fetchChainActivity = useCallback(async (userAddress) => {
+  // Fetch activity for the selected chain with pagination
+  const fetchChainActivity = useCallback(async (userAddress, page = 1) => {
     if (!userAddress || !selectedChain) return;
     
     setLoadingActivity(true);
@@ -504,9 +509,9 @@ function App() {
         console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
       }
 
-      // Get normal transactions
+      // Get normal transactions with pagination
       const txResponse = await makeApiCall(
-        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
+        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=${page}&offset=${ITEMS_PER_PAGE}&sort=desc&apikey=${apiKey}`,
         `${chainConfig.name} Transactions`
       );
       
@@ -541,7 +546,7 @@ function App() {
       // Get ERC20 token transfers
       try {
         const tokenResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
+          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=${page}&offset=${ITEMS_PER_PAGE}&sort=desc&apikey=${apiKey}`,
           `${chainConfig.name} Token Transfers`
         );
         
@@ -598,8 +603,14 @@ function App() {
         lastActivity: lastActivity
       });
 
+      // Calculate pagination
+      const hasMoreData = allActivity.length === ITEMS_PER_PAGE;
+      const estimatedTotalPages = hasMoreData ? Math.max(page + 1, 5) : page;
+      
+      setCurrentActivityPage(page);
+      setTotalActivityPages(estimatedTotalPages);
       setChainActivity(allActivity);
-      console.log(`✅ Processed ${allActivity.length} activities on ${chainConfig.name}`);
+      console.log(`✅ Processed ${allActivity.length} activities on ${chainConfig.name} (Page ${page}/${estimatedTotalPages})`);
       
     } catch (error) {
       console.error('❌ Activity fetching failed:', error);
@@ -627,10 +638,14 @@ function App() {
   // Auto-fetch data when conditions change
   useEffect(() => {
     if (address && isConnected) {
+      // Reset pagination when chain changes
+      setCurrentActivityPage(1);
+      setTotalActivityPages(1);
+      
       if (currentPage === 'approvals') {
         fetchRealApprovals(address);
       } else if (currentPage === 'activity') {
-        fetchChainActivity(address);
+        fetchChainActivity(address, 1); // Start with page 1
       }
     }
   }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
@@ -1041,7 +1056,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       Share Activity
                     </button>
                     <button
-                      onClick={() => fetchChainActivity(address)}
+                      onClick={() => fetchChainActivity(address, 1)}
                       disabled={loadingActivity}
                       className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
                     >
@@ -1279,6 +1294,50 @@ Secure yours too: https://fgrevoke.vercel.app`;
                         </div>
                       </div>
                     ))}
+                    
+                    {/* Pagination */}
+                    {totalActivityPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-purple-700">
+                        <button
+                          onClick={() => fetchChainActivity(address, Math.max(1, currentActivityPage - 1))}
+                          disabled={currentActivityPage === 1 || loadingActivity}
+                          className="px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, totalActivityPages) }, (_, i) => {
+                            const pageNum = Math.max(1, currentActivityPage - 2) + i;
+                            if (pageNum > totalActivityPages) return null;
+                            
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => fetchChainActivity(address, pageNum)}
+                                disabled={loadingActivity}
+                                className={`px-3 py-2 text-sm rounded-lg transition-colors disabled:opacity-50 ${
+                                  pageNum === currentActivityPage
+                                    ? 'bg-purple-500 text-white'
+                                    : 'bg-purple-700 hover:bg-purple-600 text-purple-200'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        <button
+                          onClick={() => fetchChainActivity(address, Math.min(totalActivityPages, currentActivityPage + 1))}
+                          disabled={currentActivityPage === totalActivityPages || loadingActivity}
+                          className="px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               )}
@@ -1290,13 +1349,6 @@ Secure yours too: https://fgrevoke.vercel.app`;
       {/* Footer */}
       <footer className="mt-8 p-4 text-center border-t border-purple-700">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-purple-300">
-          {sdkReady && (
-            <span className="flex items-center gap-1 text-green-400">
-              <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
-              Farcaster Miniapp ✅
-            </span>
-          )}
-          {sdkReady && <span className="text-purple-400">•</span>}
           <span>
             Built by{' '}
             <a 
