@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, BarChart3, ArrowLeft, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 
 function App() {
@@ -8,6 +8,7 @@ function App() {
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals' or 'activity'
 
   // Farcaster integration states
   const [user, setUser] = useState(null);
@@ -18,12 +19,26 @@ function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
 
-  // API Configuration
+  // Base activity states
+  const [baseActivity, setBaseActivity] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityStats, setActivityStats] = useState({
+    totalTransactions: 0,
+    totalValue: 0,
+    dappsUsed: 0,
+    lastActivity: null
+  });
+
+  // API Configuration with rate limiting
   const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
   const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
   const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
+
+  // Rate limiting state
+  const [lastApiCall, setLastApiCall] = useState(0);
+  const [apiCallCount, setApiCallCount] = useState(0);
 
   // Chain configuration
   const chains = [
@@ -64,6 +79,70 @@ function App() {
       explorerUrl: 'https://arbiscan.io'
     }
   ];
+
+  // Rate limiting helper
+  const respectRateLimit = async () => {
+    const now = Date.now();
+    const timeSinceLastCall = now - lastApiCall;
+    const minInterval = 250; // Minimum 250ms between calls
+
+    if (timeSinceLastCall < minInterval) {
+      const waitTime = minInterval - timeSinceLastCall;
+      console.log(`⏱️ Rate limiting: waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    setLastApiCall(Date.now());
+    setApiCallCount(prev => prev + 1);
+  };
+
+  // Enhanced API call wrapper with proper error handling
+  const makeApiCall = async (url, context = 'API call') => {
+    await respectRateLimit();
+    
+    console.log(`🌐 Making ${context}:`, url.split('&apikey=')[0] + '&apikey=***');
+    
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`📊 ${context} response:`, { 
+        status: data.status, 
+        message: data.message,
+        resultCount: data.result?.length || 0 
+      });
+      
+      // Handle NOTOK responses properly
+      if (data.status === '0') {
+        const errorMessage = data.message || data.result || 'Unknown API error';
+        
+        // Check for specific rate limit errors
+        if (errorMessage.includes('rate limit') || errorMessage.includes('Max rate limit')) {
+          throw new Error('API rate limit reached. Please wait a moment and try again.');
+        }
+        
+        // Check for other common errors
+        if (errorMessage.includes('Invalid API Key')) {
+          throw new Error('Invalid API key. Please check your configuration.');
+        }
+        
+        if (errorMessage.includes('No transactions found')) {
+          return { status: '1', result: [] }; // Return empty result for no data
+        }
+        
+        throw new Error(`API Error: ${errorMessage}`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error(`❌ ${context} failed:`, error);
+      throw error;
+    }
+  };
 
   // PROPER SDK Initialization following the documentation patterns
   useEffect(() => {
@@ -232,8 +311,8 @@ function App() {
       let fromBlock = '0';
       
       try {
-        const blockResponse = await fetch(latestBlockUrl);
-        const blockData = await blockResponse.json();
+        const blockResponse = await makeApiCall(latestBlockUrl, 'Latest Block');
+        const blockData = blockResponse;
         if (blockData.result) {
           const latestBlock = parseInt(blockData.result, 16);
           fromBlock = Math.max(0, latestBlock - 500000); // Look back ~500k blocks
@@ -248,27 +327,15 @@ function App() {
       console.log('🌐 Making API request to:', scanUrl.split('&apikey=')[0] + '&apikey=***');
       
       try {
-        const response = await fetch(scanUrl);
-        console.log('📡 Response status:', response.status);
+        const response = await makeApiCall(scanUrl, 'Approval Logs');
         
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log('📊 API Response:', { 
-          status: data.status, 
-          message: data.message,
-          resultCount: data.result?.length || 0 
-        });
-        
-        if (data.status === '1' && data.result && data.result.length > 0) {
-          console.log(`✅ Found ${data.result.length} approval events - processing...`);
-          await processApprovals(data.result, userAddress, chainConfig, apiKey);
+        if (response.status === '1' && response.result && response.result.length > 0) {
+          console.log(`✅ Found ${response.result.length} approval events - processing...`);
+          await processApprovals(response.result, userAddress, chainConfig, apiKey);
           return;
-        } else if (data.status === '0') {
-          console.log('⚠️ API returned status 0:', data.message);
-          setError(`API Error: ${data.message || 'Unknown error'}`);
+        } else if (response.status === '0') {
+          console.log('⚠️ API returned status 0:', response.message);
+          setError(`API Error: ${response.message || 'Unknown error'}`);
         } else {
           console.log('ℹ️ No approval events found for this address on', selectedChain);
           setApprovals([]); // Clear any existing approvals
@@ -376,17 +443,11 @@ function App() {
       
       const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`;
       
-      const response = await fetch(url);
+      const response = await makeApiCall(url, 'Allowance Check');
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.status === '1' && result.result && result.result !== '0x' && result.result !== '0x0') {
+      if (response.status === '1' && response.result && response.result !== '0x' && response.result !== '0x0') {
         try {
-          const allowance = BigInt(result.result).toString();
+          const allowance = BigInt(response.result).toString();
           console.log(`💰 Allowance check: ${allowance} for ${tokenContract.slice(0,8)}...`);
           return { allowance };
         } catch (bigintError) {
@@ -415,8 +476,8 @@ function App() {
       for (const call of calls) {
         try {
           const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`;
-          const response = await fetch(url);
-          const data = await response.json();
+          const response = await makeApiCall(url, `Token Info: ${call.property}`);
+          const data = response;
           
           if (data.status === '1' && data.result && data.result !== '0x') {
             if (call.property === 'decimals') {
@@ -585,9 +646,126 @@ function App() {
     alert(`✅ Successfully revoked ${successCount} out of ${approvals.length} approvals!`);
   };
 
+  // Fetch Base activity data
+  const fetchBaseActivity = useCallback(async (userAddress) => {
+    if (selectedChain !== 'base') {
+      setError('Base activity tracking is only available on Base network');
+      return;
+    }
+
+    setLoadingActivity(true);
+    setError(null);
+    console.log('🔍 Fetching Base activity for:', userAddress);
+    
+    try {
+      const chainConfig = chains.find(c => c.value === 'base');
+      
+      // Get latest block for range
+      const latestBlockUrl = `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${BASESCAN_KEY}`;
+      let fromBlock = '0';
+      
+      try {
+        const blockResponse = await makeApiCall(latestBlockUrl, 'Latest Block for Activity');
+        if (blockResponse.result) {
+          const latestBlock = parseInt(blockResponse.result, 16);
+          fromBlock = Math.max(0, latestBlock - 100000); // Last ~100k blocks
+          console.log(`📊 Activity block range: ${fromBlock} to latest`);
+        }
+      } catch (blockError) {
+        console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
+      }
+
+      // Get normal transactions
+      const txListUrl = `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${BASESCAN_KEY}`;
+      
+      try {
+        const txResponse = await makeApiCall(txListUrl, 'Base Transactions');
+        
+        if (txResponse.status === '1' && txResponse.result && txResponse.result.length > 0) {
+          const transactions = txResponse.result;
+          console.log(`✅ Found ${transactions.length} transactions on Base`);
+          
+          // Process transactions
+          const processedActivity = transactions.map(tx => {
+            const value = parseFloat(tx.value) / Math.pow(10, 18); // Convert to ETH
+            const gasUsed = parseInt(tx.gasUsed) || 0;
+            const gasPrice = parseInt(tx.gasPrice) || 0;
+            const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
+            
+            return {
+              hash: tx.hash,
+              timeStamp: parseInt(tx.timeStamp) * 1000,
+              from: tx.from.toLowerCase(),
+              to: tx.to.toLowerCase(),
+              value: value,
+              gasFee: gasFee,
+              gasUsed: gasUsed,
+              methodId: tx.methodId || '0x',
+              functionName: tx.functionName || 'Transfer',
+              isError: tx.isError === '1',
+              contractAddress: tx.contractAddress,
+              blockNumber: parseInt(tx.blockNumber)
+            };
+          });
+
+          // Calculate stats
+          const totalValue = processedActivity.reduce((sum, tx) => sum + tx.value, 0);
+          const totalGasFees = processedActivity.reduce((sum, tx) => sum + tx.gasFee, 0);
+          const uniqueContracts = new Set(processedActivity.filter(tx => tx.to !== userAddress.toLowerCase()).map(tx => tx.to));
+          const lastActivity = processedActivity.length > 0 ? new Date(processedActivity[0].timeStamp) : null;
+
+          setActivityStats({
+            totalTransactions: processedActivity.length,
+            totalValue: totalValue,
+            totalGasFees: totalGasFees,
+            dappsUsed: uniqueContracts.size,
+            lastActivity: lastActivity
+          });
+
+          setBaseActivity(processedActivity);
+          console.log(`✅ Processed ${processedActivity.length} Base activities`);
+        } else {
+          console.log('ℹ️ No transactions found for this address on Base');
+          setBaseActivity([]);
+          setActivityStats({
+            totalTransactions: 0,
+            totalValue: 0,
+            totalGasFees: 0,
+            dappsUsed: 0,
+            lastActivity: null
+          });
+        }
+      } catch (txError) {
+        console.error('❌ Transaction fetching failed:', txError);
+        setError(`Failed to fetch Base activity: ${txError.message}`);
+      }
+      
+    } catch (error) {
+      console.error('❌ Base activity fetching failed:', error);
+      setError(`Failed to fetch Base activity: ${error.message}`);
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, [BASESCAN_KEY, selectedChain]);
+
+  // Fetch Base activity when switching to activity page
+  useEffect(() => {
+    if (currentPage === 'activity' && address && isConnected) {
+      fetchBaseActivity(address);
+    }
+  }, [currentPage, address, isConnected, fetchBaseActivity]);
+
   // Share to Farcaster using proper SDK method
   const handleShare = async () => {
-    const shareText = `🛡️ Just secured my wallet with FarGuard! Successfully revoked all of my unwanted approvals.
+    const shareText = currentPage === 'activity' 
+      ? `📊 Just checked my complete Base activity with FarGuard! 
+
+💰 ${activityStats.totalTransactions} transactions
+🏗️ ${activityStats.dappsUsed} dApps used
+⛽ ${activityStats.totalGasFees.toFixed(4)} ETH in gas fees
+
+Track your Base journey: https://fgrevoke.vercel.app`
+      : `🛡️ Just secured my wallet with FarGuard! Successfully revoked all of my unwanted approvals.
 
 Check yours too and keep your assets safe! 🔒
 
@@ -654,6 +832,32 @@ https://fgrevoke.vercel.app`;
                 <ChevronDown className="h-5 w-5" />
               </div>
             </div>
+
+            {/* Navigation */}
+            {isConnected && (
+              <div className="flex gap-2 mb-4 sm:mb-0">
+                <button
+                  onClick={() => setCurrentPage('approvals')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                    currentPage === 'approvals' 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
+                  }`}
+                >
+                  🛡️ Approvals
+                </button>
+                <button
+                  onClick={() => setCurrentPage('activity')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                    currentPage === 'activity' 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
+                  }`}
+                >
+                  📊 Base Activity
+                </button>
+              </div>
+            )}
 
             {/* Wallet Connection */}
             {isConnected ? (
@@ -723,54 +927,110 @@ https://fgrevoke.vercel.app`;
           ) : (
             <div>
               {/* Connected View */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-purple-200">
-                    Active Token Approvals ({chains.find(c => c.value === selectedChain)?.name})
-                  </h2>
-                  <p className="text-sm text-purple-400 mt-1">
-                    Real data from: {formatAddress(address)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleShare}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share Success
-                  </button>
-                  <button
-                    onClick={() => fetchRealApprovals(address)}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
-                </div>
-              </div>
+              {currentPage === 'approvals' ? (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-purple-200">
+                        Active Token Approvals ({chains.find(c => c.value === selectedChain)?.name})
+                      </h2>
+                      <p className="text-sm text-purple-400 mt-1">
+                        Real data from: {formatAddress(address)}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleShare}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Share Success
+                      </button>
+                      <button
+                        onClick={() => fetchRealApprovals(address)}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Base Activity Page */}
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-purple-200">
+                        Your Complete Base Activity
+                      </h2>
+                      <p className="text-sm text-purple-400 mt-1">
+                        Track your journey on Base: {formatAddress(address)}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleShare}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Share Activity
+                      </button>
+                      <button
+                        onClick={() => fetchBaseActivity(address)}
+                        disabled={loadingActivity}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${loadingActivity ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-purple-700 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-white">{approvals.length}</p>
-                  <p className="text-sm text-purple-200">Active Approvals</p>
+              {currentPage === 'approvals' ? (
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-white">{approvals.length}</p>
+                    <p className="text-sm text-purple-200">Active Approvals</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-red-400">
+                      {approvals.filter(a => a.riskLevel === 'high').length}
+                    </p>
+                    <p className="text-sm text-purple-200">High Risk</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-orange-400">0</p>
+                    <p className="text-sm text-purple-200">Revoked</p>
+                  </div>
                 </div>
-                <div className="bg-purple-700 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-red-400">
-                    {approvals.filter(a => a.riskLevel === 'high').length}
-                  </p>
-                  <p className="text-sm text-purple-200">High Risk</p>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-white">{activityStats.totalTransactions}</p>
+                    <p className="text-sm text-purple-200">Transactions</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-blue-400">{activityStats.dappsUsed}</p>
+                    <p className="text-sm text-purple-200">dApps Used</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-green-400">{activityStats.totalValue.toFixed(3)}</p>
+                    <p className="text-sm text-purple-200">ETH Transferred</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-orange-400">{activityStats.totalGasFees.toFixed(4)}</p>
+                    <p className="text-sm text-purple-200">ETH Gas Fees</p>
+                  </div>
                 </div>
-                <div className="bg-purple-700 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-orange-400">0</p>
-                  <p className="text-sm text-purple-200">Revoked</p>
-                </div>
-              </div>
+              )}
 
               {/* Revoke All Button */}
-              {approvals.length > 0 && (
+              {currentPage === 'approvals' && approvals.length > 0 && (
                 <div className="mb-6">
                   <button
                     onClick={handleRevokeAll}
@@ -800,90 +1060,187 @@ https://fgrevoke.vercel.app`;
                       <p><strong>Chain:</strong> {selectedChain}</p>
                       <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
                       <p><strong>User:</strong> {user ? JSON.stringify(user) : 'None'}</p>
-                      <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
-                      <p><strong>Approvals Count:</strong> {approvals.length}</p>
+                      <p><strong>Current Page:</strong> {currentPage}</p>
+                      <p><strong>API Calls Made:</strong> {apiCallCount}</p>
+                      {currentPage === 'approvals' ? (
+                        <>
+                          <p><strong>Loading Approvals:</strong> {loading ? 'Yes' : 'No'}</p>
+                          <p><strong>Approvals Count:</strong> {approvals.length}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p><strong>Loading Activity:</strong> {loadingActivity ? 'Yes' : 'No'}</p>
+                          <p><strong>Base Transactions:</strong> {baseActivity.length}</p>
+                          <p><strong>dApps Used:</strong> {activityStats.dappsUsed}</p>
+                        </>
+                      )}
                     </div>
                   </details>
                 </div>
               )}
 
               {/* Content */}
-              {loading ? (
-                <div className="space-y-4">
-                  <p className="text-center text-purple-300">Loading your REAL token approvals...</p>
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
-                      <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
-                      <div className="h-3 bg-purple-600 rounded w-1/2"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : approvals.length === 0 ? (
-                <div className="text-center py-8">
-                  <Shield className="w-12 h-12 text-green-400 mx-auto mb-3" />
-                  <p className="text-green-300 text-lg font-semibold">Your wallet is secure! 🎉</p>
-                  <p className="text-purple-400 text-sm mt-2">
-                    No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
-                  </p>
-                  <p className="text-purple-500 text-xs mt-2">
-                    Try switching to a different chain or refreshing to check again
-                  </p>
-                </div>
+              {currentPage === 'approvals' ? (
+                loading ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-purple-300">Loading your REAL token approvals...</p>
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
+                        <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-purple-600 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : approvals.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Shield className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                    <p className="text-green-300 text-lg font-semibold">Your wallet is secure! 🎉</p>
+                    <p className="text-purple-400 text-sm mt-2">
+                      No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
+                    </p>
+                    <p className="text-purple-500 text-xs mt-2">
+                      Try switching to a different chain or refreshing to check again
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {approvals.map((approval) => (
+                      <div key={approval.id} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center flex-1">
+                            <CheckCircle className="w-5 h-5 mr-3 text-blue-400 flex-shrink-0" />
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-white text-sm">
+                                {approval.name} ({approval.symbol})
+                              </h3>
+                              <p className="text-xs text-purple-300 mt-1">
+                                Approved to: {approval.spenderName}
+                              </p>
+                              <p className="text-xs text-purple-400">
+                                Contract: {formatAddress(approval.contract)}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-opacity-20 ${
+                            approval.riskLevel === 'high' ? 'bg-red-500 text-red-300' :
+                            approval.riskLevel === 'medium' ? 'bg-yellow-500 text-yellow-300' :
+                            'bg-green-500 text-green-300'
+                          }`}>
+                            {approval.riskLevel === 'high' && <AlertTriangle className="w-3 h-3" />}
+                            {approval.riskLevel}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
+                          <span>Amount: {approval.amount}</span>
+                          <span>Block: {approval.blockNumber}</span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleRevokeApproval(approval)}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-3 rounded-md transition-colors"
+                          >
+                            Revoke Approval
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const chainConfig = chains.find(c => c.value === selectedChain);
+                              window.open(`${chainConfig.explorerUrl}/tx/${approval.txHash}`, '_blank');
+                            }}
+                            className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
+                            title="View Transaction"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : (
-                <div className="space-y-3">
-                  {approvals.map((approval) => (
-                    <div key={approval.id} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center flex-1">
-                          <CheckCircle className="w-5 h-5 mr-3 text-blue-400 flex-shrink-0" />
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-white text-sm">
-                              {approval.name} ({approval.symbol})
-                            </h3>
-                            <p className="text-xs text-purple-300 mt-1">
-                              Approved to: {approval.spenderName}
+                // Base Activity Page Content
+                loadingActivity ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-purple-300">Loading your Base activity...</p>
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
+                        <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-purple-600 rounded w-1/2 mb-2"></div>
+                        <div className="h-3 bg-purple-600 rounded w-1/4"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : baseActivity.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Activity className="w-12 h-12 text-blue-400 mx-auto mb-3" />
+                    <p className="text-blue-300 text-lg font-semibold">No Base activity found</p>
+                    <p className="text-purple-400 text-sm mt-2">
+                      No transactions found for this address on Base network
+                    </p>
+                    <p className="text-purple-500 text-xs mt-2">
+                      Try switching to Base network in your wallet or make some transactions first
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activityStats.lastActivity && (
+                      <div className="bg-purple-700 rounded-lg p-4 mb-4">
+                        <p className="text-purple-200 text-sm">
+                          <strong>Last Activity:</strong> {activityStats.lastActivity.toLocaleDateString()} at {activityStats.lastActivity.toLocaleTimeString()}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {baseActivity.map((tx, index) => (
+                      <div key={tx.hash} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center flex-1">
+                            <Activity className={`w-5 h-5 mr-3 flex-shrink-0 ${tx.isError ? 'text-red-400' : 'text-green-400'}`} />
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-white text-sm">
+                                {tx.functionName || 'Transaction'}
+                              </h3>
+                              <p className="text-xs text-purple-300 mt-1">
+                                To: {formatAddress(tx.to)}
+                              </p>
+                              <p className="text-xs text-purple-400">
+                                {new Date(tx.timeStamp).toLocaleDateString()} at {new Date(tx.timeStamp).toLocaleTimeString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-white">
+                              {tx.value > 0 ? `${tx.value.toFixed(4)} ETH` : 'Contract Call'}
                             </p>
-                            <p className="text-xs text-purple-400">
-                              Contract: {formatAddress(approval.contract)}
+                            <p className="text-xs text-purple-300">
+                              Gas: {tx.gasFee.toFixed(6)} ETH
                             </p>
                           </div>
                         </div>
-                        <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-opacity-20 ${
-                          approval.riskLevel === 'high' ? 'bg-red-500 text-red-300' :
-                          approval.riskLevel === 'medium' ? 'bg-yellow-500 text-yellow-300' :
-                          'bg-green-500 text-green-300'
-                        }`}>
-                          {approval.riskLevel === 'high' && <AlertTriangle className="w-3 h-3" />}
-                          {approval.riskLevel}
-                        </span>
-                      </div>
 
-                      <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
-                        <span>Amount: {approval.amount}</span>
-                        <span>Block: {approval.blockNumber}</span>
-                      </div>
+                        <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
+                          <span>Block: {tx.blockNumber}</span>
+                          <span className={`px-2 py-1 rounded ${tx.isError ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>
+                            {tx.isError ? 'Failed' : 'Success'}
+                          </span>
+                        </div>
 
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleRevokeApproval(approval)}
-                          className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-3 rounded-md transition-colors"
-                        >
-                          Revoke Approval
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const chainConfig = chains.find(c => c.value === selectedChain);
-                            window.open(`${chainConfig.explorerUrl}/tx/${approval.txHash}`, '_blank');
-                          }}
-                          className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
-                          title="View Transaction"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
+                        <div className="flex justify-end">
+                          <button 
+                            onClick={() => {
+                              window.open(`https://basescan.org/tx/${tx.hash}`, '_blank');
+                            }}
+                            className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
+                            title="View on BaseScan"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}
