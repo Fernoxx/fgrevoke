@@ -30,12 +30,32 @@ function App() {
     lastActivity: null
   });
 
-  // API Configuration with better rate limiting
-  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
-  const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
-  const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
-  const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
-  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
+  // API Configuration - Try multiple fallback keys
+  const ETHERSCAN_API_KEYS = [
+    process.env.REACT_APP_ETHERSCAN_API_KEY,
+    'YourApiKeyToken', // Free tier - get from https://etherscan.io/apis
+    'YourApiKeyToken2',
+    'demo' // Last resort - very limited
+  ].filter(Boolean);
+
+  const BASESCAN_API_KEYS = [
+    process.env.REACT_APP_BASESCAN_KEY,
+    'YourApiKeyToken', // Free tier - get from https://basescan.org/apis
+    'demo' // Last resort
+  ].filter(Boolean);
+
+  const ARBISCAN_API_KEYS = [
+    process.env.REACT_APP_ARBISCAN_KEY,
+    'YourApiKeyToken', // Free tier - get from https://arbiscan.io/apis
+    'demo' // Last resort
+  ].filter(Boolean);
+
+  // Current API key indices for rotation
+  const [currentKeyIndex, setCurrentKeyIndex] = useState({
+    ethereum: 0,
+    base: 0,
+    arbitrum: 0
+  });
 
   // Rate limiting state
   const [lastApiCall, setLastApiCall] = useState(0);
@@ -69,13 +89,45 @@ function App() {
     }
   ];
 
-  // Get API key for current chain
+  // Get API key for current chain with rotation
   const getApiKey = (chain) => {
+    let keys, keyIndex;
+    
     switch(chain) {
-      case 'base': return BASESCAN_KEY;
-      case 'arbitrum': return ARBISCAN_KEY;
-      default: return ETHERSCAN_API_KEY;
+      case 'base':
+        keys = BASESCAN_API_KEYS;
+        keyIndex = currentKeyIndex.base;
+        break;
+      case 'arbitrum':
+        keys = ARBISCAN_API_KEYS;
+        keyIndex = currentKeyIndex.arbitrum;
+        break;
+      default:
+        keys = ETHERSCAN_API_KEYS;
+        keyIndex = currentKeyIndex.ethereum;
     }
+    
+    const apiKey = keys[keyIndex] || keys[0] || 'demo';
+    console.log(`🔑 Using API key for ${chain}: ${apiKey.slice(0, 8)}...`);
+    return apiKey;
+  };
+
+  // Rotate to next API key when current one fails
+  const rotateApiKey = (chain) => {
+    const newIndex = currentKeyIndex[chain] + 1;
+    const maxIndex = chain === 'base' ? BASESCAN_API_KEYS.length : 
+                    chain === 'arbitrum' ? ARBISCAN_API_KEYS.length : 
+                    ETHERSCAN_API_KEYS.length;
+    
+    if (newIndex < maxIndex) {
+      setCurrentKeyIndex(prev => ({
+        ...prev,
+        [chain]: newIndex
+      }));
+      console.log(`🔄 Rotated to next API key for ${chain}`);
+      return true;
+    }
+    return false;
   };
 
   // Rate limiting helper
@@ -130,12 +182,29 @@ function App() {
           
           // Handle specific errors
           if (errorMessage.includes('rate limit') || errorMessage.includes('Max rate limit')) {
-            if (attempt < retries) {
-              console.log(`⏳ Rate limit hit, waiting before retry...`);
+            console.log(`⏳ Rate limit hit on attempt ${attempt}`);
+            
+            // Try rotating API key first
+            const chainName = url.includes('basescan') ? 'base' : 
+                             url.includes('arbiscan') ? 'arbitrum' : 'ethereum';
+            const rotated = rotateApiKey(chainName);
+            
+            if (rotated && attempt < retries) {
+              console.log(`🔄 Trying with new API key...`);
+              // Update URL with new API key
+              const newApiKey = getApiKey(chainName);
+              const updatedUrl = url.replace(/apikey=[^&]*/, `apikey=${newApiKey}`);
+              url = updatedUrl;
               await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
               continue;
             }
-            throw new Error('Rate limit reached. Please wait and try again.');
+            
+            if (attempt < retries) {
+              console.log(`⏳ Waiting before retry...`);
+              await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+              continue;
+            }
+            throw new Error('Rate limit reached on all API keys. Please wait and try again.');
           }
           
           if (errorMessage.includes('No transactions found') || 
@@ -281,6 +350,29 @@ function App() {
     }
   };
 
+  // Fallback: Try to fetch data without API key (limited functionality)
+  const tryFallbackApproach = async (userAddress, chainConfig) => {
+    console.log('🔄 Trying fallback approach without API key...');
+    
+    try {
+      // Try the API without API key (some endpoints work)
+      const fallbackUrl = `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=latest&page=1&offset=10&sort=desc`;
+      
+      const response = await fetch(fallbackUrl);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === '1' && data.result && data.result.length > 0) {
+          console.log('✅ Fallback approach worked! Found some token data');
+          return data.result.slice(0, 5); // Return limited results
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Fallback approach also failed');
+    }
+    
+    return null;
+  };
+
   // Fetch approvals function
   const fetchRealApprovals = useCallback(async (userAddress) => {
     if (!userAddress || !selectedChain) return;
@@ -352,8 +444,32 @@ function App() {
       }
 
       if (tokensToCheck.size === 0) {
-        console.log('ℹ️ No token interactions found for this address');
+        console.log('ℹ️ No token interactions found, trying fallback approach...');
+        
+        // Try fallback approach
+        const fallbackData = await tryFallbackApproach(userAddress, chainConfig);
+        if (fallbackData && fallbackData.length > 0) {
+          // Create mock approvals from fallback data
+          const mockApprovals = fallbackData.map((tx, index) => ({
+            id: `fallback-${index}`,
+            name: tx.tokenSymbol || 'Unknown Token',
+            symbol: tx.tokenSymbol || 'UNK',
+            contract: tx.contractAddress || '0x0',
+            spender: '0x0000000000000000000000000000000000000000',
+            spenderName: 'Demo Data - Get Real API Keys',
+            amount: 'Demo',
+            riskLevel: 'low',
+            isActive: false,
+            isDemoData: true
+          }));
+          
+          setApprovals(mockApprovals);
+          setError('⚠️ Using limited demo data. Get free API keys from etherscan.io, basescan.org, and arbiscan.io for full functionality.');
+          return;
+        }
+        
         setApprovals([]);
+        setError('❌ No data available. Please get free API keys from the respective block explorers for full functionality.');
         return;
       }
 
@@ -1062,11 +1178,29 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
+              {/* API Key Notice */}
+              <div className="bg-yellow-900/50 border border-yellow-500 rounded-lg p-4 mb-6">
+                <h3 className="text-yellow-300 font-semibold mb-2">🔑 For Full Functionality - Get Free API Keys:</h3>
+                <div className="text-yellow-200 text-sm space-y-1">
+                  <p>• <strong>Ethereum:</strong> <a href="https://etherscan.io/apis" target="_blank" rel="noopener noreferrer" className="text-yellow-100 underline">etherscan.io/apis</a></p>
+                  <p>• <strong>Base:</strong> <a href="https://basescan.org/apis" target="_blank" rel="noopener noreferrer" className="text-yellow-100 underline">basescan.org/apis</a></p>
+                  <p>• <strong>Arbitrum:</strong> <a href="https://arbiscan.io/apis" target="_blank" rel="noopener noreferrer" className="text-yellow-100 underline">arbiscan.io/apis</a></p>
+                  <p className="text-xs mt-2 text-yellow-300">Add them as environment variables: REACT_APP_ETHERSCAN_API_KEY, REACT_APP_BASESCAN_KEY, REACT_APP_ARBISCAN_KEY</p>
+                </div>
+              </div>
+
               {/* Error Display */}
               {error && (
                 <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-400" />
-                  <p className="text-red-200">{error}</p>
+                  <div className="flex-1">
+                    <p className="text-red-200">{error}</p>
+                    {error.includes('API keys') && (
+                      <p className="text-red-300 text-xs mt-1">
+                        Current API keys may be rate limited or invalid. Get your own free keys above.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
