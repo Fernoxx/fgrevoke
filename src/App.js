@@ -30,43 +30,26 @@ function App() {
     lastActivity: null
   });
 
-  // API Configuration - Try multiple fallback keys
-  const ETHERSCAN_API_KEYS = [
+  // Etherscan V2 API Configuration - ONE KEY FOR ALL CHAINS! 🎉
+  const ETHERSCAN_V2_API_KEYS = [
     process.env.REACT_APP_ETHERSCAN_API_KEY,
     'YourApiKeyToken', // Free tier - get from https://etherscan.io/apis
-    'YourApiKeyToken2',
     'demo' // Last resort - very limited
   ].filter(Boolean);
 
-  const BASESCAN_API_KEYS = [
-    process.env.REACT_APP_BASESCAN_KEY,
-    'YourApiKeyToken', // Free tier - get from https://basescan.org/apis
-    'demo' // Last resort
-  ].filter(Boolean);
-
-  const ARBISCAN_API_KEYS = [
-    process.env.REACT_APP_ARBISCAN_KEY,
-    'YourApiKeyToken', // Free tier - get from https://arbiscan.io/apis
-    'demo' // Last resort
-  ].filter(Boolean);
-
-  // Current API key indices for rotation
-  const [currentKeyIndex, setCurrentKeyIndex] = useState({
-    ethereum: 0,
-    base: 0,
-    arbitrum: 0
-  });
+  // Current API key index for rotation
+  const [currentKeyIndex, setCurrentKeyIndex] = useState(0);
 
   // Rate limiting state
   const [lastApiCall, setLastApiCall] = useState(0);
   const [apiCallCount, setApiCallCount] = useState(0);
 
-  // Chain configuration
+  // Etherscan V2 Chain configuration - ALL USE ONE API ENDPOINT! 🚀
   const chains = [
     { 
       name: 'Ethereum', 
       value: 'ethereum', 
-      apiUrl: 'https://api.etherscan.io/api',
+      apiUrl: 'https://api.etherscan.io/v2/api', // V2 endpoint
       chainId: 1,
       explorerUrl: 'https://etherscan.io',
       nativeCurrency: 'ETH'
@@ -74,7 +57,7 @@ function App() {
     { 
       name: 'Base', 
       value: 'base', 
-      apiUrl: 'https://api.basescan.org/api',
+      apiUrl: 'https://api.etherscan.io/v2/api', // Same V2 endpoint!
       chainId: 8453,
       explorerUrl: 'https://basescan.org',
       nativeCurrency: 'ETH'
@@ -82,49 +65,27 @@ function App() {
     { 
       name: 'Arbitrum', 
       value: 'arbitrum', 
-      apiUrl: 'https://api.arbiscan.io/api',
+      apiUrl: 'https://api.etherscan.io/v2/api', // Same V2 endpoint!
       chainId: 42161,
       explorerUrl: 'https://arbiscan.io',
       nativeCurrency: 'ETH'
     }
   ];
 
-  // Get API key for current chain with rotation
-  const getApiKey = (chain) => {
-    let keys, keyIndex;
-    
-    switch(chain) {
-      case 'base':
-        keys = BASESCAN_API_KEYS;
-        keyIndex = currentKeyIndex.base;
-        break;
-      case 'arbitrum':
-        keys = ARBISCAN_API_KEYS;
-        keyIndex = currentKeyIndex.arbitrum;
-        break;
-      default:
-        keys = ETHERSCAN_API_KEYS;
-        keyIndex = currentKeyIndex.ethereum;
-    }
-    
-    const apiKey = keys[keyIndex] || keys[0] || 'demo';
-    console.log(`🔑 Using API key for ${chain}: ${apiKey.slice(0, 8)}...`);
+  // Get API key - ONE KEY FOR ALL CHAINS with Etherscan V2! 🎉
+  const getApiKey = () => {
+    const apiKey = ETHERSCAN_V2_API_KEYS[currentKeyIndex] || ETHERSCAN_V2_API_KEYS[0] || 'demo';
+    console.log(`🔑 Using Etherscan V2 API key: ${apiKey.slice(0, 8)}... (works for ALL chains!)`);
     return apiKey;
   };
 
   // Rotate to next API key when current one fails
-  const rotateApiKey = (chain) => {
-    const newIndex = currentKeyIndex[chain] + 1;
-    const maxIndex = chain === 'base' ? BASESCAN_API_KEYS.length : 
-                    chain === 'arbitrum' ? ARBISCAN_API_KEYS.length : 
-                    ETHERSCAN_API_KEYS.length;
+  const rotateApiKey = () => {
+    const newIndex = currentKeyIndex + 1;
     
-    if (newIndex < maxIndex) {
-      setCurrentKeyIndex(prev => ({
-        ...prev,
-        [chain]: newIndex
-      }));
-      console.log(`🔄 Rotated to next API key for ${chain}`);
+    if (newIndex < ETHERSCAN_V2_API_KEYS.length) {
+      setCurrentKeyIndex(newIndex);
+      console.log(`🔄 Rotated to next Etherscan V2 API key`);
       return true;
     }
     return false;
@@ -185,14 +146,12 @@ function App() {
             console.log(`⏳ Rate limit hit on attempt ${attempt}`);
             
             // Try rotating API key first
-            const chainName = url.includes('basescan') ? 'base' : 
-                             url.includes('arbiscan') ? 'arbitrum' : 'ethereum';
-            const rotated = rotateApiKey(chainName);
+            const rotated = rotateApiKey();
             
             if (rotated && attempt < retries) {
-              console.log(`🔄 Trying with new API key...`);
+              console.log(`🔄 Trying with new Etherscan V2 API key...`);
               // Update URL with new API key
-              const newApiKey = getApiKey(chainName);
+              const newApiKey = getApiKey();
               const updatedUrl = url.replace(/apikey=[^&]*/, `apikey=${newApiKey}`);
               url = updatedUrl;
               await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
@@ -356,7 +315,7 @@ function App() {
     
     try {
       // Try the API without API key (some endpoints work)
-      const fallbackUrl = `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=latest&page=1&offset=10&sort=desc`;
+      const fallbackUrl = `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=latest&page=1&offset=10&sort=desc`;
       
       const response = await fetch(fallbackUrl);
       if (response.ok) {
@@ -383,7 +342,7 @@ function App() {
     
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
-      const apiKey = getApiKey(selectedChain);
+      const apiKey = getApiKey();
 
       // Use a broader block range and different approach for reliability
       let fromBlock = 'earliest';
@@ -391,7 +350,7 @@ function App() {
       // For recent activity, use last 100k blocks
       try {
         const latestBlockResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
+          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
           'Latest Block'
         );
         
@@ -407,7 +366,7 @@ function App() {
 
       // Get ERC20 token transfers to find tokens user has interacted with
       const transferResponse = await makeApiCall(
-        `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=100&sort=desc&apikey=${apiKey}`,
+        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=100&sort=desc&apikey=${apiKey}`,
         'Token Transfers'
       );
 
@@ -429,7 +388,7 @@ function App() {
         const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
         
         const logsResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`,
+          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`,
           'Approval Logs'
         );
         
@@ -560,13 +519,13 @@ function App() {
     
     try {
       const chainConfig = chains.find(c => c.value === selectedChain);
-      const apiKey = getApiKey(selectedChain);
+      const apiKey = getApiKey();
       
       // Get latest block for range
       let fromBlock = '0';
       try {
         const blockResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
+          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
           'Latest Block for Activity'
         );
         if (blockResponse.result) {
@@ -580,7 +539,7 @@ function App() {
 
       // Get normal transactions
       const txResponse = await makeApiCall(
-        `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
+        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
         `${chainConfig.name} Transactions`
       );
       
@@ -615,7 +574,7 @@ function App() {
       // Get ERC20 token transfers
       try {
         const tokenResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
+          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
           `${chainConfig.name} Token Transfers`
         );
         
@@ -717,7 +676,7 @@ function App() {
       const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
       
       const response = await makeApiCall(
-        `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`,
+        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`,
         'Allowance Check'
       );
       
@@ -746,7 +705,7 @@ function App() {
       for (const call of calls) {
         try {
           const response = await makeApiCall(
-            `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`,
+            `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`,
             `Token ${call.property}`
           );
           
@@ -1178,14 +1137,14 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
-              {/* API Key Notice */}
-              <div className="bg-yellow-900/50 border border-yellow-500 rounded-lg p-4 mb-6">
-                <h3 className="text-yellow-300 font-semibold mb-2">🔑 For Full Functionality - Get Free API Keys:</h3>
-                <div className="text-yellow-200 text-sm space-y-1">
-                  <p>• <strong>Ethereum:</strong> <a href="https://etherscan.io/apis" target="_blank" rel="noopener noreferrer" className="text-yellow-100 underline">etherscan.io/apis</a></p>
-                  <p>• <strong>Base:</strong> <a href="https://basescan.org/apis" target="_blank" rel="noopener noreferrer" className="text-yellow-100 underline">basescan.org/apis</a></p>
-                  <p>• <strong>Arbitrum:</strong> <a href="https://arbiscan.io/apis" target="_blank" rel="noopener noreferrer" className="text-yellow-100 underline">arbiscan.io/apis</a></p>
-                  <p className="text-xs mt-2 text-yellow-300">Add them as environment variables: REACT_APP_ETHERSCAN_API_KEY, REACT_APP_BASESCAN_KEY, REACT_APP_ARBISCAN_KEY</p>
+              {/* API Key Notice - Etherscan V2 Upgrade */}
+              <div className="bg-green-900/50 border border-green-500 rounded-lg p-4 mb-6">
+                <h3 className="text-green-300 font-semibold mb-2">🚀 Powered by Etherscan V2 - ONE API Key for ALL Chains!</h3>
+                <div className="text-green-200 text-sm space-y-1">
+                  <p>✨ <strong>Super Simple:</strong> Get just <strong>ONE</strong> free API key from <a href="https://etherscan.io/apis" target="_blank" rel="noopener noreferrer" className="text-green-100 underline font-semibold">etherscan.io/apis</a></p>
+                  <p>🎯 <strong>Works for:</strong> Ethereum, Base, Arbitrum + 50+ more chains!</p>
+                  <p>⚡ <strong>Free Tier:</strong> 100,000 requests/day for ALL chains</p>
+                  <p className="text-xs mt-2 text-green-300 bg-green-800/30 p-2 rounded">Add as: <code className="text-green-200">REACT_APP_ETHERSCAN_API_KEY=your_key_here</code></p>
                 </div>
               </div>
 
