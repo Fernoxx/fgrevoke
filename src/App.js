@@ -31,14 +31,14 @@ function App() {
   });
 
   // Etherscan V2 API Configuration - ONE KEY FOR ALL CHAINS! 🎉
-  const ETHERSCAN_V2_API_KEYS = [
-    process.env.REACT_APP_ETHERSCAN_API_KEY,
-    'YourApiKeyToken', // Free tier - get from https://etherscan.io/apis
-    'demo' // Last resort - very limited
-  ].filter(Boolean);
+  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY;
 
-  // Current API key index for rotation
-  const [currentKeyIndex, setCurrentKeyIndex] = useState(0);
+  // Validate API key on startup
+  useEffect(() => {
+    if (!ETHERSCAN_API_KEY || ETHERSCAN_API_KEY === 'YourEtherscanV2ApiKeyHere') {
+      setError('❌ Please configure your Etherscan V2 API key in the .env file. Get a free key from https://etherscan.io/apis');
+    }
+  }, []);
 
   // Pagination state
   const [currentActivityPage, setCurrentActivityPage] = useState(1);
@@ -79,21 +79,11 @@ function App() {
 
   // Get API key - ONE KEY FOR ALL CHAINS with Etherscan V2! 🎉
   const getApiKey = () => {
-    const apiKey = ETHERSCAN_V2_API_KEYS[currentKeyIndex] || ETHERSCAN_V2_API_KEYS[0] || 'demo';
-    console.log(`🔑 Using Etherscan V2 API key: ${apiKey.slice(0, 8)}... (works for ALL chains!)`);
-    return apiKey;
-  };
-
-  // Rotate to next API key when current one fails
-  const rotateApiKey = () => {
-    const newIndex = currentKeyIndex + 1;
-    
-    if (newIndex < ETHERSCAN_V2_API_KEYS.length) {
-      setCurrentKeyIndex(newIndex);
-      console.log(`🔄 Rotated to next Etherscan V2 API key`);
-      return true;
+    if (!ETHERSCAN_API_KEY || ETHERSCAN_API_KEY === 'YourEtherscanV2ApiKeyHere') {
+      throw new Error('API key not configured. Please set REACT_APP_ETHERSCAN_API_KEY in your .env file.');
     }
-    return false;
+    console.log(`🔑 Using Etherscan V2 API key: ${ETHERSCAN_API_KEY.slice(0, 8)}... (works for ALL chains!)`);
+    return ETHERSCAN_API_KEY;
   };
 
   // Rate limiting helper
@@ -149,25 +139,12 @@ function App() {
           if (errorMessage.includes('rate limit') || errorMessage.includes('Max rate limit')) {
             console.log(`⏳ Rate limit hit on attempt ${attempt}`);
             
-            // Try rotating API key first
-            const rotated = rotateApiKey();
-            
-            if (rotated && attempt < retries) {
-              console.log(`🔄 Trying with new Etherscan V2 API key...`);
-              // Update URL with new API key
-              const newApiKey = getApiKey();
-              const updatedUrl = url.replace(/apikey=[^&]*/, `apikey=${newApiKey}`);
-              url = updatedUrl;
-              await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
-              continue;
-            }
-            
             if (attempt < retries) {
               console.log(`⏳ Waiting before retry...`);
-              await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+              await new Promise(resolve => setTimeout(resolve, 5000 * attempt)); // Longer wait for rate limits
               continue;
             }
-            throw new Error('Rate limit reached on all API keys. Please wait and try again.');
+            throw new Error('Rate limit reached. Please wait a few minutes and try again.');
           }
           
           if (errorMessage.includes('No transactions found') || 
