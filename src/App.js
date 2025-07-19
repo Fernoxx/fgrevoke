@@ -138,12 +138,24 @@ function App() {
             throw new Error('Rate limit reached. Please wait and try again.');
           }
           
-          if (errorMessage.includes('No transactions found') || errorMessage.includes('No records found')) {
+          if (errorMessage.includes('No transactions found') || 
+              errorMessage.includes('No records found') ||
+              errorMessage.includes('No logs found') ||
+              errorMessage.toLowerCase().includes('no result')) {
             return { status: '1', result: [] }; // Return empty result for no data
           }
           
           if (errorMessage.includes('Invalid API Key')) {
             throw new Error('Invalid API key configuration.');
+          }
+          
+          // For debugging - log the exact error but don't crash the app
+          console.warn(`⚠️ API returned error: ${errorMessage}`);
+          
+          // Return empty result for unknown errors to prevent app crashes
+          if (attempt >= retries) {
+            console.error(`❌ API failed after ${retries} attempts: ${errorMessage}`);
+            return { status: '1', result: [] };
           }
           
           throw new Error(`API Error: ${errorMessage}`);
@@ -407,8 +419,16 @@ function App() {
       
     } catch (error) {
       console.error('❌ Approval fetching failed:', error);
-      setError(`Failed to fetch approvals: ${error.message}`);
-      setApprovals([]);
+      // Don't show error for empty results or network issues
+      if (error.message.includes('No transactions') || 
+          error.message.includes('No records') ||
+          error.message.includes('Rate limit')) {
+        console.log('ℹ️ No approvals found or rate limited - this is normal');
+        setApprovals([]);
+      } else {
+        setError(`Failed to fetch approvals: ${error.message}`);
+        setApprovals([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -541,7 +561,14 @@ function App() {
       
     } catch (error) {
       console.error('❌ Activity fetching failed:', error);
-      setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
+      // Don't show error for empty results or network issues
+      if (error.message.includes('No transactions') || 
+          error.message.includes('No records') ||
+          error.message.includes('Rate limit')) {
+        console.log('ℹ️ No activity found or rate limited - this is normal');
+      } else {
+        setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
+      }
       setChainActivity([]);
       setActivityStats({
         totalTransactions: 0,
