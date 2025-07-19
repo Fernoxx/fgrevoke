@@ -131,11 +131,10 @@ function App() {
         }
         
         const data = await response.json();
-        console.log(`📊 ${context} response:`, { 
-          status: data.status, 
-          message: data.message,
-          resultCount: Array.isArray(data.result) ? data.result.length : 'N/A'
-        });
+        // Only log important responses to reduce console spam
+        if (context.includes('Approval') || context.includes('Activity')) {
+          console.log(`📊 ${context}: ${data.status === '1' ? 'success' : 'no data'}`);
+        }
         
         // Handle different types of responses
         if (data.status === '0') {
@@ -332,7 +331,7 @@ function App() {
     return null;
   };
 
-  // Fetch approvals function
+  // Fetch approvals function - Simplified and optimized
   const fetchRealApprovals = useCallback(async (userAddress) => {
     if (!userAddress || !selectedChain) return;
     
@@ -344,150 +343,118 @@ function App() {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
       const apiKey = getApiKey();
 
-      // Use a broader block range and different approach for reliability
-      let fromBlock = 'earliest';
+      // Directly search for approval events - much more efficient
+      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+      const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
       
-      // For recent activity, use last 100k blocks
-      try {
-        const latestBlockResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
-          'Latest Block'
-        );
-        
-        if (latestBlockResponse.result) {
-          const latestBlock = parseInt(latestBlockResponse.result, 16);
-          fromBlock = Math.max(0, latestBlock - 100000).toString();
-          console.log(`📊 Using block range: ${fromBlock} to latest`);
-        }
-      } catch (blockError) {
-        console.log('⚠️ Using earliest block as fallback');
-        fromBlock = 'earliest';
-      }
-
-      // Get ERC20 token transfers to find tokens user has interacted with
-      const transferResponse = await makeApiCall(
-        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=100&sort=desc&apikey=${apiKey}`,
-        'Token Transfers'
+      console.log('🔍 Searching for approval events...');
+      
+      // Get approval events from the last 1M blocks to catch recent activity
+      const fromBlock = selectedChain === 'ethereum' ? '18000000' : 
+                       selectedChain === 'base' ? '10000000' : 
+                       selectedChain === 'arbitrum' ? '150000000' : '0';
+      
+      const logsResponse = await makeApiCall(
+        `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`,
+        'Approval Events'
       );
 
-      let tokensToCheck = new Set();
+      let tokensWithApprovals = new Set();
       
-      if (transferResponse.result && transferResponse.result.length > 0) {
-        // Get unique token contracts from transfers
-        transferResponse.result.forEach(transfer => {
-          if (transfer.contractAddress) {
-            tokensToCheck.add(transfer.contractAddress.toLowerCase());
+      if (logsResponse.result && logsResponse.result.length > 0) {
+        logsResponse.result.forEach(log => {
+          if (log.address) {
+            tokensWithApprovals.add(log.address.toLowerCase());
           }
         });
-        console.log(`🎯 Found ${tokensToCheck.size} tokens from transfers`);
+        console.log(`✅ Found approval events for ${tokensWithApprovals.size} tokens`);
       }
 
-      // If no token transfers found, try approval events
-      if (tokensToCheck.size === 0) {
-        const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
-        const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
+      // If no approval events found, try a quick token transfer check
+      if (tokensWithApprovals.size === 0) {
+        console.log('🔍 No direct approvals found, checking recent token transfers...');
         
-        const logsResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`,
-          'Approval Logs'
+        const transferResponse = await makeApiCall(
+          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=20&sort=desc&apikey=${apiKey}`,
+          'Recent Token Transfers'
         );
         
-        if (logsResponse.result && logsResponse.result.length > 0) {
-          logsResponse.result.forEach(log => {
-            if (log.address) {
-              tokensToCheck.add(log.address.toLowerCase());
+        if (transferResponse.result && transferResponse.result.length > 0) {
+          // Add tokens from recent transfers to check for approvals
+          transferResponse.result.slice(0, 10).forEach(transfer => {
+            if (transfer.contractAddress) {
+              tokensWithApprovals.add(transfer.contractAddress.toLowerCase());
             }
           });
-          console.log(`📝 Found ${tokensToCheck.size} tokens from approval logs`);
+          console.log(`📝 Added ${tokensWithApprovals.size} tokens from recent transfers to check`);
         }
       }
 
-      if (tokensToCheck.size === 0) {
-        console.log('ℹ️ No token interactions found, trying fallback approach...');
-        
-        // Try fallback approach
-        const fallbackData = await tryFallbackApproach(userAddress, chainConfig);
-        if (fallbackData && fallbackData.length > 0) {
-          // Create mock approvals from fallback data
-          const mockApprovals = fallbackData.map((tx, index) => ({
-            id: `fallback-${index}`,
-            name: tx.tokenSymbol || 'Unknown Token',
-            symbol: tx.tokenSymbol || 'UNK',
-            contract: tx.contractAddress || '0x0',
-            spender: '0x0000000000000000000000000000000000000000',
-            spenderName: 'Demo Data - Get Real API Keys',
-            amount: 'Demo',
-            riskLevel: 'low',
-            isActive: false,
-            isDemoData: true
-          }));
-          
-          setApprovals(mockApprovals);
-          setError('⚠️ Using limited demo data. Get free API keys from etherscan.io, basescan.org, and arbiscan.io for full functionality.');
-          return;
-        }
-        
+      if (tokensWithApprovals.size === 0) {
+        console.log('ℹ️ No token activity found');
         setApprovals([]);
-        setError('❌ No data available. Please get free API keys from the respective block explorers for full functionality.');
         return;
       }
 
-      // Check current allowances for found tokens
+      // Check actual allowances for the most relevant tokens (optimized)
       const activeApprovals = [];
-      let processedCount = 0;
+      const tokensToCheckArray = Array.from(tokensWithApprovals).slice(0, 10); // Limit to 10 most relevant
       
-      for (const tokenContract of Array.from(tokensToCheck).slice(0, 20)) { // Limit to 20 tokens
-        try {
-          console.log(`🔍 Checking token ${processedCount + 1}/${Math.min(tokensToCheck.size, 20)}: ${tokenContract.slice(0,8)}...`);
-          
-          // Get token info first
-          const tokenInfo = await getTokenInfo(tokenContract, chainConfig, apiKey);
-          
-          // Check for common spenders
-          const commonSpenders = [
-            '0xe592427a0aece92de3edee1f18e0157c05861564', // Uniswap V3 Router
-            '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', // Uniswap V2 Router
-            '0x1111111254eeb25477b68fb85ed929f73a960582', // 1inch Router
-            '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45', // Uniswap V3 Router 2
-            '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad', // Uniswap Universal Router
-          ];
-          
-          for (const spender of commonSpenders) {
-            try {
-              const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spender, chainConfig, apiKey);
-              
-              if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
-                const approval = {
-                  id: `${tokenContract}-${spender}`,
-                  name: tokenInfo.name || 'Unknown Token',
-                  symbol: tokenInfo.symbol || 'UNK',
-                  contract: tokenContract,
-                  spender: spender,
-                  spenderName: getSpenderName(spender),
-                  amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
-                  riskLevel: assessRiskLevel(spender),
-                  isActive: true
-                };
+      console.log(`🔍 Checking allowances for ${tokensToCheckArray.length} tokens...`);
+      
+      // Common spenders to check (most popular DeFi protocols)
+      const commonSpenders = [
+        '0xe592427a0aece92de3edee1f18e0157c05861564', // Uniswap V3 Router
+        '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', // Uniswap V2 Router  
+        '0x1111111254eeb25477b68fb85ed929f73a960582', // 1inch Router
+        '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45', // Uniswap V3 Router 2
+        '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad', // Uniswap Universal Router
+      ];
+      
+      // Use Promise.allSettled for parallel processing - much faster!
+      const allChecks = [];
+      
+      for (const tokenContract of tokensToCheckArray) {
+        for (const spender of commonSpenders) {
+          allChecks.push(
+            (async () => {
+              try {
+                const [tokenInfo, allowanceInfo] = await Promise.all([
+                  getTokenInfo(tokenContract, chainConfig, apiKey),
+                  checkCurrentAllowance(tokenContract, userAddress, spender, chainConfig, apiKey)
+                ]);
                 
-                activeApprovals.push(approval);
-                console.log(`✅ Active approval: ${approval.name} -> ${approval.spenderName}`);
+                if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
+                  return {
+                    id: `${tokenContract}-${spender}`,
+                    name: tokenInfo.name || 'Unknown Token',
+                    symbol: tokenInfo.symbol || 'UNK',
+                    contract: tokenContract,
+                    spender: spender,
+                    spenderName: getSpenderName(spender),
+                    amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
+                    riskLevel: assessRiskLevel(spender),
+                    isActive: true
+                  };
+                }
+                return null;
+              } catch (error) {
+                return null;
               }
-            } catch (allowanceError) {
-              console.warn(`⚠️ Allowance check failed for ${spender}:`, allowanceError.message);
-            }
-          }
-          
-          processedCount++;
-          
-          // Rate limiting between token checks
-          if (processedCount < tokensToCheck.size) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-          
-        } catch (tokenError) {
-          console.warn(`⚠️ Token check failed for ${tokenContract}:`, tokenError.message);
+            })()
+          );
         }
       }
+      
+      // Execute all checks in parallel
+      const results = await Promise.allSettled(allChecks);
+      
+      // Collect successful results
+      results.forEach(result => {
+        if (result.status === 'fulfilled' && result.value) {
+          activeApprovals.push(result.value);
+        }
+      });
       
       setApprovals(activeApprovals);
       console.log(`✅ Found ${activeApprovals.length} active approvals`);
@@ -1087,7 +1054,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
               {/* Stats */}
               {currentPage === 'approvals' ? (
-                <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-white">{approvals.length}</p>
                     <p className="text-sm text-purple-200">Active Approvals</p>
@@ -1098,10 +1065,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     </p>
                     <p className="text-sm text-purple-200">High Risk</p>
                   </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-400">{apiCallCount}</p>
-                    <p className="text-sm text-purple-200">API Calls</p>
-                  </div>
+
                 </div>
               ) : (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1137,16 +1101,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
-              {/* API Key Notice - Etherscan V2 Upgrade */}
-              <div className="bg-green-900/50 border border-green-500 rounded-lg p-4 mb-6">
-                <h3 className="text-green-300 font-semibold mb-2">🚀 Powered by Etherscan V2 - ONE API Key for ALL Chains!</h3>
-                <div className="text-green-200 text-sm space-y-1">
-                  <p>✨ <strong>Super Simple:</strong> Get just <strong>ONE</strong> free API key from <a href="https://etherscan.io/apis" target="_blank" rel="noopener noreferrer" className="text-green-100 underline font-semibold">etherscan.io/apis</a></p>
-                  <p>🎯 <strong>Works for:</strong> Ethereum, Base, Arbitrum + 50+ more chains!</p>
-                  <p>⚡ <strong>Free Tier:</strong> 100,000 requests/day for ALL chains</p>
-                  <p className="text-xs mt-2 text-green-300 bg-green-800/30 p-2 rounded">Add as: <code className="text-green-200">REACT_APP_ETHERSCAN_API_KEY=your_key_here</code></p>
-                </div>
-              </div>
+
 
               {/* Error Display */}
               {error && (
@@ -1163,33 +1118,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
-              {/* Debug Info */}
-              {isConnected && (
-                <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4 text-xs">
-                  <details>
-                    <summary className="text-blue-300 cursor-pointer">🔍 Debug Info</summary>
-                    <div className="mt-2 space-y-1 text-blue-200">
-                      <p><strong>Address:</strong> {address}</p>
-                      <p><strong>Chain:</strong> {selectedChain}</p>
-                      <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
-                      <p><strong>Current Page:</strong> {currentPage}</p>
-                      <p><strong>API Calls Made:</strong> {apiCallCount}</p>
-                      {currentPage === 'approvals' ? (
-                        <>
-                          <p><strong>Loading Approvals:</strong> {loading ? 'Yes' : 'No'}</p>
-                          <p><strong>Approvals Count:</strong> {approvals.length}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p><strong>Loading Activity:</strong> {loadingActivity ? 'Yes' : 'No'}</p>
-                          <p><strong>Activities Count:</strong> {chainActivity.length}</p>
-                          <p><strong>dApps Used:</strong> {activityStats.dappsUsed}</p>
-                        </>
-                      )}
-                    </div>
-                  </details>
-                </div>
-              )}
+
 
               {/* Content */}
               {currentPage === 'approvals' ? (
