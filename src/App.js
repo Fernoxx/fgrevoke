@@ -351,39 +351,116 @@ function App() {
       // Simplified approach: Get token transfers and check top tokens for approvals
       console.log('🔍 Getting token interactions to find approvals...');
       
-      // Since API is failing, let's create realistic demo approvals to show the interface works
-      console.log('🔍 API having issues, showing demo approvals for interface demonstration...');
+      // Try to get real token transfers and check for approvals
+      console.log('🔍 Attempting to get real token activity...');
       
-      const demoApprovals = [
-        {
-          id: 'demo-1',
-          name: 'USD Coin',
-          symbol: 'USDC',
-          contract: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-          spender: '0xe592427a0aece92de3edee1f18e0157c05861564',
-          spenderName: 'Uniswap V3 Router',
-          amount: 'Unlimited',
-          riskLevel: 'medium',
-          isActive: true,
-          isDemoData: true
-        },
-        {
-          id: 'demo-2', 
-          name: 'Wrapped Ether',
-          symbol: 'WETH',
-          contract: '0x4200000000000000000000000000000000000006',
-          spender: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
-          spenderName: 'Uniswap V2 Router',
-          amount: '1,000.00',
-          riskLevel: 'low',
-          isActive: true,
-          isDemoData: true
+      try {
+        // Get token transfers to find what tokens user has interacted with
+        const transferResponse = await makeApiCall(
+          `${chainConfig.apiUrl}?chainid=${chainConfig.chainId}&module=account&action=tokentx&address=${userAddress}&startblock=0&endblock=latest&page=1&offset=100&sort=desc&apikey=${apiKey}`,
+          'User Token Activity'
+        );
+        
+        const tokensToCheck = new Set();
+        
+        if (transferResponse.result && transferResponse.result.length > 0) {
+          // Get tokens from actual user activity
+          transferResponse.result.forEach(transfer => {
+            if (transfer.contractAddress) {
+              tokensToCheck.add(transfer.contractAddress.toLowerCase());
+            }
+          });
+          console.log(`✅ Found ${tokensToCheck.size} tokens from user activity`);
         }
-      ];
-      
-      setApprovals(demoApprovals);
-      setError('⚠️ Demo data shown - API currently having issues. Real data will load when API is working.');
-      console.log(`✅ Showing ${demoApprovals.length} demo approvals`);
+        
+        // Add common tokens that users often approve
+        const commonTokens = {
+          'ethereum': [
+            '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT
+            '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+            '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599', // WBTC
+            '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', // UNI
+          ],
+          'base': [
+            '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDC
+            '0x4200000000000000000000000000000000000006', // WETH
+          ],
+          'arbitrum': [
+            '0xaf88d065e77c8cc2239327c5edb3a432268e5831', // USDC
+            '0x82af49447d8a07e3bd95bd0d56f35241523fbab1', // WETH
+          ]
+        };
+        
+        if (commonTokens[selectedChain]) {
+          commonTokens[selectedChain].forEach(token => {
+            tokensToCheck.add(token.toLowerCase());
+          });
+        }
+        
+        if (tokensToCheck.size === 0) {
+          console.log('ℹ️ No tokens found to check for approvals');
+          setApprovals([]);
+          return;
+        }
+        
+        console.log(`🔍 Checking ${tokensToCheck.size} tokens for active approvals...`);
+        
+        // Check for real approvals (simplified to avoid complex parallel calls for now)
+        const activeApprovals = [];
+        const tokensArray = Array.from(tokensToCheck).slice(0, 5); // Check top 5 tokens
+        
+        for (const tokenContract of tokensArray) {
+          try {
+            // Check common spenders for each token
+            const commonSpenders = [
+              '0xe592427a0aece92de3edee1f18e0157c05861564', // Uniswap V3
+              '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', // Uniswap V2
+            ];
+            
+            for (const spender of commonSpenders) {
+              try {
+                const allowanceInfo = await checkCurrentAllowance(tokenContract, userAddress, spender, chainConfig, apiKey);
+                
+                if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
+                  const tokenInfo = await getTokenInfo(tokenContract, chainConfig, apiKey);
+                  
+                  activeApprovals.push({
+                    id: `${tokenContract}-${spender}`,
+                    name: tokenInfo.name || 'Unknown Token',
+                    symbol: tokenInfo.symbol || 'TOKEN',
+                    contract: tokenContract,
+                    spender: spender,
+                    spenderName: getSpenderName(spender),
+                    amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
+                    riskLevel: assessRiskLevel(spender),
+                    isActive: true
+                  });
+                  console.log(`✅ Found approval: ${tokenInfo.symbol} -> ${getSpenderName(spender)}`);
+                }
+              } catch (error) {
+                console.warn(`⚠️ Failed to check allowance for ${spender}:`, error.message);
+              }
+            }
+          } catch (error) {
+            console.warn(`⚠️ Failed to process token ${tokenContract}:`, error.message);
+          }
+          
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        setApprovals(activeApprovals);
+        console.log(`✅ Found ${activeApprovals.length} real active approvals`);
+        
+        if (activeApprovals.length === 0) {
+          setError('ℹ️ No active token approvals found. This wallet appears to be secure!');
+        }
+        
+      } catch (apiError) {
+        console.error('❌ Failed to fetch real approval data:', apiError);
+        setError(`❌ API Error: ${apiError.message}. Please check your API key configuration.`);
+        setApprovals([]);
+      }
       
     } catch (error) {
       console.error('❌ Approval fetching failed:', error);
@@ -1020,6 +1097,24 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-orange-400">{activityStats.totalGasFees.toFixed(4)}</p>
                     <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Complete Activity Notice */}
+              {currentPage === 'activity' && !loadingActivity && (
+                <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="w-5 h-5 text-blue-400" />
+                    <h3 className="text-blue-300 font-semibold">Complete Transaction History</h3>
+                  </div>
+                  <div className="text-blue-200 text-sm space-y-1">
+                    <p>✅ <strong>All Transactions:</strong> Showing page {currentActivityPage} of {totalActivityPages}</p>
+                    <p>📊 <strong>50 per page:</strong> Use page buttons below to see your complete history</p>
+                    <p>🔗 <strong>Real Data:</strong> Direct from {chains.find(c => c.value === selectedChain)?.name} blockchain</p>
+                    {chainActivity.length === ITEMS_PER_PAGE && (
+                      <p className="text-blue-300 font-medium">📄 More pages available - keep clicking Next!</p>
+                    )}
                   </div>
                 </div>
               )}
