@@ -4,6 +4,50 @@
 
 When using Viem's `readContract` function to read contract approvals or signatures, you might encounter issues where the returned data doesn't reflect the actual contract state. Here are the most common causes and solutions:
 
+## 🧐 Why you're not seeing approvals:
+
+**Approvals aren't stored in the contract directly as a "signature blob"**
+
+In ERC‑20 or ERC‑721, `approve()` stores an approval mapping (e.g., `allowance[owner][spender] = true/amount`), not the actual signature. You can only call those via `readContract` if the contract exposes a getter like `allowance(owner, spender)`.
+
+If you're looking for a signature or user approval via EIP‑712 (like `signTypedData`), you're not dealing with on‑chain contract state. Those approvals exist off‑chain, typically returned to your DApp via `walletClient.signTypedData(...)`. There's nothing in the contract to read unless the contract itself stores that signature.
+
+If your contract emits events like `Approval(...)`, those are in the logs. `readContract` cannot fetch past events—you'll need to use `getContractEvents` or filter logs via RPC.
+
+## ✅ How to fix it
+
+### A) For ERC-20/ERC-721 allowances:
+Use a view method such as:
+
+```ts
+const allowance = await publicClient.readContract({
+  address,
+  abi,
+  functionName: 'allowance',
+  args: [owner, spender],
+})
+```
+That returns the approved amount.
+
+### B) For signature-based approvals (e.g., EIP‑712):
+You must capture the signature when it's generated via the wallet (using `signTypedData`), and then either:
+
+- Relay it on-chain via `permit(...)`,
+- Or use it off-chain however you intended, since it's not stored in the contract's state.
+
+### C) For event-based approvals:
+Fetch past events:
+
+```ts
+const events = await publicClient.getContractEvents({
+  address,
+  abi,
+  eventName: 'Approval',
+  fromBlock: 0,
+})
+```
+This returns historical logs of approvals.
+
 ## 1. Block State Timing Issues
 
 The `readContract` function reads from the latest block by default, but there might be timing issues:
