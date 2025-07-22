@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { createPublicClient, http, parseAbiItem } from 'viem';
-import { mainnet, base, arbitrum } from 'viem/chains/definitions';
+import { mainnet, base, arbitrum } from 'viem/chains';
 
 function App() {
   const [selectedChain, setSelectedChain] = useState('ethereum');
