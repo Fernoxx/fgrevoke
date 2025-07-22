@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { createPublicClient, http, parseAbiItem } from 'viem';
+import { mainnet, base, arbitrum } from 'viem/chains';
 
 function App() {
   const [selectedChain, setSelectedChain] = useState('ethereum');
@@ -25,7 +27,7 @@ function App() {
   const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
 
-  // Chain configuration
+  // Chain configuration with Viem clients
   const chains = [
     { 
       name: 'Ethereum', 
@@ -37,7 +39,12 @@ function App() {
         'https://ethereum-rpc.publicnode.com'
       ],
       chainId: 1,
-      explorerUrl: 'https://etherscan.io'
+      explorerUrl: 'https://etherscan.io',
+      viemChain: mainnet,
+      viemClient: createPublicClient({
+        chain: mainnet,
+        transport: http(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`)
+      })
     },
     { 
       name: 'Base', 
@@ -49,7 +56,12 @@ function App() {
         'https://base.meowrpc.com'
       ],
       chainId: 8453,
-      explorerUrl: 'https://basescan.org'
+      explorerUrl: 'https://basescan.org',
+      viemChain: base,
+      viemClient: createPublicClient({
+        chain: base,
+        transport: http(`https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`)
+      })
     },
     { 
       name: 'Arbitrum', 
@@ -61,7 +73,12 @@ function App() {
         'https://arbitrum-rpc.publicnode.com'
       ],
       chainId: 42161,
-      explorerUrl: 'https://arbiscan.io'
+      explorerUrl: 'https://arbiscan.io',
+      viemChain: arbitrum,
+      viemClient: createPublicClient({
+        chain: arbitrum,
+        transport: http(`https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`)
+      })
     }
   ];
 
@@ -367,38 +384,135 @@ function App() {
     }
   }, [address, isConnected, fetchRealApprovals]);
 
-  // Helper functions for token data
+  // 🧐 Why you're not seeing approvals:
+  // Approvals aren't stored in the contract directly as a "signature blob"
+  // In ERC‑20 or ERC‑721, approve() stores an approval mapping (e.g., allowance[owner][spender] = true/amount), not the actual signature.
+  // You can only call those via readContract if the contract exposes a getter like allowance(owner, spender).
+  
+  // ✅ How to fix it - A) For ERC-20/ERC-721 allowances:
   const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig, apiKey) => {
     try {
-      const ownerPadded = owner.slice(2).toLowerCase().padStart(64, '0');
-      const spenderPadded = spender.slice(2).toLowerCase().padStart(64, '0');
-      const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
+      console.log(`🔍 Checking allowance via Viem for ${tokenContract.slice(0,8)}...`);
       
-      const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`;
+      // Use Viem's readContract for proper contract reading
+      const allowance = await chainConfig.viemClient.readContract({
+        address: tokenContract,
+        abi: [
+          {
+            type: 'function',
+            name: 'allowance',
+            stateMutability: 'view',
+            inputs: [
+              { type: 'address', name: 'owner' },
+              { type: 'address', name: 'spender' }
+            ],
+            outputs: [{ type: 'uint256' }]
+          }
+        ],
+        functionName: 'allowance',
+        args: [owner, spender],
+        blockTag: 'latest' // Ensure we get the most recent state
+      });
+
+      const allowanceString = allowance.toString();
+      console.log(`💰 Viem allowance check: ${allowanceString} for ${tokenContract.slice(0,8)}...`);
+      return { allowance: allowanceString };
       
-      const response = await fetch(url);
+    } catch (viemError) {
+      console.warn(`⚠️ Viem readContract failed, falling back to API call:`, viemError.message);
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.status === '1' && result.result && result.result !== '0x' && result.result !== '0x0') {
-        try {
-          const allowance = BigInt(result.result).toString();
-          console.log(`💰 Allowance check: ${allowance} for ${tokenContract.slice(0,8)}...`);
-          return { allowance };
-        } catch (bigintError) {
-          console.warn('BigInt conversion failed:', bigintError);
-          return { allowance: '0' };
+      // Fallback to your original API method
+      try {
+        const ownerPadded = owner.slice(2).toLowerCase().padStart(64, '0');
+        const spenderPadded = spender.slice(2).toLowerCase().padStart(64, '0');
+        const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
+        
+        const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`;
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
+        
+        const result = await response.json();
+        
+        if (result.status === '1' && result.result && result.result !== '0x' && result.result !== '0x0') {
+          try {
+            const allowance = BigInt(result.result).toString();
+            console.log(`💰 Fallback allowance check: ${allowance} for ${tokenContract.slice(0,8)}...`);
+            return { allowance };
+          } catch (bigintError) {
+            console.warn('BigInt conversion failed:', bigintError);
+            return { allowance: '0' };
+          }
+        }
+        
+        return { allowance: '0' };
+      } catch (error) {
+        console.warn(`Failed to check allowance for ${tokenContract.slice(0,8)}...:`, error.message);
+        return { allowance: '0' };
       }
+    }
+  };
+
+  // ✅ How to fix it - C) For event-based approvals:
+  // Fetch past events using Viem's getContractEvents
+  const fetchApprovalEvents = async (tokenContract, userAddress, chainConfig) => {
+    try {
+      console.log(`📋 Fetching approval events via Viem for ${tokenContract.slice(0,8)}...`);
       
-      return { allowance: '0' };
+      const events = await chainConfig.viemClient.getContractEvents({
+        address: tokenContract,
+        abi: [
+          {
+            type: 'event',
+            name: 'Approval',
+            inputs: [
+              { type: 'address', name: 'owner', indexed: true },
+              { type: 'address', name: 'spender', indexed: true },
+              { type: 'uint256', name: 'value', indexed: false }
+            ]
+          }
+        ],
+        eventName: 'Approval',
+        args: {
+          owner: userAddress // Filter by user as owner
+        },
+        fromBlock: 0n, // Start from genesis - you might want to optimize this
+        toBlock: 'latest'
+      });
+      
+      console.log(`✅ Found ${events.length} approval events for ${tokenContract.slice(0,8)}...`);
+      return events;
+      
+    } catch (viemError) {
+      console.warn(`⚠️ Viem getContractEvents failed:`, viemError.message);
+      return [];
+    }
+  };
+
+  // ✅ How to fix it - B) For signature-based approvals (e.g., EIP‑712):
+  // Note: You must capture the signature when it's generated via the wallet (using signTypedData),
+  // and then either relay it on-chain via permit(...) or use it off-chain however you intended,
+  // since it's not stored in the contract's state.
+  const handleSignatureBasedApproval = async (walletClient, typedData) => {
+    try {
+      console.log('✍️ Handling signature-based approval (EIP-712)...');
+      
+      // This is how you'd capture a signature for permit-style approvals
+      const signature = await walletClient.signTypedData(typedData);
+      
+      console.log('✅ Signature captured:', signature);
+      
+      // You would then either:
+      // 1. Relay it on-chain via permit(...)
+      // 2. Use it off-chain however you intended
+      
+      return signature;
     } catch (error) {
-      console.warn(`Failed to check allowance for ${tokenContract.slice(0,8)}...:`, error.message);
-      return { allowance: '0' };
+      console.warn('⚠️ Signature-based approval failed:', error.message);
+      throw error;
     }
   };
 
