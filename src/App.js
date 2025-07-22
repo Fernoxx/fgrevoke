@@ -82,6 +82,72 @@ function App() {
     }
   ];
 
+  // 🧪 Debug function to test API keys
+  const testApiKeys = async () => {
+    console.log('🧪 Testing API keys...');
+    
+    const testConfigs = [
+      { name: 'Ethereum', apiUrl: 'https://api.etherscan.io/api', key: ETHERSCAN_API_KEY },
+      { name: 'Base', apiUrl: 'https://api.basescan.org/api', key: BASESCAN_KEY },
+      { name: 'Arbitrum', apiUrl: 'https://api.arbiscan.io/api', key: ARBISCAN_KEY }
+    ];
+    
+    for (const config of testConfigs) {
+      try {
+        console.log(`🔍 Testing ${config.name} API...`);
+        
+        // Test with a simple API call to get latest block
+        const testUrl = `${config.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${config.key}`;
+        
+        const response = await fetch(testUrl);
+        const data = await response.json();
+        
+        console.log(`📊 ${config.name} API Response:`, {
+          status: data.status,
+          message: data.message,
+          result: data.result ? `Block ${parseInt(data.result, 16)}` : 'No result'
+        });
+        
+        if (data.status === '1') {
+          console.log(`✅ ${config.name} API key working!`);
+        } else {
+          console.error(`❌ ${config.name} API key failed:`, data.message);
+        }
+        
+      } catch (error) {
+        console.error(`❌ ${config.name} API test failed:`, error.message);
+      }
+    }
+    
+    // Also test the specific getLogs call that's failing
+    if (address) {
+      console.log('🔍 Testing getLogs API call...');
+      const chainConfig = chains.find(chain => chain.value === selectedChain);
+      const apiKey = selectedChain === 'base' ? BASESCAN_KEY : 
+                    selectedChain === 'arbitrum' ? ARBISCAN_KEY : ETHERSCAN_API_KEY;
+      
+      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+      const paddedAddress = address.slice(2).toLowerCase().padStart(64, '0');
+      
+      const testLogsUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
+      
+      try {
+        console.log(`🔍 Testing getLogs for ${selectedChain}...`);
+        const response = await fetch(testLogsUrl);
+        const data = await response.json();
+        
+        console.log(`📋 getLogs Response:`, {
+          status: data.status,
+          message: data.message,
+          resultCount: data.result?.length || 0
+        });
+        
+      } catch (error) {
+        console.error('❌ getLogs test failed:', error);
+      }
+    }
+  };
+
   // 🧪 Debug function to test Viem clients
   const testViemClient = async () => {
     try {
@@ -922,6 +988,13 @@ https://fgrevoke.vercel.app`;
                   >
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     Refresh
+                  </button>
+                  <button
+                    onClick={testApiKeys}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
+                  >
+                    🔑 Test APIs
                   </button>
                   <button
                     onClick={testViemClient}
