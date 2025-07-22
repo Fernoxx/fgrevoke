@@ -82,6 +82,44 @@ function App() {
     }
   ];
 
+  // 🧪 Debug function to test Viem clients
+  const testViemClient = async () => {
+    try {
+      console.log('🧪 Testing Viem clients...');
+      const chainConfig = chains.find(chain => chain.value === selectedChain);
+      
+      // Test a simple call to get latest block
+      const blockNumber = await chainConfig.viemClient.getBlockNumber();
+      console.log(`✅ ${chainConfig.name} client working! Latest block: ${blockNumber}`);
+      
+      // Test reading a well-known contract (USDC on each chain)
+      const usdcAddresses = {
+        ethereum: '0xA0b86a33E6441e2e30b1e0A2b7d0D9Ff8C7b6B2e', // USDC
+        base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+        arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' // USDC on Arbitrum
+      };
+      
+      const usdcAddress = usdcAddresses[selectedChain];
+      if (usdcAddress) {
+        const name = await chainConfig.viemClient.readContract({
+          address: usdcAddress,
+          abi: [{
+            type: 'function',
+            name: 'name',
+            stateMutability: 'view',
+            inputs: [],
+            outputs: [{ type: 'string' }]
+          }],
+          functionName: 'name'
+        });
+        console.log(`✅ Contract read test successful! USDC name: ${name}`);
+      }
+      
+    } catch (error) {
+      console.error('❌ Viem client test failed:', error);
+    }
+  };
+
   // PROPER SDK Initialization following the documentation patterns
   useEffect(() => {
     const initializeSDK = async () => {
@@ -284,8 +322,24 @@ function App() {
           await processApprovals(data.result, userAddress, chainConfig, apiKey);
           return;
         } else if (data.status === '0') {
-          console.log('⚠️ API returned status 0:', data.message);
-          setError(`API Error: ${data.message || 'Unknown error'}`);
+          console.error('❌ API returned status 0 (NOTOK):', data.message);
+          console.error('🔍 Full API response:', data);
+          console.error('📋 Request details:', {
+            chain: selectedChain,
+            apiUrl: chainConfig.apiUrl,
+            userAddress,
+            fromBlock,
+            apiKey: apiKey ? `${apiKey.slice(0,4)}...${apiKey.slice(-4)}` : 'MISSING'
+          });
+          
+          // More specific error messages
+          if (data.message?.includes('rate limit') || data.message?.includes('exceeded')) {
+            setError(`Rate limit exceeded on ${selectedChain} explorer. Please try again in a few minutes.`);
+          } else if (data.message?.includes('Invalid API Key')) {
+            setError(`Invalid API key for ${selectedChain} explorer. Check your configuration.`);
+          } else {
+            setError(`API Error (${selectedChain}): ${data.message || 'NOTOK - Unknown error'}`);
+          }
         } else {
           console.log('ℹ️ No approval events found for this address on', selectedChain);
           setApprovals([]); // Clear any existing approvals
@@ -393,6 +447,7 @@ function App() {
   const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig, apiKey) => {
     try {
       console.log(`🔍 Checking allowance via Viem for ${tokenContract.slice(0,8)}...`);
+      console.log(`📋 Chain: ${chainConfig.name}, Owner: ${owner.slice(0,8)}..., Spender: ${spender.slice(0,8)}...`);
       
       // Use Viem's readContract for proper contract reading
       const allowance = await chainConfig.viemClient.readContract({
@@ -411,6 +466,7 @@ function App() {
         ],
         functionName: 'allowance',
         args: [owner, spender],
+        account: owner, // Add account context
         blockTag: 'latest' // Ensure we get the most recent state
       });
 
@@ -419,7 +475,12 @@ function App() {
       return { allowance: allowanceString };
       
     } catch (viemError) {
-      console.warn(`⚠️ Viem readContract failed, falling back to API call:`, viemError.message);
+      console.error(`❌ Viem readContract failed for ${tokenContract.slice(0,8)}...:`);
+      console.error(`📋 Chain: ${chainConfig.name}`);
+      console.error(`🔍 Full error:`, viemError);
+      console.error(`📝 Error message:`, viemError.message);
+      console.error(`🔧 Error details:`, viemError.details || 'No details');
+      console.warn(`⚠️ Falling back to API call...`);
       
       // Fallback to your original API method
       try {
@@ -861,6 +922,13 @@ https://fgrevoke.vercel.app`;
                   >
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     Refresh
+                  </button>
+                  <button
+                    onClick={testViemClient}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
+                  >
+                    🧪 Test Viem
                   </button>
                 </div>
               </div>
