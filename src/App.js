@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2 } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 
 function App() {
@@ -8,6 +8,7 @@ function App() {
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals' or 'activity'
 
   // Farcaster integration states
   const [user, setUser] = useState(null);
@@ -18,12 +19,26 @@ function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
 
+  // Activity states for all chains
+  const [chainActivity, setChainActivity] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityStats, setActivityStats] = useState({
+    totalTransactions: 0,
+    totalValue: 0,
+    totalGasFees: 0,
+    dappsUsed: 0,
+    lastActivity: null
+  });
+
   // API Configuration
   const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
   const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
   const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
+
+  // Rate limiting
+  const [apiCallCount, setApiCallCount] = useState(0);
 
   // Chain configuration
   const chains = [
@@ -37,7 +52,8 @@ function App() {
         'https://ethereum-rpc.publicnode.com'
       ],
       chainId: 1,
-      explorerUrl: 'https://etherscan.io'
+      explorerUrl: 'https://etherscan.io',
+      nativeCurrency: 'ETH'
     },
     { 
       name: 'Base', 
@@ -49,7 +65,8 @@ function App() {
         'https://base.meowrpc.com'
       ],
       chainId: 8453,
-      explorerUrl: 'https://basescan.org'
+      explorerUrl: 'https://basescan.org',
+      nativeCurrency: 'ETH'
     },
     { 
       name: 'Arbitrum', 
@@ -61,9 +78,48 @@ function App() {
         'https://arbitrum-rpc.publicnode.com'
       ],
       chainId: 42161,
-      explorerUrl: 'https://arbiscan.io'
+      explorerUrl: 'https://arbiscan.io',
+      nativeCurrency: 'ETH'
     }
   ];
+
+  // Get API key for current chain
+  const getApiKey = (chain) => {
+    switch(chain) {
+      case 'base': return BASESCAN_KEY;
+      case 'arbitrum': return ARBISCAN_KEY;
+      default: return ETHERSCAN_API_KEY;
+    }
+  };
+
+  // Rate-limited API call helper
+  const makeApiCall = async (url, description = 'API Call') => {
+    try {
+      setApiCallCount(prev => prev + 1);
+      console.log(`🌐 ${description}:`, url.split('&apikey=')[0] + '&apikey=***');
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`📡 ${description} Response:`, { 
+        status: data.status, 
+        message: data.message,
+        resultCount: data.result?.length || (data.result ? 1 : 0)
+      });
+      
+      if (data.status === '0' && data.message && data.message !== 'No records found') {
+        throw new Error(data.message);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error(`❌ ${description} failed:`, error);
+      throw error;
+    }
+  };
 
   // PROPER SDK Initialization following the documentation patterns
   useEffect(() => {
