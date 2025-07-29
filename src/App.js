@@ -126,6 +126,9 @@ function App() {
       setApiCallCount(prev => prev + 1);
       console.log(`🌐 ${description}:`, url.split('&apikey=')[0] + '&apikey=***');
       
+      // Add small delay between API calls to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -139,6 +142,10 @@ function App() {
       });
       
       if (data.status === '0' && data.message && data.message !== 'No records found') {
+        if (data.message === 'NOTOK') {
+          console.warn(`❌ API returned NOTOK - might be rate limited or invalid parameters`);
+          throw new Error('API rate limit or invalid parameters');
+        }
         throw new Error(data.message);
       }
       
@@ -309,12 +316,14 @@ function App() {
       
       // Get latest block number using reliable ethers provider
       let fromBlock = '0';
+      let blockRanges = [1000, 5000, 10000]; // Try smaller ranges if large ones fail
+      
       try {
         const latestBlock = await getLatestBlockNumber(selectedChain);
         
         if (latestBlock && latestBlock > 0) {
-          // Look back ~50k blocks for approvals (more recent and efficient)
-          const calculatedFromBlock = Math.max(0, latestBlock - 50000);
+          // Start with a smaller range for better API compatibility
+          const calculatedFromBlock = Math.max(0, latestBlock - blockRanges[0]);
           fromBlock = calculatedFromBlock.toString();
           console.log(`📊 Using block range: ${fromBlock} to latest (latest: ${latestBlock})`);
         } else {
@@ -326,16 +335,41 @@ function App() {
         fromBlock = '0';
       }
       
-      const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
+      // Try with different block ranges if we get API errors
+      let data = null;
+      let lastError = null;
       
-      console.log('🌐 Making approval logs API request...');
+      for (let i = 0; i < blockRanges.length; i++) {
+        try {
+          const currentFromBlock = fromBlock === '0' ? '0' : Math.max(0, parseInt(fromBlock) + (blockRanges[0] - blockRanges[i])).toString();
+          const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${currentFromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
+          
+          console.log(`🌐 Trying approval logs API request with ${blockRanges[i]} block range...`);
+          
+          data = await makeApiCall(scanUrl, `Approval Logs (${blockRanges[i]} blocks)`);
+          
+          if (data.status === '1') {
+            console.log(`✅ Success with ${blockRanges[i]} block range!`);
+            break;
+          } else if (data.status === '0' && data.message === 'No records found') {
+            console.log(`ℹ️ No records found with ${blockRanges[i]} block range, trying next...`);
+            // This is not an error, continue to try other ranges
+            break;
+          }
+        } catch (error) {
+          lastError = error;
+          console.log(`⚠️ Failed with ${blockRanges[i]} block range:`, error.message);
+          if (i === blockRanges.length - 1) {
+            // Last attempt failed
+            throw error;
+          }
+        }
+      }
       
-      const data = await makeApiCall(scanUrl, 'Approval Logs');
-      
-      if (data.status === '1' && data.result && data.result.length > 0) {
+      if (data && data.status === '1' && data.result && data.result.length > 0) {
         console.log(`✅ Found ${data.result.length} approval events - processing...`);
         await processApprovals(data.result, userAddress, chainConfig, apiKey);
-      } else if (data.status === '0' && data.message !== 'No records found') {
+      } else if (data && data.status === '0' && data.message && data.message !== 'No records found') {
         console.log('⚠️ API returned status 0:', data.message);
         setError(`API Error: ${data.message || 'Unknown error'}`);
       } else {
@@ -345,7 +379,11 @@ function App() {
       
     } catch (error) {
       console.error('❌ Approval fetching failed:', error);
-      setError(`Failed to fetch approvals: ${error.message}`);
+      if (error.message.includes('rate limit') || error.message.includes('NOTOK')) {
+        setError(`🔄 API temporarily unavailable. Try switching chains or refreshing in a few moments. The ${selectedChain} explorer API might be experiencing high traffic.`);
+      } else {
+        setError(`Failed to fetch approvals: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -439,11 +477,13 @@ function App() {
       
       // Get latest block for range using reliable ethers provider
       let fromBlock = '0';
+      let activityBlockRanges = [1000, 5000]; // Smaller ranges for activity
+      
       try {
         const latestBlock = await getLatestBlockNumber(selectedChain);
         
         if (latestBlock && latestBlock > 0) {
-          fromBlock = Math.max(0, latestBlock - 10000).toString(); // Last ~10k blocks for activity (more recent)
+          fromBlock = Math.max(0, latestBlock - activityBlockRanges[0]).toString(); // Start with smallest range
           console.log(`📊 Activity block range: ${fromBlock} to latest (${latestBlock})`);
         } else {
           console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
@@ -452,11 +492,32 @@ function App() {
         console.log('⚠️ Block number fetch failed for activity, using fromBlock=0:', blockError.message);
       }
 
-      // Get normal transactions
-      const txResponse = await makeApiCall(
-        `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
-        `${chainConfig.name} Transactions`
-      );
+      // Get normal transactions with fallback
+      let txResponse = null;
+      for (let i = 0; i < activityBlockRanges.length; i++) {
+        try {
+          const currentFromBlock = fromBlock === '0' ? '0' : Math.max(0, parseInt(fromBlock) + (activityBlockRanges[0] - activityBlockRanges[i])).toString();
+          
+          txResponse = await makeApiCall(
+            `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${currentFromBlock}&endblock=latest&page=1&offset=25&sort=desc&apikey=${apiKey}`,
+            `${chainConfig.name} Transactions (${activityBlockRanges[i]} blocks)`
+          );
+          
+          if (txResponse.status === '1') {
+            console.log(`✅ Transaction fetch success with ${activityBlockRanges[i]} block range!`);
+            break;
+          } else if (txResponse.status === '0' && txResponse.message === 'No records found') {
+            console.log(`ℹ️ No transactions found with ${activityBlockRanges[i]} block range`);
+            break;
+          }
+        } catch (error) {
+          console.log(`⚠️ Transaction fetch failed with ${activityBlockRanges[i]} block range:`, error.message);
+          if (i === activityBlockRanges.length - 1) {
+            // Create empty response for last attempt
+            txResponse = { status: '0', result: [] };
+          }
+        }
+      }
       
       let allActivity = [];
       
@@ -485,14 +546,34 @@ function App() {
         allActivity.push(...transactions);
       }
 
-      // Get ERC20 token transfers
+      // Get ERC20 token transfers with fallback
       try {
-        const tokenResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=25&sort=desc&apikey=${apiKey}`,
-          `${chainConfig.name} Token Transfers`
-        );
+        let tokenResponse = null;
+        for (let i = 0; i < activityBlockRanges.length; i++) {
+          try {
+            const currentFromBlock = fromBlock === '0' ? '0' : Math.max(0, parseInt(fromBlock) + (activityBlockRanges[0] - activityBlockRanges[i])).toString();
+            
+            tokenResponse = await makeApiCall(
+              `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${currentFromBlock}&endblock=latest&page=1&offset=15&sort=desc&apikey=${apiKey}`,
+              `${chainConfig.name} Token Transfers (${activityBlockRanges[i]} blocks)`
+            );
+            
+            if (tokenResponse.status === '1') {
+              console.log(`✅ Token transfer fetch success with ${activityBlockRanges[i]} block range!`);
+              break;
+            } else if (tokenResponse.status === '0' && tokenResponse.message === 'No records found') {
+              console.log(`ℹ️ No token transfers found with ${activityBlockRanges[i]} block range`);
+              break;
+            }
+          } catch (error) {
+            console.log(`⚠️ Token transfer fetch failed with ${activityBlockRanges[i]} block range:`, error.message);
+            if (i === activityBlockRanges.length - 1) {
+              tokenResponse = { status: '0', result: [] };
+            }
+          }
+        }
         
-        if (tokenResponse.result && tokenResponse.result.length > 0) {
+        if (tokenResponse && tokenResponse.result && tokenResponse.result.length > 0) {
           const tokenTransfers = tokenResponse.result.map(tx => {
             const decimals = parseInt(tx.tokenDecimal || '18');
             const tokenValue = parseFloat(tx.value || '0') / Math.pow(10, decimals);
@@ -548,7 +629,11 @@ function App() {
       
     } catch (error) {
       console.error('❌ Activity fetching failed:', error);
-      setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
+      if (error.message.includes('rate limit') || error.message.includes('NOTOK')) {
+        setError(`🔄 Activity API temporarily unavailable. Try switching chains or refreshing in a few moments. The ${selectedChain} explorer API might be experiencing high traffic.`);
+      } else {
+        setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
+      }
       setChainActivity([]);
       setActivityStats({
         totalTransactions: 0,
