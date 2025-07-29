@@ -1019,6 +1019,7 @@ function App() {
     console.log('✅ Showing confirmation dialog');
     // Show custom confirmation instead of window.confirm()
     setShowRevokeAllConfirm(true);
+    console.log('✅ showRevokeAllConfirm state set to:', true);
   };
 
   const confirmRevokeAll = async () => {
@@ -1433,10 +1434,23 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
+              {/* Debug: Show dialog state */}
+              <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-2 mb-4 text-xs">
+                <p className="text-blue-300">
+                  Debug: showRevokeAllConfirm = {showRevokeAllConfirm ? 'TRUE' : 'false'}
+                </p>
+                <button 
+                  onClick={() => setShowRevokeAllConfirm(true)}
+                  className="bg-blue-600 text-white px-2 py-1 rounded mt-1 text-xs"
+                >
+                  Test Dialog
+                </button>
+              </div>
+
               {/* Custom Revoke All Confirmation Dialog */}
               {showRevokeAllConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-purple-800 border border-purple-600 rounded-lg p-6 m-4 max-w-md">
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center" style={{ zIndex: 9999 }}>
+                  <div className="bg-purple-800 border-2 border-purple-500 rounded-lg p-6 m-4 max-w-md shadow-2xl">
                     <h3 className="text-xl font-bold text-white mb-3">⚠️ Revoke All Approvals</h3>
                     <p className="text-purple-200 mb-4">
                       Are you sure you want to revoke ALL {approvals.length} token approvals? 
