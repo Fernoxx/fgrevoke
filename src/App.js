@@ -260,7 +260,7 @@ function App() {
     }
   }, [provider, address]);
 
-  // Fetch approvals function
+  // Fetch approvals function with proper block number handling
   const fetchRealApprovals = useCallback(async (userAddress) => {
     setLoading(true);
     setError(null);
@@ -268,10 +268,7 @@ function App() {
     
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
-      
-      let apiKey = ETHERSCAN_API_KEY;
-      if (selectedChain === 'base') apiKey = BASESCAN_KEY;
-      if (selectedChain === 'arbitrum') apiKey = ARBISCAN_KEY;
+      const apiKey = getApiKey(selectedChain);
 
       const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
       const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
@@ -282,56 +279,52 @@ function App() {
         - Chain: ${selectedChain}
         - API: ${chainConfig.apiUrl}`);
       
-      
-      // Use different block ranges to avoid rate limits
-      const latestBlockUrl = `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`;
+      // Get latest block number with proper error handling
       let fromBlock = '0';
-      
       try {
-        const blockResponse = await fetch(latestBlockUrl);
-        const blockData = await blockResponse.json();
+        const blockData = await makeApiCall(
+          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
+          'Latest Block Number'
+        );
+        
         if (blockData.result) {
           const latestBlock = parseInt(blockData.result, 16);
-          fromBlock = Math.max(0, latestBlock - 500000); // Look back ~500k blocks
-          console.log(`📊 Using block range: ${fromBlock} to latest`);
+          if (!isNaN(latestBlock) && latestBlock > 0) {
+            // Look back ~500k blocks but ensure it's a valid number
+            const calculatedFromBlock = Math.max(0, latestBlock - 500000);
+            fromBlock = calculatedFromBlock.toString();
+            console.log(`📊 Using block range: ${fromBlock} to latest (latest: ${latestBlock})`);
+          } else {
+            console.log('⚠️ Invalid latest block number, using fromBlock=0');
+            fromBlock = '0';
+          }
         }
       } catch (blockError) {
-        console.log('⚠️ Could not get latest block, using fromBlock=0');
+        console.log('⚠️ Could not get latest block, using fromBlock=0:', blockError.message);
+        fromBlock = '0';
+      }
+      
+      // Ensure fromBlock is always a valid string number
+      if (fromBlock === 'NaN' || fromBlock === '' || isNaN(parseInt(fromBlock))) {
+        fromBlock = '0';
+        console.log('⚠️ Fixed invalid fromBlock, using 0');
       }
       
       const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
       
-      console.log('🌐 Making API request to:', scanUrl.split('&apikey=')[0] + '&apikey=***');
+      console.log('🌐 Making approval logs API request...');
       
-      try {
-        const response = await fetch(scanUrl);
-        console.log('📡 Response status:', response.status);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log('📊 API Response:', { 
-          status: data.status, 
-          message: data.message,
-          resultCount: data.result?.length || 0 
-        });
-        
-        if (data.status === '1' && data.result && data.result.length > 0) {
-          console.log(`✅ Found ${data.result.length} approval events - processing...`);
-          await processApprovals(data.result, userAddress, chainConfig, apiKey);
-          return;
-        } else if (data.status === '0') {
-          console.log('⚠️ API returned status 0:', data.message);
-          setError(`API Error: ${data.message || 'Unknown error'}`);
-        } else {
-          console.log('ℹ️ No approval events found for this address on', selectedChain);
-          setApprovals([]); // Clear any existing approvals
-        }
-      } catch (scanError) {
-        console.error('❌ Scan API failed:', scanError);
-        setError(`Failed to fetch data from ${selectedChain} explorer: ${scanError.message}`);
+      const data = await makeApiCall(scanUrl, 'Approval Logs');
+      
+      if (data.status === '1' && data.result && data.result.length > 0) {
+        console.log(`✅ Found ${data.result.length} approval events - processing...`);
+        await processApprovals(data.result, userAddress, chainConfig, apiKey);
+      } else if (data.status === '0' && data.message !== 'No records found') {
+        console.log('⚠️ API returned status 0:', data.message);
+        setError(`API Error: ${data.message || 'Unknown error'}`);
+      } else {
+        console.log('ℹ️ No approval events found for this address on', selectedChain);
+        setApprovals([]); // Clear any existing approvals
       }
       
     } catch (error) {
@@ -340,7 +333,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [selectedChain, ETHERSCAN_API_KEY, BASESCAN_KEY, ARBISCAN_KEY]);
+  }, [selectedChain]);
 
   // Process approvals from API response
   const processApprovals = async (logs, userAddress, chainConfig, apiKey) => {
@@ -416,12 +409,156 @@ function App() {
     console.log(`✅ Processed ${finalApprovals.length} active approvals from ${logs.length} total logs`);
   };
 
-  // Fetch approvals when wallet connects
+  // Fetch chain activity function
+  const fetchChainActivity = useCallback(async (userAddress) => {
+    if (!userAddress || !selectedChain) return;
+    
+    setLoadingActivity(true);
+    setError(null);
+    console.log('🔍 Fetching activity for:', userAddress, 'on chain:', selectedChain);
+    
+    try {
+      const chainConfig = chains.find(c => c.value === selectedChain);
+      const apiKey = getApiKey(selectedChain);
+      
+      // Get latest block for range
+      let fromBlock = '0';
+      try {
+        const blockData = await makeApiCall(
+          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
+          'Latest Block for Activity'
+        );
+        if (blockData.result) {
+          const latestBlock = parseInt(blockData.result, 16);
+          if (!isNaN(latestBlock) && latestBlock > 0) {
+            fromBlock = Math.max(0, latestBlock - 50000).toString(); // Last ~50k blocks for better performance
+            console.log(`📊 Activity block range: ${fromBlock} to latest`);
+          }
+        }
+      } catch (blockError) {
+        console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
+      }
+
+      // Get normal transactions
+      const txResponse = await makeApiCall(
+        `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=50&sort=desc&apikey=${apiKey}`,
+        `${chainConfig.name} Transactions`
+      );
+      
+      let allActivity = [];
+      
+      if (txResponse.result && txResponse.result.length > 0) {
+        const transactions = txResponse.result.map(tx => {
+          const value = parseFloat(tx.value || '0') / Math.pow(10, 18);
+          const gasUsed = parseInt(tx.gasUsed || '0');
+          const gasPrice = parseInt(tx.gasPrice || '0');
+          const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
+          
+          return {
+            hash: tx.hash,
+            timeStamp: parseInt(tx.timeStamp) * 1000,
+            from: tx.from?.toLowerCase() || '',
+            to: tx.to?.toLowerCase() || '',
+            value: value,
+            gasFee: gasFee,
+            gasUsed: gasUsed,
+            methodId: tx.methodId || '0x',
+            functionName: tx.functionName || 'Transfer',
+            isError: tx.isError === '1',
+            blockNumber: tx.blockNumber,
+            type: 'normal'
+          };
+        });
+        allActivity.push(...transactions);
+      }
+
+      // Get ERC20 token transfers
+      try {
+        const tokenResponse = await makeApiCall(
+          `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=25&sort=desc&apikey=${apiKey}`,
+          `${chainConfig.name} Token Transfers`
+        );
+        
+        if (tokenResponse.result && tokenResponse.result.length > 0) {
+          const tokenTransfers = tokenResponse.result.map(tx => {
+            const decimals = parseInt(tx.tokenDecimal || '18');
+            const tokenValue = parseFloat(tx.value || '0') / Math.pow(10, decimals);
+            const gasUsed = parseInt(tx.gasUsed || '0');
+            const gasPrice = parseInt(tx.gasPrice || '0');
+            const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
+            
+            return {
+              hash: tx.hash,
+              timeStamp: parseInt(tx.timeStamp) * 1000,
+              from: tx.from?.toLowerCase() || '',
+              to: tx.to?.toLowerCase() || '',
+              value: 0, // native currency value
+              tokenValue: tokenValue,
+              tokenSymbol: tx.tokenSymbol || 'Unknown',
+              tokenName: tx.tokenName || 'Unknown Token',
+              gasFee: gasFee,
+              gasUsed: gasUsed,
+              isError: false,
+              blockNumber: tx.blockNumber,
+              type: 'token_transfer'
+            };
+          });
+          allActivity.push(...tokenTransfers);
+        }
+      } catch (tokenError) {
+        console.log('⚠️ Could not fetch token transfers:', tokenError.message);
+      }
+
+      // Sort by timestamp (newest first)
+      allActivity.sort((a, b) => b.timeStamp - a.timeStamp);
+      
+      // Calculate stats
+      const totalValue = allActivity.reduce((sum, tx) => sum + (tx.value || 0), 0);
+      const totalGasFees = allActivity.reduce((sum, tx) => sum + (tx.gasFee || 0), 0);
+      const uniqueContracts = new Set(
+        allActivity
+          .filter(tx => tx.to !== userAddress.toLowerCase() && tx.to && tx.to !== '0x0000000000000000000000000000000000000000')
+          .map(tx => tx.to)
+      );
+      const lastActivity = allActivity.length > 0 ? new Date(allActivity[0].timeStamp) : null;
+
+      setActivityStats({
+        totalTransactions: allActivity.length,
+        totalValue: totalValue,
+        totalGasFees: totalGasFees,
+        dappsUsed: uniqueContracts.size,
+        lastActivity: lastActivity
+      });
+
+      setChainActivity(allActivity);
+      console.log(`✅ Processed ${allActivity.length} activities on ${chainConfig.name}`);
+      
+    } catch (error) {
+      console.error('❌ Activity fetching failed:', error);
+      setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
+      setChainActivity([]);
+      setActivityStats({
+        totalTransactions: 0,
+        totalValue: 0,
+        totalGasFees: 0,
+        dappsUsed: 0,
+        lastActivity: null
+      });
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, [selectedChain]);
+
+  // Auto-fetch data when conditions change
   useEffect(() => {
     if (address && isConnected) {
-      fetchRealApprovals(address);
+      if (currentPage === 'approvals') {
+        fetchRealApprovals(address);
+      } else if (currentPage === 'activity') {
+        fetchChainActivity(address);
+      }
     }
-  }, [address, isConnected, fetchRealApprovals]);
+  }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
 
   // Helper functions for token data
   const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig, apiKey) => {
@@ -430,30 +567,19 @@ function App() {
       const spenderPadded = spender.slice(2).toLowerCase().padStart(64, '0');
       const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
       
-      const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`;
+      const response = await makeApiCall(
+        `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`,
+        'Allowance Check'
+      );
       
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.status === '1' && result.result && result.result !== '0x' && result.result !== '0x0') {
-        try {
-          const allowance = BigInt(result.result).toString();
-          console.log(`💰 Allowance check: ${allowance} for ${tokenContract.slice(0,8)}...`);
-          return { allowance };
-        } catch (bigintError) {
-          console.warn('BigInt conversion failed:', bigintError);
-          return { allowance: '0' };
-        }
+      if (response.result && response.result !== '0x' && response.result !== '0x0') {
+        const allowance = BigInt(response.result).toString();
+        return { allowance };
       }
       
       return { allowance: '0' };
     } catch (error) {
-      console.warn(`Failed to check allowance for ${tokenContract.slice(0,8)}...:`, error.message);
+      console.warn(`Allowance check failed:`, error.message);
       return { allowance: '0' };
     }
   };
