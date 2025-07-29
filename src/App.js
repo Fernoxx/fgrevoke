@@ -1003,26 +1003,58 @@ function App() {
 
   // Revoke ALL approvals
   const handleRevokeAll = async () => {
+    console.log('🔄 handleRevokeAll clicked!', { 
+      approvalsLength: approvals.length, 
+      isConnected, 
+      provider: !!provider,
+      address 
+    });
+    
     if (approvals.length === 0) {
       setError('No approvals to revoke!');
+      console.log('❌ No approvals to revoke');
       return;
     }
 
+    console.log('✅ Showing confirmation dialog');
     // Show custom confirmation instead of window.confirm()
     setShowRevokeAllConfirm(true);
   };
 
   const confirmRevokeAll = async () => {
+    console.log('🔄 confirmRevokeAll called!');
     setShowRevokeAllConfirm(false);
     setIsRevoking(true);
     
     try {
-      console.log(`🗑️ Starting to revoke ${approvals.length} approvals using contract...`);
+      // Check if we have provider and are connected
+      if (!provider || !isConnected || !address) {
+        throw new Error('Wallet not connected properly');
+      }
+
+      console.log(`🗑️ Starting to revoke ${approvals.length} approvals using contract...`, {
+        contractAddress: REVOKE_HELPER_ADDRESS,
+        provider: !!provider,
+        address,
+        selectedChain
+      });
+      
+      // Contract is deployed on Base, so ensure we're using Base approvals
+      if (selectedChain !== 'base') {
+        throw new Error('Revoke contract is only available on Base chain. Please switch to Base.');
+      }
       
       // Separate ERC20 and ERC721 approvals (for now we only have ERC20)
       const erc20Approvals = approvals.filter(approval => approval.type !== 'erc721');
       const tokenAddresses = erc20Approvals.map(approval => approval.contract);
       const spenderAddresses = erc20Approvals.map(approval => approval.spender);
+      
+      console.log('📊 Approval data prepared:', {
+        totalApprovals: approvals.length,
+        erc20Approvals: erc20Approvals.length,
+        tokenAddresses: tokenAddresses.length,
+        spenderAddresses: spenderAddresses.length
+      });
       
       setRevokeAllProgress({ 
         current: 0, 
@@ -1035,12 +1067,40 @@ function App() {
         console.log('📝 Calling revoke contract with:', {
           contract: REVOKE_HELPER_ADDRESS,
           tokens: tokenAddresses.length,
-          spenders: spenderAddresses.length
+          spenders: spenderAddresses.length,
+          tokenAddresses: tokenAddresses.slice(0, 3), // Show first 3 for debugging
+          spenderAddresses: spenderAddresses.slice(0, 3)
         });
+
+        // Ensure we're on Base chain (8453) since the contract is deployed there
+        const chainConfig = chains.find(c => c.value === selectedChain);
+        const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
+        
+        try {
+          const currentChainId = await provider.request({ method: 'eth_chainId' });
+          console.log('🔗 Current chain ID:', currentChainId, 'Expected:', expectedChainId);
+          
+          if (currentChainId !== expectedChainId) {
+            console.log('🔄 Switching to correct chain...');
+            await provider.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: expectedChainId }],
+            });
+          }
+        } catch (switchError) {
+          console.log('Chain switch error (might be expected):', switchError);
+        }
 
         // Create the contract call data
         const contractInterface = new ethers.utils.Interface(revokeHelperABI);
         const data = contractInterface.encodeFunctionData('revokeERC20', [tokenAddresses, spenderAddresses]);
+        
+        console.log('📋 Contract call data:', {
+          functionName: 'revokeERC20',
+          tokens: tokenAddresses,
+          spenders: spenderAddresses,
+          encodedData: data.slice(0, 20) + '...' // Show first part of encoded data
+        });
         
         const txParams = {
           to: REVOKE_HELPER_ADDRESS,
@@ -1049,7 +1109,7 @@ function App() {
           value: '0x0'
         };
 
-        console.log('📝 Submitting batch revoke transaction...');
+        console.log('📝 Submitting batch revoke transaction with params:', txParams);
         const txHash = await provider.request({
           method: 'eth_sendTransaction',
           params: [txParams]
@@ -1073,19 +1133,27 @@ function App() {
       
     } catch (error) {
       console.error('❌ Batch revoke failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        code: error.code,
+        data: error.data,
+        stack: error.stack
+      });
+      
       setError(`Failed to revoke approvals: ${error.message}`);
       setRevokeAllProgress({
         current: 0,
         total: approvals.length,
         status: 'completed',
-        successCount: 0
+        successCount: 0,
+        error: error.message
       });
     } finally {
       setIsRevoking(false);
-      // Auto-hide progress after 5 seconds
+      // Auto-hide progress after 10 seconds to see any error messages
       setTimeout(() => {
         setRevokeAllProgress(null);
-      }, 5000);
+      }, 10000);
     }
   };
 
@@ -1452,15 +1520,31 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       </>
                     ) : (
                       <>
-                        <p className="text-green-300 mb-3">
-                          Successfully revoked {revokeAllProgress.successCount} out of {revokeAllProgress.total} approvals!
-                        </p>
-                        <button
-                          onClick={() => setRevokeAllProgress(null)}
-                          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-md transition-colors"
-                        >
-                          Close
-                        </button>
+                        {revokeAllProgress.error ? (
+                          <>
+                            <p className="text-red-300 mb-3">
+                              ❌ Error: {revokeAllProgress.error}
+                            </p>
+                            <button
+                              onClick={() => setRevokeAllProgress(null)}
+                              className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors"
+                            >
+                              Close
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-green-300 mb-3">
+                              Successfully revoked {revokeAllProgress.successCount} out of {revokeAllProgress.total} approvals!
+                            </p>
+                            <button
+                              onClick={() => setRevokeAllProgress(null)}
+                              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-md transition-colors"
+                            >
+                              Close
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
