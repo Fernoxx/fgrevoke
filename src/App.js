@@ -86,13 +86,26 @@ function App() {
     }
   ];
 
-  // Get API key for current chain - Use ETHERSCAN key for all chains including Base
-  const getApiKey = (chain) => {
-    switch(chain) {
-      case 'base': return ETHERSCAN_API_KEY; // ✅ Base uses Etherscan API key!
-      case 'arbitrum': return ARBISCAN_KEY;
-      default: return ETHERSCAN_API_KEY;
-    }
+  // Use Alchemy for all blockchain data - much more reliable than Etherscan APIs
+  const getAlchemyConfig = (chain) => {
+    const configs = {
+      'ethereum': {
+        baseUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+        apiKey: ALCHEMY_API_KEY,
+        chainId: 1
+      },
+      'base': {
+        baseUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+        apiKey: ALCHEMY_API_KEY,
+        chainId: 8453
+      },
+      'arbitrum': {
+        baseUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+        apiKey: ALCHEMY_API_KEY,
+        chainId: 42161
+      }
+    };
+    return configs[chain] || configs['ethereum'];
   };
 
   // Get ethers provider for reliable blockchain interactions
@@ -122,34 +135,226 @@ function App() {
     }
   };
 
-  // Rate-limited API call helper
-  const makeApiCall = async (url, description = 'API Call') => {
+  // Alchemy API call helper - more reliable than Etherscan
+  const makeAlchemyCall = async (method, params, description = 'Alchemy Call') => {
     try {
       setApiCallCount(prev => prev + 1);
-      console.log(`🌐 ${description}:`, url.split('&apikey=')[0] + '&apikey=***');
+      const alchemyConfig = getAlchemyConfig(selectedChain);
       
-      // Add small delay between API calls to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const requestBody = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: method,
+        params: params
+      };
       
-      const response = await fetch(url);
+      console.log(`🌐 ${description}:`, method, params);
+      
+      const response = await fetch(alchemyConfig.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
       console.log(`📡 ${description} Response:`, { 
-        status: data.status, 
-        message: data.message,
-        resultCount: data.result?.length || (data.result ? 1 : 0)
+        method: method,
+        resultType: typeof data.result,
+        hasResult: !!data.result,
+        error: data.error
       });
       
-      // Don't throw errors here - let the calling code handle status checking
-      // This allows us to inspect the full response including any data that might be present
+      if (data.error) {
+        throw new Error(`Alchemy error: ${data.error.message}`);
+      }
       
-      return data;
+      return data.result;
     } catch (error) {
       console.error(`❌ ${description} failed:`, error);
       throw error;
+    }
+  };
+
+  // Get approval logs using Alchemy
+  const fetchApprovalsWithAlchemy = async (userAddress) => {
+    try {
+      console.log('🔍 Fetching approvals using Alchemy for:', userAddress);
+      
+      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+      const paddedAddress = '0x' + userAddress.slice(2).toLowerCase().padStart(64, '0');
+      
+      // Get latest block
+      const latestBlock = await makeAlchemyCall('eth_blockNumber', [], 'Latest Block');
+      const latestBlockNum = parseInt(latestBlock, 16);
+      const fromBlock = Math.max(0, latestBlockNum - 50000); // Last 50k blocks
+      
+      console.log(`📊 Using Alchemy block range: ${fromBlock} to ${latestBlockNum}`);
+      
+      // Get approval logs
+      const logs = await makeAlchemyCall('eth_getLogs', [{
+        fromBlock: `0x${fromBlock.toString(16)}`,
+        toBlock: 'latest',
+        topics: [approvalTopic, paddedAddress]
+      }], 'Approval Logs');
+      
+      console.log(`✅ Alchemy returned ${logs.length} approval logs`);
+      
+      if (logs.length > 0) {
+        await processApprovalsFromAlchemy(logs, userAddress);
+      } else {
+        console.log('ℹ️ No approval events found');
+        setApprovals([]);
+      }
+    } catch (error) {
+      console.error('❌ Alchemy approval fetch failed:', error);
+      throw error;
+    }
+  };
+
+  // Process approval logs from Alchemy
+  const processApprovalsFromAlchemy = async (logs, userAddress) => {
+    console.log('🔄 Processing approvals from Alchemy...', { logsCount: logs.length });
+    const approvalMap = new Map();
+    
+    // Process recent logs first
+    const recentLogs = logs.slice(-50).reverse();
+    let processedCount = 0;
+    
+    for (const log of recentLogs) {
+      try {
+        if (processedCount >= 20) break; // Limit processing
+        
+        const tokenContract = log.address?.toLowerCase();
+        const spenderAddress = log.topics && log.topics[2] ? 
+          '0x' + log.topics[2].slice(26).toLowerCase() : null;
+        
+        if (!tokenContract || !spenderAddress || spenderAddress === '0x0000000000000000000000000000000000000000') {
+          continue;
+        }
+        
+        const key = `${tokenContract}-${spenderAddress}`;
+        if (approvalMap.has(key)) continue;
+        
+        console.log(`🔍 Checking approval: ${tokenContract.slice(0,8)}... -> ${spenderAddress.slice(0,8)}...`);
+        
+        // Check current allowance using Alchemy
+        const allowance = await checkAllowanceWithAlchemy(tokenContract, userAddress, spenderAddress);
+        
+        if (allowance && allowance !== '0') {
+          console.log(`✅ Active allowance found: ${allowance}`);
+          
+          // Get token info using Alchemy
+          const tokenInfo = await getTokenInfoWithAlchemy(tokenContract);
+          
+          const approval = {
+            id: key,
+            name: tokenInfo.name || 'Unknown Token',
+            symbol: tokenInfo.symbol || 'UNK',
+            contract: tokenContract,
+            spender: spenderAddress,
+            spenderName: getSpenderName(spenderAddress),
+            amount: formatAllowance(allowance, tokenInfo.decimals),
+            riskLevel: assessRiskLevel(spenderAddress),
+            txHash: log.transactionHash,
+            blockNumber: parseInt(log.blockNumber, 16),
+            isActive: true
+          };
+          
+          approvalMap.set(key, approval);
+          processedCount++;
+          
+          console.log(`📝 Added approval: ${approval.name} (${approval.symbol}) -> ${approval.spenderName}`);
+        }
+        
+        // Small delay
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.warn('⚠️ Error processing approval:', error.message);
+      }
+    }
+    
+    const finalApprovals = Array.from(approvalMap.values());
+    setApprovals(finalApprovals);
+    console.log(`✅ Processed ${finalApprovals.length} active approvals using Alchemy`);
+  };
+
+  // Check allowance using Alchemy
+  const checkAllowanceWithAlchemy = async (tokenContract, owner, spender) => {
+    try {
+      const ownerPadded = owner.slice(2).toLowerCase().padStart(64, '0');
+      const spenderPadded = spender.slice(2).toLowerCase().padStart(64, '0');
+      const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
+      
+      const result = await makeAlchemyCall('eth_call', [{
+        to: tokenContract,
+        data: data
+      }, 'latest'], 'Allowance Check');
+      
+      if (result && result !== '0x' && result !== '0x0') {
+        return BigInt(result).toString();
+      }
+      
+      return '0';
+    } catch (error) {
+      console.warn(`Allowance check failed:`, error.message);
+      return '0';
+    }
+  };
+
+  // Get token info using Alchemy
+  const getTokenInfoWithAlchemy = async (tokenAddress) => {
+    try {
+      const calls = [
+        { method: '0x06fdde03', property: 'name' },
+        { method: '0x95d89b41', property: 'symbol' },
+        { method: '0x313ce567', property: 'decimals' }
+      ];
+      
+      const results = {};
+      
+      for (const call of calls) {
+        try {
+          const result = await makeAlchemyCall('eth_call', [{
+            to: tokenAddress,
+            data: call.method
+          }, 'latest'], `Token ${call.property}`);
+          
+          if (result && result !== '0x') {
+            if (call.property === 'decimals') {
+              results[call.property] = parseInt(result, 16);
+            } else {
+              // Decode hex string
+              const hex = result.slice(2);
+              let decoded = '';
+              for (let i = 0; i < hex.length; i += 2) {
+                const charCode = parseInt(hex.slice(i, i + 2), 16);
+                if (charCode > 0) {
+                  decoded += String.fromCharCode(charCode);
+                }
+              }
+              results[call.property] = decoded.trim() || `Token${call.property.toUpperCase()}`;
+            }
+          }
+        } catch (callError) {
+          console.warn(`Failed to get ${call.property}:`, callError);
+        }
+      }
+      
+      return {
+        name: results.name || 'Unknown Token',
+        symbol: results.symbol || 'UNK',
+        decimals: results.decimals || 18
+      };
+    } catch (error) {
+      console.warn('Failed to get token info:', error);
+      return { name: 'Unknown Token', symbol: 'UNK', decimals: 18 };
     }
   };
 
@@ -322,111 +527,25 @@ function App() {
     }
   }, [provider, address]);
 
-  // Fetch approvals function with proper block number handling
+  // Fetch approvals using Alchemy - much more reliable
   const fetchRealApprovals = useCallback(async (userAddress) => {
     setLoading(true);
     setError(null);
-    console.log('🔍 Fetching approvals for:', userAddress, 'on chain:', selectedChain);
+    console.log('🔍 Fetching approvals using Alchemy for:', userAddress, 'on chain:', selectedChain);
     
     try {
-      const chainConfig = chains.find(chain => chain.value === selectedChain);
-      const apiKey = getApiKey(selectedChain);
-      
-      console.log(`🔑 API Key Info for ${selectedChain}:`, {
-        chain: selectedChain,
-        apiUrl: chainConfig.apiUrl,
-        keySource: selectedChain === 'base' ? 'ETHERSCAN_API_KEY' : selectedChain === 'arbitrum' ? 'ARBISCAN_KEY' : 'ETHERSCAN_API_KEY',
-        keyLength: apiKey ? apiKey.length : 0,
-        keyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : 'missing'
+      const alchemyConfig = getAlchemyConfig(selectedChain);
+      console.log(`🌟 Using Alchemy for ${selectedChain}:`, {
+        baseUrl: alchemyConfig.baseUrl.split('/')[2], // Just show domain
+        keyLength: alchemyConfig.apiKey ? alchemyConfig.apiKey.length : 0,
+        keyPreview: alchemyConfig.apiKey ? `${alchemyConfig.apiKey.substring(0, 8)}...` : 'missing'
       });
 
-      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
-      const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
-      
-      console.log(`🔍 Search parameters:
-        - Original Address: ${userAddress}
-        - Address without 0x: ${userAddress.slice(2)}
-        - Lowercased: ${userAddress.slice(2).toLowerCase()}
-        - Padded (64 chars): ${paddedAddress}
-        - Final topic1: 0x${paddedAddress}
-        - Chain: ${selectedChain}
-        - API: ${chainConfig.apiUrl}
-        - Approval Topic0: ${approvalTopic}`);
-      
-      // Verify the padding is exactly right
-      console.log(`🔍 Address verification:
-        - Padded length: ${paddedAddress.length} (should be 64)
-        - Starts with zeros: ${paddedAddress.startsWith('000000000000000000000000')}
-        - Original address at end: ${paddedAddress.endsWith(userAddress.slice(2).toLowerCase())}`);
-      
-      // For testing: Use full blockchain history (fromBlock=0)
-      const fromBlock = '0';
-      console.log(`📊 Using full blockchain history: fromBlock=0 to latest`);
-      
-      // Construct the exact API URL as specified
-      const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
-      
-      console.log('🌐 Making approval logs API request with full history...');
-      console.log('🔍 Exact URL:', scanUrl.replace(apiKey, '***'));
-      
-      // Show the fixed format example for Base
-      if (selectedChain === 'base') {
-        console.log('📋 Base API Format Example:');
-        console.log(`https://api.basescan.org/api?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=ETHERSCAN_KEY`);
-        console.log('🔑 Using ETHERSCAN API key for Base (not Basescan key)');
-      }
-      
-      try {
-        const data = await makeApiCall(scanUrl, 'Approval Logs (Full History)');
-        
-        // Better error handling - check actual data structure
-        console.log('🔍 Raw API Response:', {
-          status: data.status,
-          message: data.message,
-          resultType: typeof data.result,
-          isArray: Array.isArray(data.result),
-          resultLength: data.result?.length || 0,
-          firstFewResults: Array.isArray(data.result) ? data.result.slice(0, 2) : data.result
-        });
-        
-        if (data.status === '1' && Array.isArray(data.result)) {
-          console.log(`✅ Found ${data.result.length} approval events - processing...`);
-          if (data.result.length > 0) {
-            await processApprovals(data.result, userAddress, chainConfig, apiKey);
-          } else {
-            console.log('ℹ️ API returned success but with 0 results');
-            setApprovals([]);
-          }
-        } else {
-          console.error('❌ API response issue:', {
-            status: data.status,
-            message: data.message,
-            result: data.result
-          });
-          
-          if (data.status === '0') {
-            if (data.message === 'No records found') {
-              console.log('ℹ️ No approval events found for this address on', selectedChain);
-              setApprovals([]);
-            } else {
-              setError(`API Error: ${data.message || 'Unknown error'}`);
-            }
-          } else {
-            setError(`Unexpected API response format. Status: ${data.status}`);
-          }
-        }
-      } catch (error) {
-        console.error('❌ API call failed:', error);
-        throw error;
-      }
+      await fetchApprovalsWithAlchemy(userAddress);
       
     } catch (error) {
-      console.error('❌ Approval fetching failed:', error);
-      if (error.message.includes('rate limit') || error.message.includes('NOTOK')) {
-        setError(`🔄 API temporarily unavailable. Try switching chains or refreshing in a few moments. The ${selectedChain} explorer API might be experiencing high traffic.`);
-      } else {
-        setError(`Failed to fetch approvals: ${error.message}`);
-      }
+      console.error('❌ Alchemy approval fetching failed:', error);
+      setError(`Failed to fetch approvals: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -506,148 +625,20 @@ function App() {
     console.log(`✅ Processed ${finalApprovals.length} active approvals from ${logs.length} total logs`);
   };
 
-  // Fetch chain activity function
+  // Fetch chain activity using Alchemy - much more reliable
   const fetchChainActivity = useCallback(async (userAddress) => {
     if (!userAddress || !selectedChain) return;
     
     setLoadingActivity(true);
     setError(null);
-    console.log('🔍 Fetching activity for:', userAddress, 'on chain:', selectedChain);
+    console.log('🔍 Fetching activity using Alchemy for:', userAddress, 'on chain:', selectedChain);
     
     try {
-      const chainConfig = chains.find(c => c.value === selectedChain);
-      const apiKey = getApiKey(selectedChain);
-      
-      console.log(`🔑 Activity API Key Info for ${selectedChain}:`, {
-        keySource: selectedChain === 'base' ? 'ETHERSCAN_API_KEY' : selectedChain === 'arbitrum' ? 'ARBISCAN_KEY' : 'ETHERSCAN_API_KEY',
-        keyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : 'missing'
-      });
-      
-      // For testing: Use recent block range for activity (last 10k blocks)
-      let fromBlock = '0';
-      try {
-        const latestBlock = await getLatestBlockNumber(selectedChain);
-        if (latestBlock && latestBlock > 0) {
-          fromBlock = Math.max(0, latestBlock - 10000).toString();
-          console.log(`📊 Activity block range: ${fromBlock} to latest (${latestBlock})`);
-        }
-      } catch (blockError) {
-        console.log('⚠️ Block number fetch failed for activity, using fromBlock=0:', blockError.message);
-      }
-
-      // Get normal transactions
-      const txResponse = await makeApiCall(
-        `${chainConfig.apiUrl}?module=account&action=txlist&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=25&sort=desc&apikey=${apiKey}`,
-        `${chainConfig.name} Transactions`
-      );
-      
-      console.log('🔍 Transaction API Response:', {
-        status: txResponse.status,
-        message: txResponse.message,
-        resultCount: txResponse.result?.length || 0
-      });
-      
-      let allActivity = [];
-      
-      if (txResponse.result && txResponse.result.length > 0) {
-        const transactions = txResponse.result.map(tx => {
-          const value = parseFloat(tx.value || '0') / Math.pow(10, 18);
-          const gasUsed = parseInt(tx.gasUsed || '0');
-          const gasPrice = parseInt(tx.gasPrice || '0');
-          const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
-          
-          return {
-            hash: tx.hash,
-            timeStamp: parseInt(tx.timeStamp) * 1000,
-            from: tx.from?.toLowerCase() || '',
-            to: tx.to?.toLowerCase() || '',
-            value: value,
-            gasFee: gasFee,
-            gasUsed: gasUsed,
-            methodId: tx.methodId || '0x',
-            functionName: tx.functionName || 'Transfer',
-            isError: tx.isError === '1',
-            blockNumber: tx.blockNumber,
-            type: 'normal'
-          };
-        });
-        allActivity.push(...transactions);
-      }
-
-      // Get ERC20 token transfers
-      try {
-        const tokenResponse = await makeApiCall(
-          `${chainConfig.apiUrl}?module=account&action=tokentx&address=${userAddress}&startblock=${fromBlock}&endblock=latest&page=1&offset=15&sort=desc&apikey=${apiKey}`,
-          `${chainConfig.name} Token Transfers`
-        );
-        
-        console.log('🔍 Token Transfer API Response:', {
-          status: tokenResponse.status,
-          message: tokenResponse.message,
-          resultCount: tokenResponse.result?.length || 0
-        });
-        
-        if (tokenResponse.status === '1' && tokenResponse.result && tokenResponse.result.length > 0) {
-          const tokenTransfers = tokenResponse.result.map(tx => {
-            const decimals = parseInt(tx.tokenDecimal || '18');
-            const tokenValue = parseFloat(tx.value || '0') / Math.pow(10, decimals);
-            const gasUsed = parseInt(tx.gasUsed || '0');
-            const gasPrice = parseInt(tx.gasPrice || '0');
-            const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
-            
-            return {
-              hash: tx.hash,
-              timeStamp: parseInt(tx.timeStamp) * 1000,
-              from: tx.from?.toLowerCase() || '',
-              to: tx.to?.toLowerCase() || '',
-              value: 0, // native currency value
-              tokenValue: tokenValue,
-              tokenSymbol: tx.tokenSymbol || 'Unknown',
-              tokenName: tx.tokenName || 'Unknown Token',
-              gasFee: gasFee,
-              gasUsed: gasUsed,
-              isError: false,
-              blockNumber: tx.blockNumber,
-              type: 'token_transfer'
-            };
-          });
-          allActivity.push(...tokenTransfers);
-        }
-      } catch (tokenError) {
-        console.log('⚠️ Could not fetch token transfers:', tokenError.message);
-      }
-
-      // Sort by timestamp (newest first)
-      allActivity.sort((a, b) => b.timeStamp - a.timeStamp);
-      
-      // Calculate stats
-      const totalValue = allActivity.reduce((sum, tx) => sum + (tx.value || 0), 0);
-      const totalGasFees = allActivity.reduce((sum, tx) => sum + (tx.gasFee || 0), 0);
-      const uniqueContracts = new Set(
-        allActivity
-          .filter(tx => tx.to !== userAddress.toLowerCase() && tx.to && tx.to !== '0x0000000000000000000000000000000000000000')
-          .map(tx => tx.to)
-      );
-      const lastActivity = allActivity.length > 0 ? new Date(allActivity[0].timeStamp) : null;
-
-      setActivityStats({
-        totalTransactions: allActivity.length,
-        totalValue: totalValue,
-        totalGasFees: totalGasFees,
-        dappsUsed: uniqueContracts.size,
-        lastActivity: lastActivity
-      });
-
-      setChainActivity(allActivity);
-      console.log(`✅ Processed ${allActivity.length} activities on ${chainConfig.name}`);
+      await fetchActivityWithAlchemy(userAddress);
       
     } catch (error) {
-      console.error('❌ Activity fetching failed:', error);
-      if (error.message.includes('rate limit') || error.message.includes('NOTOK')) {
-        setError(`🔄 Activity API temporarily unavailable. Try switching chains or refreshing in a few moments. The ${selectedChain} explorer API might be experiencing high traffic.`);
-      } else {
-        setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
-      }
+      console.error('❌ Alchemy activity fetching failed:', error);
+      setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
       setChainActivity([]);
       setActivityStats({
         totalTransactions: 0,
@@ -660,6 +651,131 @@ function App() {
       setLoadingActivity(false);
     }
   }, [selectedChain]);
+
+  // Fetch activity using Alchemy
+  const fetchActivityWithAlchemy = async (userAddress) => {
+    try {
+      console.log('🔍 Fetching activity using Alchemy for:', userAddress);
+      
+      // Get latest block
+      const latestBlock = await makeAlchemyCall('eth_blockNumber', [], 'Latest Block for Activity');
+      const latestBlockNum = parseInt(latestBlock, 16);
+      const fromBlock = Math.max(0, latestBlockNum - 5000); // Last 5k blocks for performance
+      
+      console.log(`📊 Using Alchemy activity block range: ${fromBlock} to ${latestBlockNum}`);
+      
+      let allActivity = [];
+      
+      // Get recent transaction hashes for this address
+      // We'll use a more targeted approach with Alchemy
+      try {
+        // Get transfers TO this address (received)
+        const receivedLogs = await makeAlchemyCall('eth_getLogs', [{
+          fromBlock: `0x${fromBlock.toString(16)}`,
+          toBlock: 'latest',
+          topics: [
+            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', // Transfer topic
+            null, // from (any)
+            '0x' + userAddress.slice(2).toLowerCase().padStart(64, '0') // to (user)
+          ]
+        }], 'Received Transfers');
+        
+        // Get transfers FROM this address (sent)
+        const sentLogs = await makeAlchemyCall('eth_getLogs', [{
+          fromBlock: `0x${fromBlock.toString(16)}`,
+          toBlock: 'latest',
+          topics: [
+            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', // Transfer topic
+            '0x' + userAddress.slice(2).toLowerCase().padStart(64, '0'), // from (user)
+            null // to (any)
+          ]
+        }], 'Sent Transfers');
+        
+        console.log(`✅ Found ${receivedLogs.length} received and ${sentLogs.length} sent transfers`);
+        
+        // Process the logs to get unique transactions
+        const txHashes = new Set();
+        [...receivedLogs, ...sentLogs].forEach(log => {
+          if (log.transactionHash) {
+            txHashes.add(log.transactionHash);
+          }
+        });
+        
+        console.log(`🔍 Processing ${txHashes.size} unique transactions`);
+        
+        // Get transaction details for each unique hash (limit to prevent overwhelming)
+        const txHashArray = Array.from(txHashes).slice(0, 20);
+        
+        for (const txHash of txHashArray) {
+          try {
+            const tx = await makeAlchemyCall('eth_getTransactionByHash', [txHash], 'Transaction Details');
+            const receipt = await makeAlchemyCall('eth_getTransactionReceipt', [txHash], 'Transaction Receipt');
+            
+            if (tx && receipt) {
+              const value = parseFloat(tx.value || '0') / Math.pow(10, 18);
+              const gasUsed = parseInt(receipt.gasUsed, 16);
+              const gasPrice = parseInt(tx.gasPrice, 16);
+              const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
+              
+              const activity = {
+                hash: tx.hash,
+                timeStamp: Date.now(), // We don't have timestamp from Alchemy directly
+                from: tx.from?.toLowerCase() || '',
+                to: tx.to?.toLowerCase() || '',
+                value: value,
+                gasFee: gasFee,
+                gasUsed: gasUsed,
+                methodId: tx.input?.slice(0, 10) || '0x',
+                functionName: tx.input === '0x' ? 'Transfer' : 'Contract Call',
+                isError: receipt.status === '0x0',
+                blockNumber: parseInt(tx.blockNumber, 16),
+                type: 'normal'
+              };
+              
+              allActivity.push(activity);
+            }
+            
+            // Small delay to avoid overwhelming Alchemy
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+          } catch (txError) {
+            console.warn('⚠️ Failed to get transaction details:', txError.message);
+          }
+        }
+        
+      } catch (error) {
+        console.warn('⚠️ Could not fetch activity logs:', error.message);
+      }
+      
+      // Sort by block number (newest first)
+      allActivity.sort((a, b) => b.blockNumber - a.blockNumber);
+      
+      // Calculate stats
+      const totalValue = allActivity.reduce((sum, tx) => sum + (tx.value || 0), 0);
+      const totalGasFees = allActivity.reduce((sum, tx) => sum + (tx.gasFee || 0), 0);
+      const uniqueContracts = new Set(
+        allActivity
+          .filter(tx => tx.to !== userAddress.toLowerCase() && tx.to && tx.to !== '0x0000000000000000000000000000000000000000')
+          .map(tx => tx.to)
+      );
+      const lastActivity = allActivity.length > 0 ? new Date() : null; // Approximate since we don't have exact timestamps
+      
+      setActivityStats({
+        totalTransactions: allActivity.length,
+        totalValue: totalValue,
+        totalGasFees: totalGasFees,
+        dappsUsed: uniqueContracts.size,
+        lastActivity: lastActivity
+      });
+      
+      setChainActivity(allActivity);
+      console.log(`✅ Processed ${allActivity.length} activities using Alchemy`);
+      
+    } catch (error) {
+      console.error('❌ Alchemy activity fetch failed:', error);
+      throw error;
+    }
+  };
 
   // Auto-fetch data when conditions change
   useEffect(() => {
