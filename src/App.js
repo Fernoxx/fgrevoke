@@ -12,7 +12,6 @@ function App() {
   const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals' or 'activity'
 
   // Farcaster integration states
-  const [user, setUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
   const [address, setAddress] = useState(null);
   const [userAddresses, setUserAddresses] = useState([]); // All user's addresses
@@ -33,12 +32,19 @@ function App() {
     lastActivity: null
   });
 
-  // API Configuration
-  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
+  // API Configuration - Using your Vercel environment variables
+  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || process.env.REACT_APP_ETHERSCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
   const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
-  const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
-  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
+  const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || ETHERSCAN_API_KEY;
+  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || ETHERSCAN_API_KEY;
+  
+  console.log('🔑 API Keys loaded:', {
+    etherscan: ETHERSCAN_API_KEY ? `${ETHERSCAN_API_KEY.substring(0, 8)}...` : 'missing',
+    alchemy: ALCHEMY_API_KEY ? `${ALCHEMY_API_KEY.substring(0, 8)}...` : 'missing',
+    basescan: BASESCAN_KEY ? `${BASESCAN_KEY.substring(0, 8)}...` : 'missing',
+    arbiscan: ARBISCAN_KEY ? `${ARBISCAN_KEY.substring(0, 8)}...` : 'missing'
+  });
 
   // Rate limiting
   const [apiCallCount, setApiCallCount] = useState(0);
@@ -252,23 +258,7 @@ function App() {
     return new ethers.providers.JsonRpcProvider(chainConfig.rpcUrls[0]);
   };
 
-  // Get reliable block number using ethers
-  const getLatestBlockNumber = async (chain) => {
-    try {
-      const provider = getEthersProvider(chain);
-      if (!provider) {
-        console.log('⚠️ No provider available for chain:', chain);
-        return null;
-      }
-      
-      const latestBlock = await provider.getBlockNumber();
-      console.log(`📊 Latest block number for ${chain}: ${latestBlock}`);
-      return latestBlock;
-    } catch (error) {
-      console.log(`⚠️ Failed to get block number for ${chain}:`, error.message);
-      return null;
-    }
-  };
+
 
   // Alchemy API call helper - more reliable than Etherscan
   const makeAlchemyCall = async (method, params, description = 'Alchemy Call') => {
@@ -530,7 +520,6 @@ function App() {
           
           console.log('🎯 Extracted real user data:', realUserData);
           setCurrentUser(realUserData);
-          setUser(contextData.user); // Keep for compatibility
           
           // Get user's verified addresses from Farcaster
           if (contextData.user.verifiedAddresses && contextData.user.verifiedAddresses.length > 0) {
@@ -704,79 +693,7 @@ function App() {
     }
   }, [selectedChain]);
 
-  // Process approvals from API response
-  const processApprovals = async (logs, userAddress, chainConfig, apiKey) => {
-    console.log('🔄 Processing approvals...', { logsCount: logs.length });
-    const approvalMap = new Map();
-    
-    // Process more recent logs first (reverse order)
-    const recentLogs = logs.slice(-100).reverse();
-    let processedCount = 0;
-    
-    for (const log of recentLogs) {
-      try {
-        if (processedCount >= 20) break; // Limit to prevent overwhelming
-        
-        const tokenContract = log.address?.toLowerCase();
-        const spenderAddress = log.topics && log.topics[2] ? 
-          '0x' + log.topics[2].slice(26).toLowerCase() : null;
-        
-        if (!tokenContract || !spenderAddress || spenderAddress === '0x0000000000000000000000000000000000000000') {
-          continue;
-        }
-        
-        const key = `${tokenContract}-${spenderAddress}`;
-        if (approvalMap.has(key)) continue;
-        
-        console.log(`🔍 Checking approval: ${tokenContract.slice(0,8)}... -> ${spenderAddress.slice(0,8)}...`);
-        
-        // Check current allowance with timeout
-        const allowanceInfo = await Promise.race([
-          checkCurrentAllowance(tokenContract, userAddress, spenderAddress, chainConfig, apiKey),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-        ]);
-        
-        if (allowanceInfo && allowanceInfo.allowance && allowanceInfo.allowance !== '0') {
-          console.log(`✅ Active allowance found: ${allowanceInfo.allowance}`);
-          
-          // Get token info with timeout
-          const tokenInfo = await Promise.race([
-            getTokenInfo(tokenContract, chainConfig, apiKey),
-            new Promise(resolve => setTimeout(() => resolve({ name: 'Unknown Token', symbol: 'UNK', decimals: 18 }), 8000))
-          ]);
-          
-          const approval = {
-            id: key,
-            name: tokenInfo.name || 'Unknown Token',
-            symbol: tokenInfo.symbol || 'UNK',
-            contract: tokenContract,
-            spender: spenderAddress,
-            spenderName: getSpenderName(spenderAddress),
-            amount: formatAllowance(allowanceInfo.allowance, tokenInfo.decimals),
-            riskLevel: assessRiskLevel(spenderAddress),
-            txHash: log.transactionHash,
-            blockNumber: parseInt(log.blockNumber, 16) || log.blockNumber,
-            isActive: true
-          };
-          
-          approvalMap.set(key, approval);
-          processedCount++;
-          
-          console.log(`📝 Added approval: ${approval.name} (${approval.symbol}) -> ${approval.spenderName}`);
-        }
-        
-        // Small delay between requests to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-      } catch (error) {
-        console.warn('⚠️ Error processing approval:', error.message);
-      }
-    }
-    
-    const finalApprovals = Array.from(approvalMap.values());
-    setApprovals(finalApprovals);
-    console.log(`✅ Processed ${finalApprovals.length} active approvals from ${logs.length} total logs`);
-  };
+
 
   // Fetch chain activity using Alchemy - much more reliable
   const fetchChainActivity = useCallback(async (userAddress) => {
@@ -941,76 +858,26 @@ function App() {
     }
   }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
 
-  // Helper functions for token data
-  const checkCurrentAllowance = async (tokenContract, owner, spender, chainConfig, apiKey) => {
+  // Helper functions for token data (using Alchemy)
+  const checkCurrentAllowance = async (tokenContract, owner, spender) => {
     try {
-      const ownerPadded = owner.slice(2).toLowerCase().padStart(64, '0');
-      const spenderPadded = spender.slice(2).toLowerCase().padStart(64, '0');
-      const data = `0xdd62ed3e${ownerPadded}${spenderPadded}`;
-      
-      const response = await makeApiCall(
-        `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenContract}&data=${data}&tag=latest&apikey=${apiKey}`,
-        'Allowance Check'
-      );
-      
-      if (response.result && response.result !== '0x' && response.result !== '0x0') {
-        const allowance = BigInt(response.result).toString();
-        return { allowance };
-      }
-      
-      return { allowance: '0' };
+      // Use the existing checkAllowanceWithAlchemy function
+      const allowance = await checkAllowanceWithAlchemy(tokenContract, owner, spender);
+      return { allowance: allowance || '0' };
     } catch (error) {
       console.warn(`Allowance check failed:`, error.message);
       return { allowance: '0' };
     }
   };
 
-  const getTokenInfo = async (tokenAddress, chainConfig, apiKey) => {
+  const getTokenInfo = async (tokenAddress) => {
     try {
-      const calls = [
-        { method: '0x06fdde03', property: 'name' },
-        { method: '0x95d89b41', property: 'symbol' },
-        { method: '0x313ce567', property: 'decimals' }
-      ];
-      
-      const results = {};
-      
-      for (const call of calls) {
-        try {
-          const response = await makeApiCall(
-            `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`,
-            `Token ${call.property}`
-          );
-          
-          if (response.result && response.result !== '0x') {
-            if (call.property === 'decimals') {
-              results[call.property] = parseInt(response.result, 16);
-            } else {
-              try {
-                const hex = response.result.slice(2);
-                // Browser-compatible hex to string conversion
-                let decoded = '';
-                for (let i = 0; i < hex.length; i += 2) {
-                  const charCode = parseInt(hex.slice(i, i + 2), 16);
-                  if (charCode > 0) { // Skip null bytes
-                    decoded += String.fromCharCode(charCode);
-                  }
-                }
-                results[call.property] = decoded.trim() || `Token${call.property.toUpperCase()}`;
-              } catch (decodeError) {
-                results[call.property] = `Token${call.property.toUpperCase()}`;
-              }
-            }
-          }
-        } catch (callError) {
-          console.warn(`Failed to get ${call.property}:`, callError);
-        }
-      }
-      
+      // Use the existing getTokenInfoWithAlchemy function
+      const tokenInfo = await getTokenInfoWithAlchemy(tokenAddress);
       return {
-        name: results.name || 'Unknown Token',
-        symbol: results.symbol || 'UNK',
-        decimals: results.decimals || 18
+        name: tokenInfo.name || 'Unknown Token',
+        symbol: tokenInfo.symbol || 'UNK',
+        decimals: tokenInfo.decimals || 18
       };
     } catch (error) {
       console.warn('Failed to get token info:', error);
