@@ -86,10 +86,10 @@ function App() {
     }
   ];
 
-  // Get API key for current chain
+  // Get API key for current chain - Use ETHERSCAN key for all chains including Base
   const getApiKey = (chain) => {
     switch(chain) {
-      case 'base': return BASESCAN_KEY;
+      case 'base': return ETHERSCAN_API_KEY; // ✅ Base uses Etherscan API key!
       case 'arbitrum': return ARBISCAN_KEY;
       default: return ETHERSCAN_API_KEY;
     }
@@ -331,6 +331,14 @@ function App() {
     try {
       const chainConfig = chains.find(chain => chain.value === selectedChain);
       const apiKey = getApiKey(selectedChain);
+      
+      console.log(`🔑 API Key Info for ${selectedChain}:`, {
+        chain: selectedChain,
+        apiUrl: chainConfig.apiUrl,
+        keySource: selectedChain === 'base' ? 'ETHERSCAN_API_KEY' : selectedChain === 'arbitrum' ? 'ARBISCAN_KEY' : 'ETHERSCAN_API_KEY',
+        keyLength: apiKey ? apiKey.length : 0,
+        keyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : 'missing'
+      });
 
       const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
       const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
@@ -360,6 +368,13 @@ function App() {
       
       console.log('🌐 Making approval logs API request with full history...');
       console.log('🔍 Exact URL:', scanUrl.replace(apiKey, '***'));
+      
+      // Show the fixed format example for Base
+      if (selectedChain === 'base') {
+        console.log('📋 Base API Format Example:');
+        console.log(`https://api.basescan.org/api?module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=ETHERSCAN_KEY`);
+        console.log('🔑 Using ETHERSCAN API key for Base (not Basescan key)');
+      }
       
       try {
         const data = await makeApiCall(scanUrl, 'Approval Logs (Full History)');
@@ -502,6 +517,11 @@ function App() {
     try {
       const chainConfig = chains.find(c => c.value === selectedChain);
       const apiKey = getApiKey(selectedChain);
+      
+      console.log(`🔑 Activity API Key Info for ${selectedChain}:`, {
+        keySource: selectedChain === 'base' ? 'ETHERSCAN_API_KEY' : selectedChain === 'arbitrum' ? 'ARBISCAN_KEY' : 'ETHERSCAN_API_KEY',
+        keyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : 'missing'
+      });
       
       // For testing: Use recent block range for activity (last 10k blocks)
       let fromBlock = '0';
