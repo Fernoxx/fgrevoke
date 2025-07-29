@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { ethers } from 'ethers';
 
 function App() {
   const [selectedChain, setSelectedChain] = useState('ethereum');
@@ -89,6 +90,33 @@ function App() {
       case 'base': return BASESCAN_KEY;
       case 'arbitrum': return ARBISCAN_KEY;
       default: return ETHERSCAN_API_KEY;
+    }
+  };
+
+  // Get ethers provider for reliable blockchain interactions
+  const getEthersProvider = (chain) => {
+    const chainConfig = chains.find(c => c.value === chain);
+    if (!chainConfig) return null;
+    
+    // Use the first RPC URL for the chain
+    return new ethers.providers.JsonRpcProvider(chainConfig.rpcUrls[0]);
+  };
+
+  // Get reliable block number using ethers
+  const getLatestBlockNumber = async (chain) => {
+    try {
+      const provider = getEthersProvider(chain);
+      if (!provider) {
+        console.log('⚠️ No provider available for chain:', chain);
+        return null;
+      }
+      
+      const latestBlock = await provider.getBlockNumber();
+      console.log(`📊 Latest block number for ${chain}: ${latestBlock}`);
+      return latestBlock;
+    } catch (error) {
+      console.log(`⚠️ Failed to get block number for ${chain}:`, error.message);
+      return null;
     }
   };
 
@@ -279,35 +307,23 @@ function App() {
         - Chain: ${selectedChain}
         - API: ${chainConfig.apiUrl}`);
       
-      // Get latest block number with proper error handling
+      // Get latest block number using reliable ethers provider
       let fromBlock = '0';
       try {
-        const blockData = await makeApiCall(
-          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
-          'Latest Block Number'
-        );
+        const latestBlock = await getLatestBlockNumber(selectedChain);
         
-        if (blockData.result) {
-          const latestBlock = parseInt(blockData.result, 16);
-          if (!isNaN(latestBlock) && latestBlock > 0) {
-            // Look back ~500k blocks but ensure it's a valid number
-            const calculatedFromBlock = Math.max(0, latestBlock - 500000);
-            fromBlock = calculatedFromBlock.toString();
-            console.log(`📊 Using block range: ${fromBlock} to latest (latest: ${latestBlock})`);
-          } else {
-            console.log('⚠️ Invalid latest block number, using fromBlock=0');
-            fromBlock = '0';
-          }
+        if (latestBlock && latestBlock > 0) {
+          // Look back ~50k blocks for approvals (more recent and efficient)
+          const calculatedFromBlock = Math.max(0, latestBlock - 50000);
+          fromBlock = calculatedFromBlock.toString();
+          console.log(`📊 Using block range: ${fromBlock} to latest (latest: ${latestBlock})`);
+        } else {
+          console.log('⚠️ Could not get latest block, using fromBlock=0');
+          fromBlock = '0';
         }
       } catch (blockError) {
-        console.log('⚠️ Could not get latest block, using fromBlock=0:', blockError.message);
+        console.log('⚠️ Block number fetch failed, using fromBlock=0:', blockError.message);
         fromBlock = '0';
-      }
-      
-      // Ensure fromBlock is always a valid string number
-      if (fromBlock === 'NaN' || fromBlock === '' || isNaN(parseInt(fromBlock))) {
-        fromBlock = '0';
-        console.log('⚠️ Fixed invalid fromBlock, using 0');
       }
       
       const scanUrl = `${chainConfig.apiUrl}?module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${apiKey}`;
@@ -421,22 +437,19 @@ function App() {
       const chainConfig = chains.find(c => c.value === selectedChain);
       const apiKey = getApiKey(selectedChain);
       
-      // Get latest block for range
+      // Get latest block for range using reliable ethers provider
       let fromBlock = '0';
       try {
-        const blockData = await makeApiCall(
-          `${chainConfig.apiUrl}?module=proxy&action=eth_blockNumber&apikey=${apiKey}`,
-          'Latest Block for Activity'
-        );
-        if (blockData.result) {
-          const latestBlock = parseInt(blockData.result, 16);
-          if (!isNaN(latestBlock) && latestBlock > 0) {
-            fromBlock = Math.max(0, latestBlock - 50000).toString(); // Last ~50k blocks for better performance
-            console.log(`📊 Activity block range: ${fromBlock} to latest`);
-          }
+        const latestBlock = await getLatestBlockNumber(selectedChain);
+        
+        if (latestBlock && latestBlock > 0) {
+          fromBlock = Math.max(0, latestBlock - 10000).toString(); // Last ~10k blocks for activity (more recent)
+          console.log(`📊 Activity block range: ${fromBlock} to latest (${latestBlock})`);
+        } else {
+          console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
         }
       } catch (blockError) {
-        console.log('⚠️ Could not get latest block for activity, using fromBlock=0');
+        console.log('⚠️ Block number fetch failed for activity, using fromBlock=0:', blockError.message);
       }
 
       // Get normal transactions
@@ -596,16 +609,17 @@ function App() {
       
       for (const call of calls) {
         try {
-          const url = `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`;
-          const response = await fetch(url);
-          const data = await response.json();
+          const response = await makeApiCall(
+            `${chainConfig.apiUrl}?module=proxy&action=eth_call&to=${tokenAddress}&data=${call.method}&tag=latest&apikey=${apiKey}`,
+            `Token ${call.property}`
+          );
           
-          if (data.status === '1' && data.result && data.result !== '0x') {
+          if (response.result && response.result !== '0x') {
             if (call.property === 'decimals') {
-              results[call.property] = parseInt(data.result, 16);
+              results[call.property] = parseInt(response.result, 16);
             } else {
               try {
-                const hex = data.result.slice(2);
+                const hex = response.result.slice(2);
                 // Browser-compatible hex to string conversion
                 let decoded = '';
                 for (let i = 0; i < hex.length; i += 2) {
@@ -769,11 +783,22 @@ function App() {
 
   // Share to Farcaster using proper SDK method
   const handleShare = async () => {
-    const shareText = `🛡️ Just secured my wallet with FarGuard! Successfully revoked all of my unwanted approvals.
+    const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
+    
+    const shareText = currentPage === 'activity'
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!
 
-Check yours too and keep your assets safe! 🔒
+💰 ${activityStats.totalTransactions} transactions
+🏗️ ${activityStats.dappsUsed} dApps used
+⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
 
-https://fgrevoke.vercel.app`;
+Track your journey: https://fgrevoke.vercel.app`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! 
+
+✅ Reviewed ${approvals.length} token approvals
+🔒 Protecting my assets from risky permissions
+
+Secure yours too: https://fgrevoke.vercel.app`;
 
     try {
       if (sdk?.actions?.composeCast) {
@@ -804,64 +829,103 @@ https://fgrevoke.vercel.app`;
     setAddress(null);
     setIsConnected(false);
     setApprovals([]);
+    setChainActivity([]);
     setError(null);
     setProvider(null);
+    setCurrentPage('approvals');
+    setActivityStats({
+      totalTransactions: 0,
+      totalValue: 0,
+      totalGasFees: 0,
+      dappsUsed: 0,
+      lastActivity: null
+    });
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
         {/* Header */}
-        <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
-          <div className="flex items-center gap-3 mb-4 sm:mb-0">
-            <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
-            <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
-            {/* Chain Selection */}
-            <div className="relative w-full sm:w-auto">
-              <select
-                className="appearance-none bg-purple-700 text-white py-2 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer w-full"
-                value={selectedChain}
-                onChange={(e) => setSelectedChain(e.target.value)}
-              >
-                {chains.map((chain) => (
-                  <option key={chain.value} value={chain.value}>
-                    {chain.name}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-purple-200">
-                <ChevronDown className="h-5 w-5" />
-              </div>
+        <header className="w-full max-w-4xl flex flex-col space-y-4 py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between">
+            <div className="flex items-center gap-3 mb-4 sm:mb-0">
+              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
+              <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
             </div>
-
-            {/* Wallet Connection */}
-            {isConnected ? (
-              <div className="flex items-center space-x-2">
-                <div className="bg-purple-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  {user?.username ? `@${user.username}` : formatAddress(address)}
-                </div>
-                <button
-                  onClick={disconnect}
-                  className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold transition-colors"
+            
+            <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
+              {/* Chain Selection */}
+              <div className="relative w-full sm:w-auto">
+                <select
+                  className="appearance-none bg-purple-700 text-white py-2 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer w-full"
+                  value={selectedChain}
+                  onChange={(e) => setSelectedChain(e.target.value)}
                 >
-                  Disconnect
-                </button>
+                  {chains.map((chain) => (
+                    <option key={chain.value} value={chain.value}>
+                      {chain.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-purple-200">
+                  <ChevronDown className="h-5 w-5" />
+                </div>
               </div>
-            ) : (
-              <button
-                onClick={connectWallet}
-                disabled={isConnecting || !sdkReady}
-                className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
-              >
-                <Wallet className="w-5 h-5 mr-2" />
-                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-              </button>
-            )}
+
+              {/* Wallet Connection */}
+              {isConnected ? (
+                <div className="flex items-center space-x-2">
+                  <div className="bg-purple-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    {user?.username ? `@${user.username}` : formatAddress(address)}
+                  </div>
+                  <button
+                    onClick={disconnect}
+                    className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={connectWallet}
+                  disabled={isConnecting || !sdkReady}
+                  className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                >
+                  <Wallet className="w-5 h-5 mr-2" />
+                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Navigation Tabs - Only show when connected */}
+          {isConnected && (
+            <div className="flex space-x-1 bg-purple-900 p-1 rounded-lg">
+              <button
+                onClick={() => setCurrentPage('approvals')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                  currentPage === 'approvals'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-purple-300 hover:text-white hover:bg-purple-700'
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                Token Approvals
+              </button>
+              <button
+                onClick={() => setCurrentPage('activity')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                  currentPage === 'activity'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-purple-300 hover:text-white hover:bg-purple-700'
+                }`}
+              >
+                <Activity className="w-4 h-4" />
+                Wallet Activity
+              </button>
+            </div>
+          )}
         </header>
 
         {/* Main Content */}
@@ -908,7 +972,10 @@ https://fgrevoke.vercel.app`;
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-purple-200">
-                    Active Token Approvals ({chains.find(c => c.value === selectedChain)?.name})
+                    {currentPage === 'approvals' 
+                      ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
+                      : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
+                    }
                   </h2>
                   <p className="text-sm text-purple-400 mt-1">
                     Real data from: {formatAddress(address)}
@@ -920,39 +987,71 @@ https://fgrevoke.vercel.app`;
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                   >
                     <Share2 className="w-4 h-4" />
-                    Share Success
+                    Share {currentPage === 'activity' ? 'Activity' : 'Success'}
                   </button>
-                  <button
-                    onClick={() => fetchRealApprovals(address)}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
+                  {currentPage === 'approvals' ? (
+                    <button
+                      onClick={() => fetchRealApprovals(address)}
+                      disabled={loading}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => fetchChainActivity(address)}
+                      disabled={loadingActivity}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loadingActivity ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-purple-700 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-white">{approvals.length}</p>
-                  <p className="text-sm text-purple-200">Active Approvals</p>
+              {currentPage === 'approvals' ? (
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-white">{approvals.length}</p>
+                    <p className="text-sm text-purple-200">Active Approvals</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-red-400">
+                      {approvals.filter(a => a.riskLevel === 'high').length}
+                    </p>
+                    <p className="text-sm text-purple-200">High Risk</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-blue-400">{apiCallCount}</p>
+                    <p className="text-sm text-purple-200">API Calls</p>
+                  </div>
                 </div>
-                <div className="bg-purple-700 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-red-400">
-                    {approvals.filter(a => a.riskLevel === 'high').length}
-                  </p>
-                  <p className="text-sm text-purple-200">High Risk</p>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-white">{activityStats.totalTransactions}</p>
+                    <p className="text-sm text-purple-200">Transactions</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-blue-400">{activityStats.dappsUsed}</p>
+                    <p className="text-sm text-purple-200">dApps Used</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-green-400">{activityStats.totalValue.toFixed(3)}</p>
+                    <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Transferred</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-orange-400">{activityStats.totalGasFees.toFixed(4)}</p>
+                    <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
+                  </div>
                 </div>
-                <div className="bg-purple-700 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-orange-400">0</p>
-                  <p className="text-sm text-purple-200">Revoked</p>
-                </div>
-              </div>
+              )}
 
-              {/* Revoke All Button */}
-              {approvals.length > 0 && (
+              {/* Revoke All Button - Only show for approvals */}
+              {currentPage === 'approvals' && approvals.length > 0 && (
                 <div className="mb-6">
                   <button
                     onClick={handleRevokeAll}
@@ -981,91 +1080,186 @@ https://fgrevoke.vercel.app`;
                       <p><strong>Address:</strong> {address}</p>
                       <p><strong>Chain:</strong> {selectedChain}</p>
                       <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
-                      <p><strong>User:</strong> {user ? JSON.stringify(user) : 'None'}</p>
-                      <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
-                      <p><strong>Approvals Count:</strong> {approvals.length}</p>
+                      <p><strong>Current Page:</strong> {currentPage}</p>
+                      <p><strong>API Calls Made:</strong> {apiCallCount}</p>
+                      {currentPage === 'approvals' ? (
+                        <>
+                          <p><strong>Loading Approvals:</strong> {loading ? 'Yes' : 'No'}</p>
+                          <p><strong>Approvals Count:</strong> {approvals.length}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p><strong>Loading Activity:</strong> {loadingActivity ? 'Yes' : 'No'}</p>
+                          <p><strong>Activities Count:</strong> {chainActivity.length}</p>
+                          <p><strong>dApps Used:</strong> {activityStats.dappsUsed}</p>
+                        </>
+                      )}
                     </div>
                   </details>
                 </div>
               )}
 
               {/* Content */}
-              {loading ? (
-                <div className="space-y-4">
-                  <p className="text-center text-purple-300">Loading your REAL token approvals...</p>
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
-                      <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
-                      <div className="h-3 bg-purple-600 rounded w-1/2"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : approvals.length === 0 ? (
-                <div className="text-center py-8">
-                  <Shield className="w-12 h-12 text-green-400 mx-auto mb-3" />
-                  <p className="text-green-300 text-lg font-semibold">Your wallet is secure! 🎉</p>
-                  <p className="text-purple-400 text-sm mt-2">
-                    No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
-                  </p>
-                  <p className="text-purple-500 text-xs mt-2">
-                    Try switching to a different chain or refreshing to check again
-                  </p>
-                </div>
+              {currentPage === 'approvals' ? (
+                loading ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-purple-300">Loading your REAL token approvals...</p>
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
+                        <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-purple-600 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : approvals.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Shield className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                    <p className="text-green-300 text-lg font-semibold">Your wallet is secure! 🎉</p>
+                    <p className="text-purple-400 text-sm mt-2">
+                      No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {approvals.map((approval) => (
+                      <div key={approval.id} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center flex-1">
+                            <CheckCircle className="w-5 h-5 mr-3 text-blue-400 flex-shrink-0" />
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-white text-sm">
+                                {approval.name} ({approval.symbol})
+                              </h3>
+                              <p className="text-xs text-purple-300 mt-1">
+                                Approved to: {approval.spenderName}
+                              </p>
+                              <p className="text-xs text-purple-400">
+                                Contract: {formatAddress(approval.contract)}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-opacity-20 ${
+                            approval.riskLevel === 'high' ? 'bg-red-500 text-red-300' :
+                            approval.riskLevel === 'medium' ? 'bg-yellow-500 text-yellow-300' :
+                            'bg-green-500 text-green-300'
+                          }`}>
+                            {approval.riskLevel === 'high' && <AlertTriangle className="w-3 h-3" />}
+                            {approval.riskLevel}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
+                          <span>Amount: {approval.amount}</span>
+                          <span>Block: {approval.blockNumber}</span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleRevokeApproval(approval)}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-3 rounded-md transition-colors"
+                          >
+                            Revoke Approval
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const chainConfig = chains.find(c => c.value === selectedChain);
+                              window.open(`${chainConfig.explorerUrl}/tx/${approval.txHash}`, '_blank');
+                            }}
+                            className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
+                            title="View Transaction"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : (
-                <div className="space-y-3">
-                  {approvals.map((approval) => (
-                    <div key={approval.id} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center flex-1">
-                          <CheckCircle className="w-5 h-5 mr-3 text-blue-400 flex-shrink-0" />
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-white text-sm">
-                              {approval.name} ({approval.symbol})
-                            </h3>
-                            <p className="text-xs text-purple-300 mt-1">
-                              Approved to: {approval.spenderName}
+                // Activity View
+                loadingActivity ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-purple-300">Loading wallet activity...</p>
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
+                        <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-purple-600 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : chainActivity.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Activity className="w-12 h-12 text-blue-400 mx-auto mb-3" />
+                    <p className="text-blue-300 text-lg font-semibold">No recent activity found</p>
+                    <p className="text-purple-400 text-sm mt-2">
+                      No transactions found in the last 10,000 blocks on {chains.find(c => c.value === selectedChain)?.name}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activityStats.lastActivity && (
+                      <div className="bg-purple-700 rounded-lg p-4 mb-4">
+                        <p className="text-purple-200 text-sm">
+                          <strong>Last Activity:</strong> {activityStats.lastActivity.toLocaleDateString()} at {activityStats.lastActivity.toLocaleTimeString()}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {chainActivity.map((tx, index) => (
+                      <div key={`${tx.hash}-${index}`} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center flex-1">
+                            <Activity className={`w-5 h-5 mr-3 flex-shrink-0 ${tx.isError ? 'text-red-400' : 'text-green-400'}`} />
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-white text-sm">
+                                {tx.functionName || 'Transaction'}
+                              </h3>
+                              <p className="text-xs text-purple-300 mt-1">
+                                To: {formatAddress(tx.to)}
+                              </p>
+                              <p className="text-xs text-purple-400">
+                                {new Date(tx.timeStamp).toLocaleDateString()} at {new Date(tx.timeStamp).toLocaleTimeString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-white">
+                              {tx.type === 'token_transfer' 
+                                ? `${tx.tokenValue?.toFixed(4) || '0'} ${tx.tokenSymbol}`
+                                : tx.value > 0 
+                                  ? `${tx.value.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency}`
+                                  : 'Contract Call'
+                              }
                             </p>
-                            <p className="text-xs text-purple-400">
-                              Contract: {formatAddress(approval.contract)}
+                            <p className="text-xs text-purple-300">
+                              Gas: {tx.gasFee?.toFixed(6) || '0'} {chains.find(c => c.value === selectedChain)?.nativeCurrency}
                             </p>
                           </div>
                         </div>
-                        <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-opacity-20 ${
-                          approval.riskLevel === 'high' ? 'bg-red-500 text-red-300' :
-                          approval.riskLevel === 'medium' ? 'bg-yellow-500 text-yellow-300' :
-                          'bg-green-500 text-green-300'
-                        }`}>
-                          {approval.riskLevel === 'high' && <AlertTriangle className="w-3 h-3" />}
-                          {approval.riskLevel}
-                        </span>
-                      </div>
 
-                      <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
-                        <span>Amount: {approval.amount}</span>
-                        <span>Block: {approval.blockNumber}</span>
-                      </div>
+                        <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
+                          <span>Block: {tx.blockNumber}</span>
+                          <span className={`px-2 py-1 rounded ${tx.isError ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>
+                            {tx.isError ? 'Failed' : 'Success'}
+                          </span>
+                        </div>
 
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleRevokeApproval(approval)}
-                          className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-3 rounded-md transition-colors"
-                        >
-                          Revoke Approval
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const chainConfig = chains.find(c => c.value === selectedChain);
-                            window.open(`${chainConfig.explorerUrl}/tx/${approval.txHash}`, '_blank');
-                          }}
-                          className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
-                          title="View Transaction"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
+                        <div className="flex justify-end">
+                          <button 
+                            onClick={() => {
+                              const chainConfig = chains.find(c => c.value === selectedChain);
+                              window.open(`${chainConfig.explorerUrl}/tx/${tx.hash}`, '_blank');
+                            }}
+                            className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
+                            title="View Transaction"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}
