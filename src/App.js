@@ -17,7 +17,7 @@ function App() {
   const [userAddresses, setUserAddresses] = useState([]); // All user's addresses
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [context, setContext] = useState(null);
+  const [, setContext] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
 
@@ -47,7 +47,7 @@ function App() {
   });
 
   // Rate limiting
-  const [apiCallCount, setApiCallCount] = useState(0);
+  const [, setApiCallCount] = useState(0);
 
   // Chain configuration using Etherscan V2 API with chainid parameter
   const chains = [
@@ -789,7 +789,7 @@ function App() {
               
               const activity = {
                 hash: tx.hash,
-                timeStamp: Date.now(), // We don't have timestamp from Alchemy directly
+                timeStamp: parseInt(tx.blockNumber, 16) * 12000 + 1640000000000, // Approximate timestamp based on block
                 from: tx.from?.toLowerCase() || '',
                 to: tx.to?.toLowerCase() || '',
                 value: value,
@@ -828,7 +828,7 @@ function App() {
           .filter(tx => tx.to !== userAddress.toLowerCase() && tx.to && tx.to !== '0x0000000000000000000000000000000000000000')
           .map(tx => tx.to)
       );
-      const lastActivity = allActivity.length > 0 ? new Date() : null; // Approximate since we don't have exact timestamps
+      const lastActivity = allActivity.length > 0 ? new Date(allActivity[0].timeStamp) : null;
       
       setActivityStats({
         totalTransactions: allActivity.length,
@@ -1253,11 +1253,13 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-3 mb-4">
-                      <p className="text-yellow-300 text-sm">
-                        🔗 No verified addresses found. You can connect a wallet manually.
-                      </p>
-                    </div>
+                    !isConnected && (
+                      <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-3 mb-4">
+                        <p className="text-yellow-300 text-sm">
+                          🔗 No verified addresses found. You can connect a wallet manually.
+                        </p>
+                      </div>
+                    )
                   )}
                 </div>
               ) : (
@@ -1269,16 +1271,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
               
-              {!sdkReady ? (
+              {!sdkReady && (
                 <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4">
                   <p className="text-blue-300 text-sm">
                     🔄 Initializing Farcaster SDK...
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-3 mb-4">
-                  <p className="text-green-300 text-sm">
-                    🎉 SDK Ready! {context?.client?.name && `(${context.client.name})`}
                   </p>
                 </div>
               )}
@@ -1346,7 +1342,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
               {/* Stats */}
               {currentPage === 'approvals' ? (
-                <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-white">{approvals.length}</p>
                     <p className="text-sm text-purple-200">Active Approvals</p>
@@ -1356,10 +1352,6 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       {approvals.filter(a => a.riskLevel === 'high').length}
                     </p>
                     <p className="text-sm text-purple-200">High Risk</p>
-                  </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-400">{apiCallCount}</p>
-                    <p className="text-sm text-purple-200">API Calls</p>
                   </div>
                 </div>
               ) : (
@@ -1416,7 +1408,6 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <p><strong>Chain:</strong> {selectedChain}</p>
                       <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
                       <p><strong>Current Page:</strong> {currentPage}</p>
-                      <p><strong>API Calls Made:</strong> {apiCallCount}</p>
                       {currentPage === 'approvals' ? (
                         <>
                           <p><strong>Loading Approvals:</strong> {loading ? 'Yes' : 'No'}</p>
