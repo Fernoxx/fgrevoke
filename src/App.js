@@ -13,7 +13,9 @@ function App() {
 
   // Farcaster integration states
   const [user, setUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
   const [address, setAddress] = useState(null);
+  const [userAddresses, setUserAddresses] = useState([]); // All user's addresses
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [context, setContext] = useState(null);
@@ -151,7 +153,7 @@ function App() {
     }
   };
 
-  // PROPER SDK Initialization following the documentation patterns
+  // PROPER SDK Initialization with Real Farcaster User Detection
   useEffect(() => {
     const initializeSDK = async () => {
       console.log('🚀 Initializing Farcaster SDK...');
@@ -167,15 +169,44 @@ function App() {
           return;
         }
 
-        // Get context data
+        // Get context data with real user information
         const contextData = await sdk.context;
-        console.log('📊 Context data:', contextData);
+        console.log('📊 Full Context data:', contextData);
         setContext(contextData);
 
-        // Set user data if available
+        // Extract Real Farcaster User Data
         if (contextData?.user) {
-          console.log('👤 User found in context:', contextData.user);
-          setUser(contextData.user);
+          console.log('👤 Real Farcaster user found:', contextData.user);
+          
+          const realUserData = {
+            fid: contextData.user.fid,                    // Real FID (e.g., 242597)
+            username: contextData.user.username,          // Real username (e.g., "ferno")  
+            displayName: contextData.user.displayName,    // Real display name
+            pfpUrl: contextData.user.pfpUrl,             // Profile picture URL
+            bio: contextData.user.bio,                   // User bio
+            followerCount: contextData.user.followerCount,
+            followingCount: contextData.user.followingCount
+          };
+          
+          console.log('🎯 Extracted real user data:', realUserData);
+          setCurrentUser(realUserData);
+          setUser(contextData.user); // Keep for compatibility
+          
+          // Get user's verified addresses from Farcaster
+          if (contextData.user.verifiedAddresses && contextData.user.verifiedAddresses.length > 0) {
+            console.log('🔑 Found verified addresses:', contextData.user.verifiedAddresses);
+            setUserAddresses(contextData.user.verifiedAddresses);
+            
+            // Set the first verified address as primary
+            const primaryAddress = contextData.user.verifiedAddresses[0];
+            setAddress(primaryAddress.toLowerCase());
+            setIsConnected(true);
+            console.log('✅ Auto-connected with verified address:', primaryAddress);
+          } else {
+            console.log('⚠️ No verified addresses found for user, will need wallet connection');
+          }
+        } else {
+          console.log('⚠️ No user data in context');
         }
 
         // CRITICAL: Call ready() to hide splash screen
@@ -194,7 +225,7 @@ function App() {
     initializeSDK();
   }, []);
 
-  // PROPER Wallet Connection using the documented approach
+  // Enhanced Wallet Connection - handles both verified addresses and manual connections
   const connectWallet = async () => {
     console.log('🔌 Starting wallet connection...');
     setIsConnecting(true);
@@ -205,12 +236,22 @@ function App() {
         throw new Error('SDK not ready. Please wait for initialization.');
       }
 
-      // Get Ethereum provider using the proper SDK method
-      console.log('🌐 Getting Ethereum provider...');
+      // If user already has verified addresses, use those first
+      if (userAddresses.length > 0) {
+        console.log('🔑 Using verified Farcaster addresses:', userAddresses);
+        const primaryAddress = userAddresses[0].toLowerCase();
+        setAddress(primaryAddress);
+        setIsConnected(true);
+        console.log('✅ Connected with verified address:', primaryAddress);
+        return;
+      }
+
+      // Otherwise, try to get wallet provider for manual connection
+      console.log('🌐 Getting Ethereum provider for manual connection...');
       const ethProvider = await sdk.wallet.getEthereumProvider();
       
       if (!ethProvider) {
-        throw new Error('Ethereum provider not available. Please ensure you have a wallet connected in Farcaster.');
+        throw new Error('No wallet available. Please ensure you have verified addresses in your Farcaster profile or connect a wallet.');
       }
 
       console.log('✅ Provider obtained, requesting accounts...');
@@ -225,8 +266,8 @@ function App() {
         throw new Error('No accounts returned from wallet');
       }
 
-      const walletAddress = accounts[0].toLowerCase(); // Normalize to lowercase
-      console.log('👛 Wallet connected:', walletAddress);
+      const walletAddress = accounts[0].toLowerCase();
+      console.log('👛 Manual wallet connected:', walletAddress);
 
       // Get current chain
       const chainId = await ethProvider.request({ method: 'eth_chainId' });
@@ -243,17 +284,8 @@ function App() {
 
       setAddress(walletAddress);
       setIsConnected(true);
-      
-      // If we have user context, use it, otherwise create minimal user object
-      if (!user && context?.user) {
-        setUser(context.user);
-        console.log('👤 Using context user:', context.user);
-      } else if (!user) {
-        setUser({ address: walletAddress });
-        console.log('👤 Created user object with address');
-      }
 
-      console.log('🎉 Wallet connection successful! Ready to fetch real data...');
+      console.log('🎉 Manual wallet connection successful! Ready to fetch real data...');
 
     } catch (error) {
       console.error('❌ Wallet connection failed:', error);
@@ -887,6 +919,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
       dappsUsed: 0,
       lastActivity: null
     });
+    
+    // Note: We keep currentUser and userAddresses as they come from Farcaster profile
+    // and should persist across wallet connections/disconnections
+    console.log('🔌 Disconnected wallet but kept Farcaster user profile data');
   };
 
   return (
@@ -919,13 +955,57 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               </div>
 
-              {/* Wallet Connection */}
+              {/* User Profile & Connection */}
               {isConnected ? (
                 <div className="flex items-center space-x-2">
+                  {/* Enhanced User Profile Display */}
                   <div className="bg-purple-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                    {user?.username ? `@${user.username}` : formatAddress(address)}
+                    <div className="flex items-center gap-2">
+                      {/* Profile Picture */}
+                      {currentUser?.pfpUrl && (
+                        <img 
+                          src={currentUser.pfpUrl} 
+                          alt="Profile" 
+                          className="w-6 h-6 rounded-full"
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                      )}
+                      {/* User Info */}
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {currentUser?.username ? `@${currentUser.username}` : 
+                           currentUser?.displayName || 
+                           formatAddress(address)}
+                        </span>
+                        {currentUser?.displayName && currentUser?.username && (
+                          <span className="text-xs text-purple-300">{currentUser.displayName}</span>
+                        )}
+                      </div>
+                      {/* FID Badge */}
+                      {currentUser?.fid && (
+                        <span className="bg-purple-600 text-purple-200 text-xs px-2 py-1 rounded">
+                          FID: {currentUser.fid}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  
+                  {/* Address Selector for multiple addresses */}
+                  {userAddresses.length > 1 && (
+                    <select
+                      className="bg-purple-600 text-white text-sm py-1 px-2 rounded focus:outline-none"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                    >
+                      {userAddresses.map((addr, idx) => (
+                        <option key={addr} value={addr.toLowerCase()}>
+                          Address {idx + 1}: {formatAddress(addr)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  
                   <button
                     onClick={disconnect}
                     className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold transition-colors"
@@ -940,7 +1020,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
                 >
                   <Wallet className="w-5 h-5 mr-2" />
-                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                  {isConnecting ? 'Connecting...' : 
+                   userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}
                 </button>
               )}
             </div>
@@ -980,10 +1061,57 @@ Secure yours too: https://fgrevoke.vercel.app`;
           {!isConnected ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-16 h-16 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-purple-200 mb-2">Connect Your Farcaster Wallet</h2>
-              <p className="text-xl text-purple-300 mb-4">
-                View your REAL token approvals and revoke risky permissions
-              </p>
+              
+              {/* Personalized Welcome for Farcaster Users */}
+              {currentUser ? (
+                <div className="mb-6">
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    {currentUser.pfpUrl && (
+                      <img 
+                        src={currentUser.pfpUrl} 
+                        alt="Profile" 
+                        className="w-12 h-12 rounded-full border-2 border-purple-400"
+                        onError={(e) => { e.target.style.display = 'none' }}
+                      />
+                    )}
+                    <div>
+                      <h2 className="text-2xl font-bold text-purple-200">
+                        Welcome, {currentUser.displayName || `@${currentUser.username}`}!
+                      </h2>
+                      <p className="text-sm text-purple-400">
+                        FID: {currentUser.fid} • Ready to secure your wallet
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {userAddresses.length > 0 ? (
+                    <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-3 mb-4">
+                      <p className="text-green-300 text-sm">
+                        ✅ Found {userAddresses.length} verified address{userAddresses.length > 1 ? 'es' : ''} in your Farcaster profile
+                      </p>
+                      <div className="text-xs text-green-200 mt-1">
+                        {userAddresses.slice(0, 2).map((addr, idx) => (
+                          <div key={addr}>{formatAddress(addr)}</div>
+                        ))}
+                        {userAddresses.length > 2 && <div>+{userAddresses.length - 2} more...</div>}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-3 mb-4">
+                      <p className="text-yellow-300 text-sm">
+                        🔗 No verified addresses found. You can connect a wallet manually.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-purple-200 mb-2">Secure Your Wallet</h2>
+                  <p className="text-xl text-purple-300 mb-4">
+                    View your REAL token approvals and revoke risky permissions
+                  </p>
+                </div>
+              )}
               
               {!sdkReady ? (
                 <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4">
@@ -1010,7 +1138,9 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 disabled={isConnecting || !sdkReady}
                 className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors"
               >
-                {!sdkReady ? 'Initializing...' : isConnecting ? 'Connecting...' : '🔗 Connect Farcaster Wallet'}
+                {!sdkReady ? 'Initializing...' : 
+                 isConnecting ? 'Connecting...' : 
+                 userAddresses.length > 0 ? '🔗 Use Verified Addresses' : '🔗 Connect Wallet'}
               </button>
             </div>
           ) : (
@@ -1124,7 +1254,9 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   <details>
                     <summary className="text-blue-300 cursor-pointer">🔍 Debug Info</summary>
                     <div className="mt-2 space-y-1 text-blue-200">
-                      <p><strong>Address:</strong> {address}</p>
+                      <p><strong>Farcaster User:</strong> {currentUser ? `@${currentUser.username} (FID: ${currentUser.fid})` : 'None'}</p>
+                      <p><strong>Verified Addresses:</strong> {userAddresses.length}</p>
+                      <p><strong>Current Address:</strong> {address}</p>
                       <p><strong>Chain:</strong> {selectedChain}</p>
                       <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
                       <p><strong>Current Page:</strong> {currentPage}</p>
