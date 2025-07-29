@@ -43,12 +43,13 @@ function App() {
   // Rate limiting
   const [apiCallCount, setApiCallCount] = useState(0);
 
-  // Chain configuration
+  // Chain configuration using Etherscan V2 API with chainid parameter
   const chains = [
     { 
       name: 'Ethereum', 
       value: 'ethereum', 
-      apiUrl: 'https://api.etherscan.io/api',
+      apiUrl: 'https://api.etherscan.io/api', // Standard Etherscan API
+      etherscanV2Url: 'https://api.etherscan.io/v2/api?chainid=1',
       rpcUrls: [
         `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
         `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
@@ -61,7 +62,8 @@ function App() {
     { 
       name: 'Base', 
       value: 'base', 
-      apiUrl: 'https://api.basescan.org/api',
+      apiUrl: 'https://api.etherscan.io/v2/api?chainid=8453', // ✅ Correct Etherscan V2 format for Base
+      etherscanV2Url: 'https://api.etherscan.io/v2/api?chainid=8453',
       rpcUrls: [
         `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
         'https://base-mainnet.publicnode.com',
@@ -74,7 +76,8 @@ function App() {
     { 
       name: 'Arbitrum', 
       value: 'arbitrum', 
-      apiUrl: 'https://api.arbiscan.io/api',
+      apiUrl: 'https://api.etherscan.io/v2/api?chainid=42161', // ✅ Correct Etherscan V2 format for Arbitrum
+      etherscanV2Url: 'https://api.etherscan.io/v2/api?chainid=42161',
       rpcUrls: [
         `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
         'https://arb1.arbitrum.io/rpc',
@@ -106,6 +109,138 @@ function App() {
       }
     };
     return configs[chain] || configs['ethereum'];
+  };
+
+  // Fallback to Etherscan V2 API when Alchemy fails
+  const makeEtherscanV2Call = async (url, description = 'Etherscan V2 Call') => {
+    try {
+      setApiCallCount(prev => prev + 1);
+      console.log(`🌐 ${description}:`, url.split('&apikey=')[0] + '&apikey=***');
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`📡 ${description} Response:`, { 
+        status: data.status, 
+        message: data.message,
+        resultCount: data.result?.length || (data.result ? 1 : 0)
+      });
+      
+      return data;
+    } catch (error) {
+      console.error(`❌ ${description} failed:`, error);
+      throw error;
+    }
+  };
+
+  // Get approvals using Etherscan V2 API (fallback)
+  const fetchApprovalsWithEtherscanV2 = async (userAddress) => {
+    try {
+      console.log('🔍 Fallback: Fetching approvals using Etherscan V2 for:', userAddress);
+      
+      const chainConfig = chains.find(chain => chain.value === selectedChain);
+      const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+      const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
+      
+      // Use Etherscan V2 API with correct format
+      const url = `${chainConfig.apiUrl}&module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${ETHERSCAN_API_KEY}`;
+      
+      console.log('📋 Using Etherscan V2 API format:');
+      console.log(`- Chain: ${selectedChain} (chainid=${chainConfig.chainId})`);
+      console.log(`- URL: ${chainConfig.apiUrl}&module=logs&action=getLogs...`);
+      
+      const data = await makeEtherscanV2Call(url, 'Etherscan V2 Approval Logs');
+      
+      if (data.status === '1' && Array.isArray(data.result)) {
+        console.log(`✅ Etherscan V2 returned ${data.result.length} approval logs`);
+        
+        if (data.result.length > 0) {
+          await processApprovalsFromEtherscan(data.result, userAddress);
+        } else {
+          console.log('ℹ️ No approval events found');
+          setApprovals([]);
+        }
+      } else if (data.status === '0' && data.message === 'No records found') {
+        console.log('ℹ️ No approval events found for this address');
+        setApprovals([]);
+      } else {
+        throw new Error(data.message || 'Unknown Etherscan V2 error');
+      }
+    } catch (error) {
+      console.error('❌ Etherscan V2 approval fetch failed:', error);
+      throw error;
+    }
+  };
+
+  // Process approvals from Etherscan format
+  const processApprovalsFromEtherscan = async (logs, userAddress) => {
+    console.log('🔄 Processing approvals from Etherscan V2...', { logsCount: logs.length });
+    const approvalMap = new Map();
+    
+    // Process recent logs first
+    const recentLogs = logs.slice(-50).reverse();
+    let processedCount = 0;
+    
+    for (const log of recentLogs) {
+      try {
+        if (processedCount >= 20) break; // Limit processing
+        
+        const tokenContract = log.address?.toLowerCase();
+        const spenderAddress = log.topics && log.topics[2] ? 
+          '0x' + log.topics[2].slice(26).toLowerCase() : null;
+        
+        if (!tokenContract || !spenderAddress || spenderAddress === '0x0000000000000000000000000000000000000000') {
+          continue;
+        }
+        
+        const key = `${tokenContract}-${spenderAddress}`;
+        if (approvalMap.has(key)) continue;
+        
+        console.log(`🔍 Checking approval: ${tokenContract.slice(0,8)}... -> ${spenderAddress.slice(0,8)}...`);
+        
+        // Check current allowance using Alchemy (still use Alchemy for contract calls)
+        const allowance = await checkAllowanceWithAlchemy(tokenContract, userAddress, spenderAddress);
+        
+        if (allowance && allowance !== '0') {
+          console.log(`✅ Active allowance found: ${allowance}`);
+          
+          // Get token info using Alchemy
+          const tokenInfo = await getTokenInfoWithAlchemy(tokenContract);
+          
+          const approval = {
+            id: key,
+            name: tokenInfo.name || 'Unknown Token',
+            symbol: tokenInfo.symbol || 'UNK',
+            contract: tokenContract,
+            spender: spenderAddress,
+            spenderName: getSpenderName(spenderAddress),
+            amount: formatAllowance(allowance, tokenInfo.decimals),
+            riskLevel: assessRiskLevel(spenderAddress),
+            txHash: log.transactionHash,
+            blockNumber: parseInt(log.blockNumber, 16) || log.blockNumber,
+            isActive: true
+          };
+          
+          approvalMap.set(key, approval);
+          processedCount++;
+          
+          console.log(`📝 Added approval: ${approval.name} (${approval.symbol}) -> ${approval.spenderName}`);
+        }
+        
+        // Small delay
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.warn('⚠️ Error processing approval:', error.message);
+      }
+    }
+    
+    const finalApprovals = Array.from(approvalMap.values());
+    setApprovals(finalApprovals);
+    console.log(`✅ Processed ${finalApprovals.length} active approvals using Etherscan V2`);
   };
 
   // Get ethers provider for reliable blockchain interactions
@@ -527,24 +662,42 @@ function App() {
     }
   }, [provider, address]);
 
-  // Fetch approvals using Alchemy - much more reliable
+  // Fetch approvals with Alchemy first, then Etherscan V2 fallback
   const fetchRealApprovals = useCallback(async (userAddress) => {
     setLoading(true);
     setError(null);
-    console.log('🔍 Fetching approvals using Alchemy for:', userAddress, 'on chain:', selectedChain);
+    console.log('🔍 Fetching approvals for:', userAddress, 'on chain:', selectedChain);
     
     try {
-      const alchemyConfig = getAlchemyConfig(selectedChain);
-      console.log(`🌟 Using Alchemy for ${selectedChain}:`, {
-        baseUrl: alchemyConfig.baseUrl.split('/')[2], // Just show domain
-        keyLength: alchemyConfig.apiKey ? alchemyConfig.apiKey.length : 0,
-        keyPreview: alchemyConfig.apiKey ? `${alchemyConfig.apiKey.substring(0, 8)}...` : 'missing'
-      });
+      // Try Alchemy first (preferred method)
+      try {
+        const alchemyConfig = getAlchemyConfig(selectedChain);
+        console.log(`🌟 Trying Alchemy for ${selectedChain}:`, {
+          baseUrl: alchemyConfig.baseUrl.split('/')[2], // Just show domain
+          keyLength: alchemyConfig.apiKey ? alchemyConfig.apiKey.length : 0,
+          keyPreview: alchemyConfig.apiKey ? `${alchemyConfig.apiKey.substring(0, 8)}...` : 'missing'
+        });
 
-      await fetchApprovalsWithAlchemy(userAddress);
+        await fetchApprovalsWithAlchemy(userAddress);
+        console.log('✅ Successfully fetched approvals using Alchemy');
+        
+      } catch (alchemyError) {
+        console.warn('⚠️ Alchemy failed, trying Etherscan V2 fallback:', alchemyError.message);
+        
+        // Fallback to Etherscan V2 API
+        const chainConfig = chains.find(chain => chain.value === selectedChain);
+        console.log(`🔄 Fallback to Etherscan V2 for ${selectedChain}:`, {
+          apiUrl: chainConfig.apiUrl,
+          chainId: chainConfig.chainId,
+          etherscanKey: ETHERSCAN_API_KEY ? `${ETHERSCAN_API_KEY.substring(0, 8)}...` : 'missing'
+        });
+        
+        await fetchApprovalsWithEtherscanV2(userAddress);
+        console.log('✅ Successfully fetched approvals using Etherscan V2 fallback');
+      }
       
     } catch (error) {
-      console.error('❌ Alchemy approval fetching failed:', error);
+      console.error('❌ Both Alchemy and Etherscan V2 failed:', error);
       setError(`Failed to fetch approvals: ${error.message}`);
     } finally {
       setLoading(false);
