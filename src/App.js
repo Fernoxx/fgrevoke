@@ -984,24 +984,32 @@ function App() {
     }
   };
 
+  // State for revoke all confirmation
+  const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
+  const [revokeAllProgress, setRevokeAllProgress] = useState(null);
+
   // Revoke ALL approvals
   const handleRevokeAll = async () => {
     if (approvals.length === 0) {
-      alert('No approvals to revoke!');
+      setError('No approvals to revoke!');
       return;
     }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to revoke ALL ${approvals.length} token approvals? This will require ${approvals.length} separate transactions.`
-    );
+    // Show custom confirmation instead of window.confirm()
+    setShowRevokeAllConfirm(true);
+  };
 
-    if (!confirmed) return;
-
+  const confirmRevokeAll = async () => {
+    setShowRevokeAllConfirm(false);
     console.log(`🗑️ Starting to revoke ${approvals.length} approvals...`);
     
+    setRevokeAllProgress({ current: 0, total: approvals.length, status: 'revoking' });
     let successCount = 0;
-    for (const approval of approvals) {
+    
+    for (let i = 0; i < approvals.length; i++) {
+      const approval = approvals[i];
       try {
+        setRevokeAllProgress({ current: i + 1, total: approvals.length, status: 'revoking', currentToken: approval.name });
         await handleRevokeApproval(approval);
         successCount++;
         console.log(`✅ Revoked ${successCount}/${approvals.length}: ${approval.name}`);
@@ -1013,7 +1021,17 @@ function App() {
       }
     }
 
-    alert(`✅ Successfully revoked ${successCount} out of ${approvals.length} approvals!`);
+    setRevokeAllProgress({ 
+      current: approvals.length, 
+      total: approvals.length, 
+      status: 'completed', 
+      successCount: successCount 
+    });
+    
+    // Auto-hide progress after 5 seconds
+    setTimeout(() => {
+      setRevokeAllProgress(null);
+    }, 5000);
   };
 
   // Share to Farcaster using proper SDK method
@@ -1282,6 +1300,78 @@ Secure yours too: https://fgrevoke.vercel.app`;
               {error && (
                 <div className="bg-red-900/50 border border-red-500 rounded-lg p-3 mb-4">
                   <p className="text-red-200 text-sm">{error}</p>
+                </div>
+              )}
+
+              {/* Custom Revoke All Confirmation Dialog */}
+              {showRevokeAllConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-purple-800 border border-purple-600 rounded-lg p-6 m-4 max-w-md">
+                    <h3 className="text-xl font-bold text-white mb-3">⚠️ Revoke All Approvals</h3>
+                    <p className="text-purple-200 mb-4">
+                      Are you sure you want to revoke ALL {approvals.length} token approvals? 
+                      This will require {approvals.length} separate transactions.
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowRevokeAllConfirm(false)}
+                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={confirmRevokeAll}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors"
+                      >
+                        Revoke All
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Revoke All Progress Dialog */}
+              {revokeAllProgress && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-purple-800 border border-purple-600 rounded-lg p-6 m-4 max-w-md">
+                    <h3 className="text-xl font-bold text-white mb-3">
+                      {revokeAllProgress.status === 'completed' ? '✅ Revoke Complete' : '🔄 Revoking Approvals'}
+                    </h3>
+                    
+                    {revokeAllProgress.status === 'revoking' ? (
+                      <>
+                        <p className="text-purple-200 mb-3">
+                          Progress: {revokeAllProgress.current} / {revokeAllProgress.total}
+                        </p>
+                        {revokeAllProgress.currentToken && (
+                          <p className="text-purple-300 text-sm mb-3">
+                            Currently revoking: {revokeAllProgress.currentToken}
+                          </p>
+                        )}
+                        <div className="w-full bg-purple-700 rounded-full h-2.5 mb-4">
+                          <div 
+                            className="bg-purple-400 h-2.5 rounded-full transition-all duration-300" 
+                            style={{ width: `${(revokeAllProgress.current / revokeAllProgress.total) * 100}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-purple-300 text-sm">
+                          Please confirm each transaction in your wallet...
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-green-300 mb-3">
+                          Successfully revoked {revokeAllProgress.successCount} out of {revokeAllProgress.total} approvals!
+                        </p>
+                        <button
+                          onClick={() => setRevokeAllProgress(null)}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-md transition-colors"
+                        >
+                          Close
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 
