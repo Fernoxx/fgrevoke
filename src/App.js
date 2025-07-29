@@ -321,11 +321,11 @@ function App() {
       
       console.log(`📊 Using Alchemy block range: ${fromBlock} to ${latestBlockNum}`);
       
-      // Get approval logs
+      // Get approval logs using simplified topic filter to avoid 400 error
       const logs = await makeAlchemyCall('eth_getLogs', [{
         fromBlock: `0x${fromBlock.toString(16)}`,
         toBlock: 'latest',
-        topics: [approvalTopic, paddedAddress]
+        topics: [approvalTopic] // Only use the main approval topic, filter by user address later
       }], 'Approval Logs');
       
       console.log(`✅ Alchemy returned ${logs.length} approval logs`);
@@ -355,9 +355,17 @@ function App() {
       try {
         if (processedCount >= 20) break; // Limit processing
         
+        // Extract data from approval log
         const tokenContract = log.address?.toLowerCase();
+        const ownerAddress = log.topics && log.topics[1] ? 
+          '0x' + log.topics[1].slice(26).toLowerCase() : null;
         const spenderAddress = log.topics && log.topics[2] ? 
           '0x' + log.topics[2].slice(26).toLowerCase() : null;
+        
+        // Filter by user address since we couldn't do it in the API call
+        if (ownerAddress !== userAddress.toLowerCase()) {
+          continue;
+        }
         
         if (!tokenContract || !spenderAddress || spenderAddress === '0x0000000000000000000000000000000000000000') {
           continue;
@@ -737,79 +745,76 @@ function App() {
       let allActivity = [];
       
       // Get recent transaction hashes for this address
-      // We'll use a more targeted approach with Alchemy
+      // Use Alchemy's enhanced API for better performance
       try {
-        // Get transfers TO this address (received)
-        const receivedLogs = await makeAlchemyCall('eth_getLogs', [{
+        // Get transfers TO this address (received) - use address field instead of topics for better compatibility
+        const receivedLogs = await makeAlchemyCall('alchemy_getAssetTransfers', [{
           fromBlock: `0x${fromBlock.toString(16)}`,
           toBlock: 'latest',
-          topics: [
-            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', // Transfer topic
-            null, // from (any)
-            '0x' + userAddress.slice(2).toLowerCase().padStart(64, '0') // to (user)
-          ]
+          toAddress: userAddress.toLowerCase(),
+          category: ['erc20', 'erc721', 'erc1155', 'external'],
+          withMetadata: false,
+          excludeZeroValue: true,
+          maxCount: '0x64' // 100 transfers max
         }], 'Received Transfers');
         
         // Get transfers FROM this address (sent)
-        const sentLogs = await makeAlchemyCall('eth_getLogs', [{
+        const sentLogs = await makeAlchemyCall('alchemy_getAssetTransfers', [{
           fromBlock: `0x${fromBlock.toString(16)}`,
           toBlock: 'latest',
-          topics: [
-            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', // Transfer topic
-            '0x' + userAddress.slice(2).toLowerCase().padStart(64, '0'), // from (user)
-            null // to (any)
-          ]
+          fromAddress: userAddress.toLowerCase(),
+          category: ['erc20', 'erc721', 'erc1155', 'external'],
+          withMetadata: false,
+          excludeZeroValue: true,
+          maxCount: '0x64' // 100 transfers max
         }], 'Sent Transfers');
         
-        console.log(`✅ Found ${receivedLogs.length} received and ${sentLogs.length} sent transfers`);
+        console.log(`✅ Found ${receivedLogs?.transfers?.length || 0} received and ${sentLogs?.transfers?.length || 0} sent transfers`);
         
-        // Process the logs to get unique transactions
-        const txHashes = new Set();
-        [...receivedLogs, ...sentLogs].forEach(log => {
-          if (log.transactionHash) {
-            txHashes.add(log.transactionHash);
-          }
-        });
+        // Process the transfers from Alchemy's enhanced API
+        const allTransfers = [
+          ...(receivedLogs?.transfers || []),
+          ...(sentLogs?.transfers || [])
+        ];
         
-        console.log(`🔍 Processing ${txHashes.size} unique transactions`);
+        console.log(`🔍 Processing ${allTransfers.length} transfers`);
         
-        // Get transaction details for each unique hash (limit to prevent overwhelming)
-        const txHashArray = Array.from(txHashes).slice(0, 20);
+        // Process transfers directly (limit to prevent overwhelming)
+        const transfersToProcess = allTransfers.slice(0, 20);
         
-        for (const txHash of txHashArray) {
+        for (const transfer of transfersToProcess) {
           try {
-            const tx = await makeAlchemyCall('eth_getTransactionByHash', [txHash], 'Transaction Details');
-            const receipt = await makeAlchemyCall('eth_getTransactionReceipt', [txHash], 'Transaction Receipt');
+            const value = transfer.category === 'external' 
+              ? parseFloat(transfer.value || '0') 
+              : 0; // For ERC20 tokens, we'll show token amount separately
             
-            if (tx && receipt) {
-              const value = parseFloat(tx.value || '0') / Math.pow(10, 18);
-              const gasUsed = parseInt(receipt.gasUsed, 16);
-              const gasPrice = parseInt(tx.gasPrice, 16);
-              const gasFee = (gasUsed * gasPrice) / Math.pow(10, 18);
-              
-              const activity = {
-                hash: tx.hash,
-                timeStamp: parseInt(tx.blockNumber, 16) * 12000 + 1640000000000, // Approximate timestamp based on block
-                from: tx.from?.toLowerCase() || '',
-                to: tx.to?.toLowerCase() || '',
-                value: value,
-                gasFee: gasFee,
-                gasUsed: gasUsed,
-                methodId: tx.input?.slice(0, 10) || '0x',
-                functionName: tx.input === '0x' ? 'Transfer' : 'Contract Call',
-                isError: receipt.status === '0x0',
-                blockNumber: parseInt(tx.blockNumber, 16),
-                type: 'normal'
-              };
-              
-              allActivity.push(activity);
-            }
+            const blockNum = parseInt(transfer.blockNum, 16);
+            const timestamp = blockNum * 12000 + 1640000000000; // Approximate timestamp
             
-            // Small delay to avoid overwhelming Alchemy
+            const activity = {
+              hash: transfer.hash,
+              timeStamp: timestamp,
+              from: transfer.from?.toLowerCase() || '',
+              to: transfer.to?.toLowerCase() || '',
+              value: value,
+              gasFee: 0, // We'll get this from transaction receipt if needed
+              gasUsed: 0,
+              methodId: transfer.category === 'external' ? '0x' : '0xa9059cbb',
+              functionName: transfer.category === 'external' ? 'ETH Transfer' : `${transfer.asset} Transfer`,
+              isError: false, // Alchemy only returns successful transfers
+              blockNumber: blockNum,
+              type: transfer.category,
+              tokenSymbol: transfer.asset || 'ETH',
+              tokenValue: transfer.category !== 'external' ? parseFloat(transfer.value || '0') : null
+            };
+            
+            allActivity.push(activity);
+            
+            // Small delay to avoid overwhelming
             await new Promise(resolve => setTimeout(resolve, 50));
             
-          } catch (txError) {
-            console.warn('⚠️ Failed to get transaction details:', txError.message);
+          } catch (transferError) {
+            console.warn('⚠️ Failed to process transfer:', transferError.message);
           }
         }
         
