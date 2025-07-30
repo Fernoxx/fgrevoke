@@ -1021,19 +1021,38 @@ function App() {
 
   // Revoke ALL approvals
   const handleRevokeAll = async () => {
+    console.log("🔥 Revoke button clicked!"); // DEBUG LOG
+    console.log("📊 Current state:", {
+      approvalsCount: approvals.length,
+      isConnected,
+      hasProvider: !!provider,
+      address,
+      isRevoking
+    });
+    
     if (approvals.length === 0) {
+      console.log("❌ No approvals to revoke");
       setError('No approvals to revoke!');
       return;
     }
 
+    if (!provider || !address) {
+      console.log("❌ Wallet not connected");
+      setError('Please connect your wallet first');
+      return;
+    }
+
+    console.log("✅ Showing confirmation dialog");
     // Show custom confirmation instead of window.confirm()
     setShowRevokeAllConfirm(true);
   };
 
   const confirmRevokeAll = async () => {
+    console.log("🚀 confirmRevokeAll called!");
     setShowRevokeAllConfirm(false);
     
     if (!provider || !address) {
+      console.log("❌ Missing provider or address");
       alert('Please connect your wallet first');
       return;
     }
@@ -1041,6 +1060,8 @@ function App() {
     try {
       setIsRevoking(true);
       console.log('🔄 Starting revoke all with contract...');
+      console.log('📍 Contract address:', REVOKE_HELPER_ADDRESS);
+      console.log('📍 ABI loaded:', !!revokeHelperABI);
       
       // Get token and spender addresses from approvals
       const tokenAddresses = approvals.map(approval => approval.contract);
@@ -1049,12 +1070,25 @@ function App() {
       console.log('📋 Revoking approvals:', { 
         count: approvals.length, 
         tokenAddresses: tokenAddresses.slice(0, 3), 
-        spenderAddresses: spenderAddresses.slice(0, 3) 
+        spenderAddresses: spenderAddresses.slice(0, 3),
+        allTokens: tokenAddresses,
+        allSpenders: spenderAddresses
       });
 
+      if (tokenAddresses.length === 0 || spenderAddresses.length === 0) {
+        throw new Error('No valid approvals to revoke');
+      }
+
+      if (tokenAddresses.length !== spenderAddresses.length) {
+        throw new Error('Token and spender arrays length mismatch');
+      }
+
       // Create contract call data
+      console.log('🔧 Creating contract interface...');
       const contractInterface = new ethers.utils.Interface(revokeHelperABI);
       const data = contractInterface.encodeFunctionData('revokeERC20', [tokenAddresses, spenderAddresses]);
+      
+      console.log('📝 Encoded function data:', data.slice(0, 50) + '...');
       
       // Submit transaction
       const txParams = {
@@ -1064,7 +1098,9 @@ function App() {
         value: '0x0'
       };
 
+      console.log('📝 Transaction params:', txParams);
       console.log('📝 Submitting transaction to contract:', REVOKE_HELPER_ADDRESS);
+      
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [txParams]
@@ -1078,6 +1114,7 @@ function App() {
       
     } catch (error) {
       console.error('❌ Revoke failed:', error);
+      console.error('❌ Error stack:', error.stack);
       alert(`❌ Revoke failed: ${error.message}`);
     } finally {
       setIsRevoking(false);
@@ -1446,7 +1483,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     }
                   </h2>
                   <p className="text-sm text-purple-400 mt-1">
-                    Real data from: {formatAddress(address)}
+                    Connected: {formatAddress(address)}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1516,7 +1553,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
               {/* Revoke All Button - Only show for approvals */}
               {currentPage === 'approvals' && approvals.length > 0 && (
-                <div className="mb-6">
+                <div className="mb-6 space-y-2">
                   <button
                     onClick={handleRevokeAll}
                     disabled={isRevoking}
@@ -1524,6 +1561,18 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   >
                     <Trash2 className="w-5 h-5" />
                     {isRevoking ? 'Revoking Approvals...' : `Revoke All ${approvals.length} Approvals`}
+                  </button>
+                  
+                  {/* Debug button - remove after testing */}
+                  <button
+                    onClick={() => {
+                      console.log("🧪 Debug test button clicked");
+                      console.log("Function exists:", typeof handleRevokeAll);
+                      console.log("Current state:", { approvals: approvals.length, isConnected, provider: !!provider });
+                    }}
+                    className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                  >
+                    🧪 Test Debug (check console)
                   </button>
                 </div>
               )}
@@ -1555,7 +1604,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                         </>
                       ) : (
                         <>
-                          <p><strong>Loading Activity:</strong> {loadingActivity ? 'Yes' : 'No'}</p>
+          
                           <p><strong>Activities Count:</strong> {chainActivity.length}</p>
                           <p><strong>dApps Used:</strong> {activityStats.dappsUsed}</p>
                         </>
