@@ -1024,14 +1024,13 @@ function App() {
     }
   };
 
-  // State for revoke confirmations
-  const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
+  // State for revoke operations
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(null); // Store approval to revoke
   const [isRevoking, setIsRevoking] = useState(false);
 
-  // Revoke ALL approvals - TEMPORARY: Direct call to test contract
+  // Revoke ALL approvals - Direct contract call
   const handleRevokeAll = async () => {
-    console.log("🔥 Revoke button clicked!"); // DEBUG LOG
+    console.log("🔥 Revoke All button clicked!");
     console.log("📊 Current state:", {
       approvalsCount: approvals.length,
       isConnected,
@@ -1052,17 +1051,14 @@ function App() {
       return;
     }
 
-    // TEMPORARY: Skip dialog and call contract directly to test
-    console.log("🚀 TESTING: Calling contract directly (no dialog)");
-    
-    const userConfirmed = window.confirm(`Are you sure you want to revoke ALL ${approvals.length} token approvals? This will submit a batch transaction to the smart contract.`);
-    
-    if (userConfirmed) {
-      console.log("✅ User confirmed, calling contract...");
-      await confirmRevokeAll();
-    } else {
-      console.log("❌ User cancelled");
+    if (isRevoking) {
+      console.log("❌ Already revoking");
+      return;
     }
+
+    // Direct call to contract - no confirm dialog (doesn't work in sandboxed environment)
+    console.log("🚀 Calling revoke contract directly...");
+    await confirmRevokeAll();
   };
 
   const confirmRevokeAll = async () => {
@@ -1455,65 +1451,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
 
 
-              {/* Custom Revoke All Confirmation Dialog - SUPER VISIBLE */}
-              {showRevokeAllConfirm && (
-                <div 
-                  className="fixed top-0 left-0 w-full h-full bg-red-600 bg-opacity-95 flex items-center justify-center" 
-                  style={{ 
-                    zIndex: 999999,
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0
-                  }}
-                  onClick={(e) => {
-                    console.log("🎯 RED Dialog backdrop clicked");
-                    e.stopPropagation();
-                  }}
-                >
-                  <div 
-                    className="bg-white border-8 border-red-500 rounded-lg p-8 m-4 max-w-md shadow-2xl"
-                    style={{
-                      backgroundColor: 'white',
-                      color: 'black',
-                      border: '8px solid red',
-                      minWidth: '300px',
-                      minHeight: '200px'
-                    }}
-                    onClick={(e) => {
-                      console.log("🎯 WHITE Dialog content clicked");
-                      e.stopPropagation();
-                    }}
-                  >
-                    <h3 className="text-2xl font-bold text-red-600 mb-4 text-center">⚠️ REVOKE ALL APPROVALS</h3>
-                    <p className="text-black mb-6 text-center text-lg">
-                      Are you sure you want to revoke ALL <strong>{approvals.length}</strong> token approvals? 
-                      This will use a single batch transaction via smart contract.
-                    </p>
-                    <div className="flex gap-4">
-                      <button
-                        onClick={() => {
-                          console.log("🚫 Cancel clicked");
-                          setShowRevokeAllConfirm(false);
-                        }}
-                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-6 rounded-md text-lg font-bold transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          console.log("🚀 REVOKE ALL CLICKED!");
-                          confirmRevokeAll();
-                        }}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-6 rounded-md text-lg font-bold transition-colors"
-                      >
-                        REVOKE ALL
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Individual Revoke Confirmation Dialog */}
               {showRevokeConfirm && (
@@ -1648,30 +1586,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     <Trash2 className="w-5 h-5" />
                     {isRevoking ? 'Revoking Approvals...' : `Revoke All ${approvals.length} Approvals`}
                   </button>
-                  
-                  {/* Debug buttons - remove after testing */}
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => {
-                        console.log("🧪 Debug test button clicked");
-                        console.log("Function exists:", typeof handleRevokeAll);
-                        console.log("Current state:", { approvals: approvals.length, isConnected, provider: !!provider });
-                      }}
-                      className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                    >
-                      🧪 Test Debug (check console)
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        console.log("🎯 Manually showing dialog");
-                        setShowRevokeAllConfirm(true);
-                      }}
-                      className="w-full px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors"
-                    >
-                      🎯 Force Show Dialog
-                    </button>
-                  </div>
+
                 </div>
               )}
 
