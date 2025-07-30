@@ -1496,14 +1496,7 @@ https://fgrevoke.vercel.app`;
                     </div>
                   )}
 
-                  {!hasRevoked && totalClaims < 50 && (
-                    <div className="bg-yellow-900/50 border border-yellow-500 rounded-lg p-4 mb-4">
-                      <h3 className="text-yellow-200 font-bold text-lg mb-2">💡 Earn 0.5 USDC</h3>
-                      <p className="text-yellow-300 text-sm">
-                        Revoke at least one token approval to unlock your reward claim!
-                      </p>
-                    </div>
-                  )}
+
 
                   {totalClaims >= 50 && !hasClaimedLocally && (
                     <div className="bg-gray-700 border border-gray-500 rounded-lg p-4 mb-4">
