@@ -13,6 +13,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals' or 'activity'
+  const [activityPageNumber, setActivityPageNumber] = useState(1);
+  const transactionsPerPage = 10;
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -1018,6 +1020,11 @@ function App() {
     }
   }, [hasClaimedLocally]);
 
+  // Reset activity page number when switching chains or pages
+  useEffect(() => {
+    setActivityPageNumber(1);
+  }, [selectedChain, currentPage]);
+
   // Mock revoke function (since we're focusing on reward claiming now)
   const requestRevokeApproval = (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
@@ -1615,7 +1622,15 @@ https://fgrevoke.vercel.app`;
                       </div>
                     )}
                     
-                    {chainActivity.map((tx, index) => (
+                    {(() => {
+                      const startIndex = (activityPageNumber - 1) * transactionsPerPage;
+                      const endIndex = startIndex + transactionsPerPage;
+                      const paginatedActivity = chainActivity.slice(startIndex, endIndex);
+                      const totalPages = Math.ceil(chainActivity.length / transactionsPerPage);
+
+                      return (
+                        <>
+                          {paginatedActivity.map((tx, index) => (
                       <div key={`${tx.hash}-${index}`} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center flex-1">
@@ -1673,6 +1688,48 @@ https://fgrevoke.vercel.app`;
                         </div>
                       </div>
                     ))}
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                          <div className="flex justify-center items-center gap-2 mt-6 pt-4 border-t border-purple-600">
+                            <button
+                              onClick={() => setActivityPageNumber(prev => Math.max(1, prev - 1))}
+                              disabled={activityPageNumber === 1}
+                              className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ←
+                            </button>
+                            
+                            {[...Array(totalPages)].map((_, i) => (
+                              <button
+                                key={i + 1}
+                                onClick={() => setActivityPageNumber(i + 1)}
+                                className={`px-3 py-1 rounded ${
+                                  activityPageNumber === i + 1 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-purple-600 text-white hover:bg-purple-500'
+                                }`}
+                              >
+                                {i + 1}
+                              </button>
+                            ))}
+                            
+                            <button
+                              onClick={() => setActivityPageNumber(prev => Math.min(totalPages, prev + 1))}
+                              disabled={activityPageNumber === totalPages}
+                              className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              →
+                            </button>
+                            
+                            <span className="text-purple-300 text-sm ml-2">
+                              Page {activityPageNumber} of {totalPages} ({chainActivity.length} transactions)
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   </div>
                 )
               )}
