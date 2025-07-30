@@ -1085,51 +1085,51 @@ function App() {
         isActive: a.isActive 
       })));
       
-      // Filter 1: Only include active approvals with non-zero amounts
-      const nonZeroApprovals = approvals.filter(approval => {
-        // Check if approval is active and has a valid amount
-        const isActive = approval.isActive !== false; // Default to true if not specified
-        const hasAmount = approval.amount && approval.amount !== '0' && approval.amount !== '0.0';
-        
-        if (!isActive) {
-          console.log(`⚠️ Skipping ${approval.name} - not active`);
-          return false;
-        }
-        
-        if (!hasAmount) {
-          console.log(`⚠️ Skipping ${approval.name} - zero or missing amount: ${approval.amount}`);
-          return false;
-        }
-        
-        return true;
-      });
+             // Filter 1: Only ERC20 tokens with non-zero amounts (as requested)
+       const onlyERC20 = approvals.filter(approval => {
+         // Check if approval is active and has a valid amount
+         const isActive = approval.isActive !== false; // Default to true if not specified
+         const hasAmount = approval.amount && approval.amount !== '0' && approval.amount !== '0.0';
+         
+         // ERC20 indicators (adjust based on your structure)
+         const looksLikeERC20 = approval.symbol && approval.symbol.length <= 10; // Most ERC20 symbols are short
+         const notNFT = approval.amount !== '1' || approval.symbol?.includes('LP') || approval.symbol?.includes('Token');
+         
+         if (!isActive) {
+           console.log(`⚠️ Skipping ${approval.name} - not active`);
+           return false;
+         }
+         
+         if (!hasAmount) {
+           console.log(`⚠️ Skipping ${approval.name} - zero or missing amount: ${approval.amount}`);
+           return false;
+         }
+         
+         if (!looksLikeERC20) {
+           console.log(`⚠️ Skipping ${approval.name} - doesn't look like ERC20 (no symbol)`);
+           return false;
+         }
+         
+         if (!notNFT) {
+           console.log(`⚠️ Skipping ${approval.name} - looks like NFT (amount=1, no LP/Token in symbol)`);
+           return false;
+         }
+         
+         console.log(`✅ Including ERC20: ${approval.name} (${approval.symbol}) - ${approval.amount}`);
+         return true;
+       });
       
-      console.log("✅ Non-zero approvals:", nonZeroApprovals.length);
-      
-             // Filter 2: Only include valid ERC20 contract addresses
-       const validApprovals = nonZeroApprovals.filter(approval => {
+             console.log("✅ ERC20 approvals after filtering:", onlyERC20.length);
+       
+              // Filter 2: Final validation of contract addresses
+       const validApprovals = onlyERC20.filter(approval => {
          const validContract = approval.contract && approval.contract.startsWith('0x') && approval.contract.length === 42;
          const validSpender = approval.spender && approval.spender.startsWith('0x') && approval.spender.length === 42;
          
-         // Additional check: Make sure this looks like an ERC20 approval (has amount field)
-         const hasValidAmount = approval.amount && typeof approval.amount === 'string';
-         
-         // Skip if it looks like an NFT (ERC721) - those usually don't have decimal amounts
-         const looksLikeNFT = approval.amount === '1' && !approval.symbol?.includes('LP') && !approval.symbol?.includes('Token');
-         
+         // Final address validation only (ERC20 filtering already done above)
          if (!validContract || !validSpender) {
            console.log(`⚠️ Skipping ${approval.name} - invalid addresses`);
            console.log(`   Contract: ${approval.contract}, Spender: ${approval.spender}`);
-           return false;
-         }
-         
-         if (!hasValidAmount) {
-           console.log(`⚠️ Skipping ${approval.name} - invalid amount format: ${approval.amount}`);
-           return false;
-         }
-         
-         if (looksLikeNFT) {
-           console.log(`⚠️ Skipping ${approval.name} - looks like NFT approval (amount=1)`);
            return false;
          }
          
@@ -1148,10 +1148,17 @@ function App() {
       const tokenAddresses = validApprovals.map(approval => approval.contract);
       const spenderAddresses = validApprovals.map(approval => approval.spender);
       
-      // ENHANCED LOGGING AS REQUESTED
-      console.log("🧾 Final token list:", tokenAddresses);
-      console.log("🧾 Final spender list:", spenderAddresses);
-      console.log("🧾 Tokens being revoked:", validApprovals.map(a => a.name));
+             // ENHANCED LOGGING AS REQUESTED - EXACTLY AS SPECIFIED
+       console.log("📥 Tokens:", tokenAddresses);
+       console.log("📥 Spenders:", spenderAddresses);
+       console.log("✅ Equal length:", tokenAddresses.length === spenderAddresses.length);
+       console.log("🧾 Tokens being revoked:", validApprovals.map(a => a.name));
+       
+       // DETAILED PAIRING CHECK
+       console.log("🔍 Token-Spender pairs:");
+       for (let i = 0; i < Math.min(tokenAddresses.length, spenderAddresses.length); i++) {
+         console.log(`  ${i}: ${tokenAddresses[i]} → ${spenderAddresses[i]} (${validApprovals[i]?.name})`);
+       }
 
       // Final validation checks
       if (!tokenAddresses.length || !spenderAddresses.length) {
@@ -1160,11 +1167,13 @@ function App() {
         return;
       }
 
-      if (tokenAddresses.length !== spenderAddresses.length) {
-        console.error("❌ Array length mismatch after filtering!");
-        console.log('❌ Token and spender arrays length mismatch after filtering');
-        return;
-      }
+             // EXACT CHECK AS REQUESTED
+       if (tokenAddresses.length !== spenderAddresses.length) {
+         console.error("❌ Mismatched token/spender list");
+         console.error(`   Tokens: ${tokenAddresses.length}, Spenders: ${spenderAddresses.length}`);
+         console.log('❌ This would cause contract revert - aborting');
+         return;
+       }
 
       // Check if we're on the right chain (Base = 8453)
       console.log("🔗 Checking current chain...");
@@ -1214,11 +1223,18 @@ function App() {
         value: '0x0'
       };
 
-      console.log('📝 Submitting revoke all transaction...');
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
-      });
+             // FINAL SUMMARY BEFORE CONTRACT CALL
+       console.log("🚀 FINAL VALIDATION PASSED - CALLING CONTRACT:");
+       console.log(`   📊 Filtered from ${approvals.length} → ${validApprovals.length} valid ERC20 approvals`);
+       console.log(`   ✅ All tokens have non-zero allowances`);
+       console.log(`   ✅ All addresses are valid 42-char hex`);
+       console.log(`   ✅ Token/spender arrays are equal length`);
+       
+       console.log('📝 Submitting revoke all transaction...');
+       const txHash = await provider.request({
+         method: 'eth_sendTransaction',
+         params: [txParams]
+       });
 
       console.log('✅ Revoke all transaction submitted:', txHash);
       console.log('✅ All approvals revoked successfully!');
