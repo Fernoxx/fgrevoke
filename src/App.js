@@ -1200,19 +1200,7 @@ function App() {
          console.log(`      Amount: ${approval.amount}`);
        }
 
-             // Use writeContract with proper ABI (as requested)
-       const revokeABI = [
-         {
-           "inputs": [
-             { "internalType": "address[]", "name": "tokens", "type": "address[]" },
-             { "internalType": "address[]", "name": "spenders", "type": "address[]" }
-           ],
-           "name": "revokeERC20",
-           "outputs": [],
-           "stateMutability": "nonpayable",
-           "type": "function"
-         }
-       ];
+             
 
        // Final validation before contract call (as requested)
        if (tokenAddresses.length === 0 || spenderAddresses.length === 0) {
@@ -1240,56 +1228,53 @@ function App() {
          return;
        }
        
-              // Skip wagmi entirely and use direct provider approach (more reliable in Farcaster)
-       console.log("🚀 All validations passed - using direct provider approach...");
-       
-       let tx;
-       try {
-         // Skip getWalletClient() entirely - it's causing the connections error
-         throw new Error("Skipping wagmi - using direct provider");
-       } catch (writeError) {
-         console.error("❌ writeContract failed:", writeError);
-         console.error("❌ Error name:", writeError.name);
-         console.error("❌ Error message:", writeError.message);
-         
-         // If wagmi writeContract fails, fall back to direct provider call
-         console.log("🔄 Falling back to direct provider call...");
-         
-         // Create contract call data manually
-         const functionSignature = '0x6b6f5a1e'; // revokeERC20(address[],address[])
-         const encodedTokens = ethers.utils.defaultAbiCoder.encode(['address[]'], [tokenAddresses]);
-         const encodedSpenders = ethers.utils.defaultAbiCoder.encode(['address[]'], [spenderAddresses]);
-         
-         const tokensData = encodedTokens.slice(66);
-         const spendersData = encodedSpenders.slice(66);
-         const tokensOffset = '0000000000000000000000000000000000000000000000000000000000000040';
-         const spendersOffset = (64 + tokensData.length / 2).toString(16).padStart(64, '0');
-         const callData = functionSignature + tokensOffset + spendersOffset + tokensData + spendersData;
-
-         const txParams = {
-           to: REVOKE_HELPER_ADDRESS,
-           data: callData,
-           from: address,
-           value: '0x0'
-         };
-
-         tx = await provider.request({
-           method: 'eth_sendTransaction',
-           params: [txParams]
-         });
-         
-         console.log("✅ Fallback transaction successful:", tx);
-       }
-
-       console.log("✅ Revoke submitted:", tx);
-       console.log('✅ Revoke submitted');
+                    console.log("🚀 All validations passed - executing revoke transaction...");
       
-             // Clear revoked approvals from UI
-       setApprovals(prev => prev.filter(approval => !validApprovals.some(revoked => revoked.id === approval.id)));
+            let tx;
+      try {
+        // Create contract call data using proper ABI encoding
+        const iface = new ethers.utils.Interface(revokeHelperABI);
+        const callData = iface.encodeFunctionData('revokeERC20', [tokenAddresses, spenderAddresses]);
+        
+        console.log("📝 Encoded call data:", callData);
+        console.log("🔍 Function signature:", callData.slice(0, 10));
+
+        const txParams = {
+          to: REVOKE_HELPER_ADDRESS,
+          data: callData,
+          from: address,
+          value: '0x0'
+        };
+
+        console.log("📤 Transaction parameters:", txParams);
+        console.log("🎯 Contract address:", REVOKE_HELPER_ADDRESS);
+        console.log("👤 From address:", address);
+        
+        tx = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [txParams]
+        });
+        
+        console.log("✅ Transaction successful:", tx);
+
+             console.log("✅ Revoke submitted:", tx);
+      
+      // Clear revoked approvals from UI
+      setApprovals(prev => prev.filter(approval => !validApprovals.some(revoked => revoked.id === approval.id)));
+      
+      // Show success message
+      setError(null); // Clear any previous errors
+      console.log(`✅ Successfully revoked ${validApprovals.length} approvals!`);
       
     } catch (err) {
       console.error("❌ Revoke failed:", err);
-      console.log(err.message || 'Revoke failed');
+      console.error("❌ Error details:", {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        data: err.data
+      });
+      setError(`Failed to revoke approvals: ${err.message || 'Unknown error'}`);
     } finally {
       setIsRevoking(false);
     }
