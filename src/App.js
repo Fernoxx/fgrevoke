@@ -4,7 +4,7 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-import { writeContract, getWalletClient } from '@wagmi/core';
+import { getWalletClient } from '@wagmi/core';
 import { wagmiConfig } from './lib/wagmi';
 
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
@@ -1253,16 +1253,16 @@ function App() {
          console.log("🔍 Wallet client account:", walletClient?.account?.address);
          
          if (!walletClient) {
-           throw new Error("No wallet client available");
+           throw new Error("Wallet client not found. Is wallet connected?");
          }
          
-         tx = await writeContract({
+         // Use client.writeContract() instead of global writeContract()
+         tx = await walletClient.writeContract({
            address: REVOKE_HELPER_ADDRESS,
            abi: revokeABI,
            functionName: 'revokeERC20',
            args: [tokenAddresses, spenderAddresses],
-           account: address, // ✅ explicitly pass connected address
-           chainId: 8453 // ✅ explicitly pass chain ID
+           account: address
          });
          
          console.log("✅ writeContract call successful:", tx);
