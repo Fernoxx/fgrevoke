@@ -1245,7 +1245,10 @@ function App() {
        
        let tx;
        try {
-         const walletClient = await getWalletClient(); // ✅ signer included
+         const walletClient = await getWalletClient({
+           chainId: 8453, // Base chain
+           account: address // ✅ explicitly pass connected address
+         });
          console.log("🔍 Wallet client obtained:", !!walletClient);
          console.log("🔍 Wallet client account:", walletClient?.account?.address);
          
@@ -1258,7 +1261,8 @@ function App() {
            abi: revokeABI,
            functionName: 'revokeERC20',
            args: [tokenAddresses, spenderAddresses],
-           account: walletClient.account.address, // ✅ signer account
+           account: address, // ✅ explicitly pass connected address
+           chainId: 8453 // ✅ explicitly pass chain ID
          });
          
          console.log("✅ writeContract call successful:", tx);
