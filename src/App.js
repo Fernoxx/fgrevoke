@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
+import { writeContract } from '@wagmi/core';
+import { wagmiConfig } from './lib/wagmi';
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
 
 function App() {
@@ -961,61 +963,38 @@ function App() {
     setShowRevokeConfirm(approval);
   };
 
-  // PROPER revoke function using the connected provider
+  // Individual revoke using wagmi writeContract
   const handleRevokeApproval = async (approval) => {
     console.log('🎯 handleRevokeApproval called for:', approval.name);
-    console.log('🔌 Provider state:', { hasProvider: !!provider, isConnected, address });
     
-    if (!provider || !isConnected) {
-      console.log('❌ Wallet not connected properly');
-      setError('Please connect your wallet first');
-      return;
-    }
-
     try {
       console.log('🔄 Starting individual revoke for:', approval.name);
+      console.log('📋 Approval details:', { contract: approval.contract, spender: approval.spender });
       
-      // Ensure we're on the right chain
-      const chainConfig = chains.find(c => c.value === selectedChain);
-      const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
-      
-      try {
-        const currentChainId = await provider.request({ method: 'eth_chainId' });
-        if (currentChainId !== expectedChainId) {
-          console.log('🔄 Switching to correct chain...');
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: expectedChainId }],
-          });
-        }
-      } catch (switchError) {
-        console.log('Chain switch error (might be expected):', switchError);
-      }
-
-      // ERC20 approve(spender, 0) call data
-      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
-      
-      const txParams = {
-        to: approval.contract,
-        data: revokeData,
-        from: address,
-        value: '0x0'
-      };
-
-      console.log('📝 Submitting revoke transaction...');
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
+      // Use wagmi writeContract for individual revoke
+      const tx = await writeContract(wagmiConfig, {
+        address: REVOKE_HELPER_ADDRESS,
+        abi: revokeHelperABI,
+        functionName: 'revokeERC20',
+        args: [[approval.contract], [approval.spender]], // Arrays with single items
+        chainId: 8453 // Base chain
       });
 
-      console.log('✅ Revoke transaction submitted:', txHash);
+      console.log('✅ Individual revoke tx sent:', tx);
+      alert(`✅ Revoke submitted for ${approval.name}! Check your wallet.`);
       
       // Update UI optimistically
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
 
     } catch (error) {
-      console.error('❌ Revoke failed:', error);
-      setError(`Failed to revoke approval: ${error.message}`);
+      console.error('❌ Individual revoke failed:', error);
+      console.error('❌ Error message:', error.message);
+      
+      if (error.message?.includes('User rejected')) {
+        alert('❌ Transaction rejected by user');
+      } else {
+        alert(`❌ Failed to revoke ${approval.name}: ${error.message}`);
+      }
     }
   };
 
@@ -1062,19 +1041,10 @@ function App() {
 
   const confirmRevokeAll = async () => {
     console.log("🚀 confirmRevokeAll called!");
-    // setShowRevokeAllConfirm(false); // Temporarily disabled since we're not using dialog
     
-    if (!provider || !address) {
-      console.log("❌ Missing provider or address");
-      alert('Please connect your wallet first');
-      return;
-    }
-
     try {
       setIsRevoking(true);
-      console.log('🔄 Starting revoke all with contract...');
-      console.log('📍 Contract address:', REVOKE_HELPER_ADDRESS);
-      console.log('📍 ABI loaded:', !!revokeHelperABI);
+      console.log('🔄 Starting revoke all with wagmi writeContract...');
       
       // Get token and spender addresses from approvals
       const tokenAddresses = approvals.map(approval => approval.contract);
@@ -1095,62 +1065,35 @@ function App() {
         throw new Error('Token and spender arrays length mismatch');
       }
 
-      // Check if we're on the right chain (Base = 8453)
-      console.log("🔗 Checking current chain...");
-      const currentChainId = await provider.request({ method: 'eth_chainId' });
-      console.log("🔗 Current chain ID:", currentChainId);
+      console.log('📍 Contract address:', REVOKE_HELPER_ADDRESS);
+      console.log('📍 Using wagmi writeContract...');
+      console.log("📤 Calling writeContract...");
       
-      if (currentChainId !== '0x2105') { // Base chain ID in hex
-        console.log("⚠️ Wrong chain, switching to Base...");
-        try {
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x2105' }], // Base
-          });
-          console.log("✅ Switched to Base chain");
-        } catch (switchError) {
-          console.error("❌ Chain switch failed:", switchError);
-          throw new Error('Please switch to Base network to use revoke contract');
-        }
-      }
-
-      // Use ethers.js Contract for better transaction handling
-      console.log("🔧 Creating ethers contract instance...");
-      const ethersProvider = new ethers.providers.Web3Provider(provider);
-      const signer = ethersProvider.getSigner();
-      const contract = new ethers.Contract(REVOKE_HELPER_ADDRESS, revokeHelperABI, signer);
+      // Use wagmi writeContract - this should trigger wallet popup properly
+      const tx = await writeContract(wagmiConfig, {
+        address: REVOKE_HELPER_ADDRESS,
+        abi: revokeHelperABI,
+        functionName: 'revokeERC20',
+        args: [tokenAddresses, spenderAddresses],
+        chainId: 8453 // Base chain
+      });
       
-      console.log("📤 Calling contract.revokeERC20...");
-      console.log("📋 Args:", { tokenAddresses, spenderAddresses });
-      
-      // Call the contract function directly
-      const tx = await contract.revokeERC20(tokenAddresses, spenderAddresses);
-      
-      console.log("✅ Transaction sent!", tx.hash);
-      console.log("⏳ Waiting for confirmation...");
-      
-      // Wait for transaction confirmation
-      const receipt = await tx.wait();
-      
-      console.log("✅ Transaction confirmed!", receipt.transactionHash);
-      console.log("⛽ Gas used:", receipt.gasUsed.toString());
-      
-      alert(`✅ Revoke transaction confirmed! Hash: ${receipt.transactionHash}`);
+      console.log("✅ Revoke all tx sent:", tx);
+      alert("✅ Revoke transaction submitted! Check your wallet.");
       
       // Clear approvals from UI
       setApprovals([]);
       
     } catch (error) {
-      console.error('❌ Revoke failed:', error);
+      console.error('❌ Revoke all failed:', error);
       console.error('❌ Error message:', error.message);
       console.error('❌ Error code:', error.code);
-      console.error('❌ Error reason:', error.reason);
       
       // Handle specific error types
-      if (error.code === 4001) {
+      if (error.message?.includes('User rejected')) {
         alert('❌ Transaction rejected by user');
-      } else if (error.code === -32603) {
-        alert('❌ Transaction failed - check gas limits and network');
+      } else if (error.message?.includes('insufficient funds')) {
+        alert('❌ Insufficient funds for gas');
       } else {
         alert(`❌ Revoke failed: ${error.message}`);
       }

@@ -4,6 +4,9 @@
   "private": true,
   "dependencies": {
     "@farcaster/miniapp-sdk": "^0.1.6",
+    "@tanstack/react-query": "^5.83.0",
+    "@wagmi/connectors": "^5.9.0",
+    "@wagmi/core": "^2.18.0",
     "ajv": "^8.17.1",
     "ethers": "^5.8.0",
     "lucide-react": "^0.263.1",
@@ -11,7 +14,9 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "typescript": "^4.9.5"
+    "typescript": "^4.9.5",
+    "viem": "^2.33.1",
+    "wagmi": "^2.16.0"
   },
   "overrides": {
     "typescript": "^4.9.5"
