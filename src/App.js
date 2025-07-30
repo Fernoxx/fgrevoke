@@ -3,23 +3,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
-import { writeContract } from '@wagmi/core';
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
-import { wagmiConfig } from './lib/wagmi';
+
+
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
 
 function App() {
-  // Simplified wallet connection (without Privy for now)
-  const ready = true; // Always ready for basic wagmi
-  const authenticated = false; // Not using Privy auth for now
-  const user = null;
-  const login = () => console.log('💡 Privy not configured - using basic wallet connection');
-  const logout = () => console.log('💡 Privy not configured - using basic disconnect');
-  
-  // Wagmi hooks for wallet state
-  const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { disconnect: wagmiDisconnect } = useDisconnect();
 
   const [selectedChain, setSelectedChain] = useState('ethereum');
   const [approvals, setApprovals] = useState([]);
@@ -581,14 +569,18 @@ function App() {
     initializeSDK();
   }, []);
 
-  // Enhanced Wallet Connection - Farcaster + Wagmi + Traditional
+  // Enhanced Wallet Connection - handles both verified addresses and manual connections
   const connectWallet = async () => {
     console.log('🔌 Starting wallet connection...');
     setIsConnecting(true);
     setError(null);
 
     try {
-      // 1. If user already has verified Farcaster addresses, use those first
+      if (!sdkReady) {
+        throw new Error('SDK not ready. Please wait for initialization.');
+      }
+
+      // If user already has verified addresses, use those first
       if (userAddresses.length > 0) {
         console.log('🔑 Using verified Farcaster addresses:', userAddresses);
         const primaryAddress = userAddresses[0].toLowerCase();
@@ -598,43 +590,14 @@ function App() {
         return;
       }
 
-      // 2. Try Wagmi connectors (Coinbase Wallet, Injected, etc.)
-      if (!wagmiConnected && connectors.length > 0) {
-        console.log('🔗 Trying wagmi connectors...');
-        
-        // Prefer Coinbase Wallet for Base app users
-        const coinbaseConnector = connectors.find(c => c.name.toLowerCase().includes('coinbase'));
-        const injectedConnector = connectors.find(c => c.name.toLowerCase().includes('injected'));
-        const connector = coinbaseConnector || injectedConnector || connectors[0];
-        
-        try {
-          console.log('🎯 Connecting with:', connector.name);
-          await connect({ connector });
-          
-          // Wait a moment for wagmi to sync
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          if (wagmiAddress) {
-            setAddress(wagmiAddress.toLowerCase());
-            setIsConnected(true);
-            console.log('✅ Connected via wagmi:', wagmiAddress);
-            return;
-          }
-        } catch (connectError) {
-          console.log('⚠️ Wagmi connect failed, trying fallback...', connectError);
-        }
-      }
-
-      // 3. Fallback to Farcaster SDK + Traditional wallet connection
-      console.log('🌐 Trying SDK/traditional wallet connection...');
+      // Try to get wallet provider (miniapp SDK first, then fallback to web3)
+      console.log('🌐 Getting Ethereum provider...');
       let ethProvider = null;
       
       try {
         // Try miniapp SDK first (for Farcaster/Base App)
-        if (sdkReady) {
-          ethProvider = await sdk.wallet.getEthereumProvider();
-          console.log('✅ Got provider from miniapp SDK');
-        }
+        ethProvider = await sdk.wallet.getEthereumProvider();
+        console.log('✅ Got provider from miniapp SDK');
       } catch (sdkError) {
         console.log('⚠️ Miniapp provider failed, trying web3 fallback...');
         
@@ -642,11 +605,13 @@ function App() {
         if (typeof window !== 'undefined' && window.ethereum) {
           ethProvider = window.ethereum;
           console.log('✅ Got provider from window.ethereum');
+        } else {
+          throw new Error('No wallet available. Please install MetaMask or use this app in Farcaster/Base App.');
         }
       }
       
       if (!ethProvider) {
-        throw new Error('No wallet available. Please install MetaMask or use this app in Farcaster/Base App.');
+        throw new Error('No wallet provider available. Please ensure you have verified addresses in your Farcaster profile or connect a wallet.');
       }
 
       console.log('✅ Provider obtained, requesting accounts...');
@@ -662,7 +627,7 @@ function App() {
       }
 
       const walletAddress = accounts[0].toLowerCase();
-      console.log('👛 Wallet connected:', walletAddress);
+      console.log('👛 Manual wallet connected:', walletAddress);
 
       // Get current chain
       const chainId = await ethProvider.request({ method: 'eth_chainId' });
@@ -680,7 +645,7 @@ function App() {
       setAddress(walletAddress);
       setIsConnected(true);
 
-      console.log('🎉 Wallet connection successful!');
+      console.log('🎉 Manual wallet connection successful! Ready to fetch real data...');
 
     } catch (error) {
       console.error('❌ Wallet connection failed:', error);
@@ -690,19 +655,7 @@ function App() {
     }
   };
 
-  // Sync wagmi address with our state
-  useEffect(() => {
-    if (wagmiConnected && wagmiAddress && wagmiAddress !== address) {
-      console.log('✅ Syncing wagmi address:', wagmiAddress);
-      setAddress(wagmiAddress.toLowerCase());
-      setIsConnected(true);
-    } else if (!wagmiConnected && isConnected && !provider) {
-      // Only disconnect if we don't have a manual provider connection
-      console.log('🔌 Wagmi disconnected, clearing state...');
-      setAddress(null);
-      setIsConnected(false);
-    }
-  }, [wagmiConnected, wagmiAddress, address, isConnected, provider]);
+
 
   // Listen for account changes
   useEffect(() => {
@@ -1115,9 +1068,17 @@ function App() {
   const confirmRevokeAll = async () => {
     console.log("🚀 confirmRevokeAll called!");
     
+    if (!provider || !address) {
+      console.log("❌ Missing provider or address");
+      alert('Please connect your wallet first');
+      return;
+    }
+
     try {
       setIsRevoking(true);
-      console.log('🔄 Starting revoke all with wagmi writeContract...');
+      console.log('🔄 Starting revoke all with contract...');
+      console.log('📍 Contract address:', REVOKE_HELPER_ADDRESS);
+      console.log('📍 ABI loaded:', !!revokeHelperABI);
       
       // Get token and spender addresses from approvals
       const tokenAddresses = approvals.map(approval => approval.contract);
@@ -1138,35 +1099,62 @@ function App() {
         throw new Error('Token and spender arrays length mismatch');
       }
 
-      console.log('📍 Contract address:', REVOKE_HELPER_ADDRESS);
-      console.log('📍 Using wagmi writeContract...');
-      console.log("📤 Calling writeContract...");
+      // Check if we're on the right chain (Base = 8453)
+      console.log("🔗 Checking current chain...");
+      const currentChainId = await provider.request({ method: 'eth_chainId' });
+      console.log("🔗 Current chain ID:", currentChainId);
       
-      // Use wagmi writeContract - this should trigger wallet popup properly
-      const tx = await writeContract(wagmiConfig, {
-        address: REVOKE_HELPER_ADDRESS,
-        abi: revokeHelperABI,
-        functionName: 'revokeERC20',
-        args: [tokenAddresses, spenderAddresses],
-        chainId: 8453 // Base chain
-      });
+      if (currentChainId !== '0x2105') { // Base chain ID in hex
+        console.log("⚠️ Wrong chain, switching to Base...");
+        try {
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x2105' }], // Base
+          });
+          console.log("✅ Switched to Base chain");
+        } catch (switchError) {
+          console.error("❌ Chain switch failed:", switchError);
+          throw new Error('Please switch to Base network to use revoke contract');
+        }
+      }
+
+      // Use ethers.js Contract for better transaction handling
+      console.log("🔧 Creating ethers contract instance...");
+      const ethersProvider = new ethers.providers.Web3Provider(provider);
+      const signer = ethersProvider.getSigner();
+      const contract = new ethers.Contract(REVOKE_HELPER_ADDRESS, revokeHelperABI, signer);
       
-      console.log("✅ Revoke all tx sent:", tx);
-      alert("✅ Revoke transaction submitted! Check your wallet.");
+      console.log("📤 Calling contract.revokeERC20...");
+      console.log("📋 Args:", { tokenAddresses, spenderAddresses });
+      
+      // Call the contract function directly
+      const tx = await contract.revokeERC20(tokenAddresses, spenderAddresses);
+      
+      console.log("✅ Transaction sent!", tx.hash);
+      console.log("⏳ Waiting for confirmation...");
+      
+      // Wait for transaction confirmation
+      const receipt = await tx.wait();
+      
+      console.log("✅ Transaction confirmed!", receipt.transactionHash);
+      console.log("⛽ Gas used:", receipt.gasUsed.toString());
+      
+      alert(`✅ Revoke transaction confirmed! Hash: ${receipt.transactionHash}`);
       
       // Clear approvals from UI
       setApprovals([]);
       
     } catch (error) {
-      console.error('❌ Revoke all failed:', error);
+      console.error('❌ Revoke failed:', error);
       console.error('❌ Error message:', error.message);
       console.error('❌ Error code:', error.code);
+      console.error('❌ Error reason:', error.reason);
       
       // Handle specific error types
-      if (error.message?.includes('User rejected')) {
+      if (error.code === 4001) {
         alert('❌ Transaction rejected by user');
-      } else if (error.message?.includes('insufficient funds')) {
-        alert('❌ Insufficient funds for gas');
+      } else if (error.code === -32603) {
+        alert('❌ Transaction failed - check gas limits and network');
       } else {
         alert(`❌ Revoke failed: ${error.message}`);
       }
@@ -1228,10 +1216,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
-  const disconnect = async () => {
-    console.log('🔌 Starting disconnect...');
-    
-    // Clear local state
+  const disconnect = () => {
     setAddress(null);
     setIsConnected(false);
     setApprovals([]);
@@ -1247,19 +1232,9 @@ Secure yours too: https://fgrevoke.vercel.app`;
       lastActivity: null
     });
     
-    // Disconnect from wagmi if connected
-    if (wagmiConnected) {
-      try {
-        await wagmiDisconnect();
-        console.log('✅ Wagmi disconnected');
-      } catch (error) {
-        console.log('⚠️ Wagmi disconnect error:', error);
-      }
-    }
-    
     // Note: We keep currentUser and userAddresses as they come from Farcaster profile
     // and should persist across wallet connections/disconnections
-    console.log('🔌 Disconnect completed - kept Farcaster profile data');
+    console.log('🔌 Disconnected wallet but kept Farcaster user profile data');
   };
 
   return (
@@ -1354,7 +1329,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 <>
                   <button
                     onClick={connectWallet}
-                    disabled={isConnecting || (!ready && !sdkReady)}
+                    disabled={isConnecting || !sdkReady}
                     className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
                   >
                     <Wallet className="w-5 h-5 mr-2" />
@@ -1365,7 +1340,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   {/* Connection Status */}
                   {!isConnected && (
                     <div className="mt-2 text-sm text-purple-300 text-center">
-                      🔗 Enhanced wagmi + Coinbase Wallet support
+                      🔗 Farcaster SDK + Direct wallet connection
                     </div>
                   )}
                 </>
