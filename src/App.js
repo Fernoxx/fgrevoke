@@ -4,13 +4,13 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-// Removed getWalletClient import - using direct provider approach
+import { useAccount } from 'wagmi';
+import { writeContract } from 'wagmi/actions';
 import { wagmiConfig } from './lib/wagmi';
 
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
 
 function App() {
-
   const [selectedChain, setSelectedChain] = useState('ethereum');
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -26,6 +26,7 @@ function App() {
   const [, setContext] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
+  const [readyCallStatus, setReadyCallStatus] = useState('pending'); // 'pending', 'success', 'error', 'not-miniapp'
 
   // Activity states for all chains
   const [chainActivity, setChainActivity] = useState([]);
@@ -500,6 +501,8 @@ function App() {
   // PROPER SDK Initialization with Real Farcaster User Detection
   useEffect(() => {
     const initializeSDK = async () => {
+
+
       console.log('🚀 Initializing Farcaster SDK...');
       
       try {
@@ -553,6 +556,7 @@ function App() {
           console.log('📞 Calling sdk.actions.ready()...');
           await sdk.actions.ready();
           console.log('✅ SDK ready called successfully!');
+          setReadyCallStatus('success');
         } else {
           console.log('🌐 Running in web browser (not miniapp)');
           // For web browser usage, just set SDK as ready without miniapp features
@@ -943,6 +947,8 @@ function App() {
     }
   }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
 
+
+
   // Helper functions for token data (using Alchemy)
   const checkCurrentAllowance = async (tokenContract, owner, spender) => {
     try {
@@ -1082,6 +1088,9 @@ function App() {
 
   // State for revoke operations
   const [isRevoking, setIsRevoking] = useState(false);
+  
+  // Add wagmi account hook
+  const { connector, address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
 
   // Revoke ALL approvals - Direct contract call
   const handleRevokeAll = async () => {
@@ -1240,18 +1249,47 @@ function App() {
          return;
        }
        
-              // Skip wagmi entirely and use direct provider approach (more reliable in Farcaster)
-       console.log("🚀 All validations passed - using direct provider approach...");
+                     // Use correct wagmi approach with connector
+       console.log("🚀 All validations passed - using correct wagmi approach...");
        
        let tx;
        try {
-         // Skip getWalletClient() entirely - it's causing the connections error
-         throw new Error("Skipping wagmi - using direct provider");
+         // Check wagmi connection first
+         if (!connector || !wagmiConnected) {
+           console.error("🚨 Wallet not connected via wagmi");
+           throw new Error("Wallet not connected via wagmi");
+         }
+
+         console.log("🧠 Wagmi Address:", wagmiAddress);
+         console.log("🧠 Connector:", !!connector);
+         console.log("🧠 Connected:", wagmiConnected);
+
+         const walletClient = await connector.getWalletClient();
+
+         if (!walletClient) {
+           console.error("🚨 Wallet client not ready");
+           throw new Error("Wallet client not ready");
+         }
+
+         console.log("🧠 Wallet Client:", !!walletClient);
+         console.log("🧠 Tokens:", tokenAddresses);
+         console.log("🧠 Spenders:", spenderAddresses);
+
+         tx = await writeContract({
+           account: wagmiAddress,
+           walletClient,
+           abi: revokeABI,
+           address: REVOKE_HELPER_ADDRESS,
+           functionName: 'revokeERC20',
+           args: [tokenAddresses, spenderAddresses],
+         });
+
+         console.log("✅ writeContract call successful:", tx);
        } catch (writeError) {
          console.error("❌ writeContract failed:", writeError);
          console.error("❌ Error name:", writeError.name);
          console.error("❌ Error message:", writeError.message);
-         
+
          // If wagmi writeContract fails, fall back to direct provider call
          console.log("🔄 Falling back to direct provider call...");
          
@@ -1371,6 +1409,22 @@ Secure yours too: https://fgrevoke.vercel.app`;
             <div className="flex items-center gap-3 mb-4 sm:mb-0">
               <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
               <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
+              
+              {/* SDK Status Indicator */}
+              <div className="flex items-center space-x-2 text-xs ml-4">
+                <div className={`w-2 h-2 rounded-full ${
+                  readyCallStatus === 'success' ? 'bg-green-400' :
+                  readyCallStatus === 'error' ? 'bg-red-400' :
+                  readyCallStatus === 'not-miniapp' ? 'bg-yellow-400' :
+                  'bg-gray-400 animate-pulse'
+                }`}></div>
+                <span className="text-purple-200/70">
+                  {readyCallStatus === 'success' ? 'SDK Ready' :
+                   readyCallStatus === 'error' ? 'SDK Error' :
+                   readyCallStatus === 'not-miniapp' ? 'Web Mode' :
+                   'SDK Loading...'}
+                </span>
+              </div>
             </div>
             
             <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">

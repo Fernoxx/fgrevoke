@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@farcaster/miniapp-sdk": "^0.1.6",
+    "@farcaster/miniapp-sdk": "^0.1.8",
     "@farcaster/miniapp-wagmi-connector": "^1.0.0",
     "@privy-io/react-auth": "^2.21.0",
     "@privy-io/wagmi-connector": "^0.1.13",
