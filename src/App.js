@@ -944,55 +944,24 @@ function App() {
   // CRITICAL: Call sdk.actions.ready() after app is fully loaded (official docs pattern)
   useEffect(() => {
     const callReady = async () => {
-      try {
-        console.log('🔍 Checking SDK availability...');
-        console.log('SDK object:', typeof sdk);
-        console.log('SDK actions:', typeof sdk?.actions);
-        console.log('SDK ready function:', typeof sdk?.actions?.ready);
-
-        // Wait for SDK to be available and initialized
-        if (!sdk || !sdk.actions || typeof sdk.actions.ready !== 'function') {
-          console.log('⏳ SDK not ready yet, retrying in 100ms...');
-          setTimeout(callReady, 100);
-          return;
-        }
-
-        // Check if we're in a miniapp first
-        console.log('🔍 Checking if in miniapp...');
-        const isInMiniApp = await sdk.isInMiniApp();
-        console.log('📱 Is in MiniApp:', isInMiniApp);
-
-        console.log('📞 Calling sdk.actions.ready() after app is ready...');
-        await sdk.actions.ready();
-        console.log('✅ SDK ready called successfully!');
-        
-        // Set a flag to indicate ready was called
-        window.farcasterReadyCalled = true;
-        setReadyCallStatus('success');
-        
-      } catch (error) {
-        console.error('❌ Failed to call sdk.actions.ready():', error);
-        console.error('Error details:', error);
-        console.error('Error stack:', error.stack);
-        
-        // If we're not in a miniapp context, this might fail - that's okay
-        if (error.message && (error.message.includes('not in miniapp') || error.message.includes('not supported'))) {
-          console.log('🌐 Running in web browser - miniapp features not available');
-          setReadyCallStatus('not-miniapp');
-        } else {
-          // Retry once more after a delay
-          console.log('🔄 Retrying ready call in 1 second...');
+      // Only call ready() when key UI states are loaded
+      if (sdkReady && (isConnected || !sdk)) {
+        try {
+          if (sdk && typeof sdk.actions?.ready === 'function') {
+            console.log('📞 Calling sdk.actions.ready() after app is ready...');
+            await sdk.actions.ready();
+            console.log('✅ SDK ready called successfully!');
+            setReadyCallStatus('success');
+          }
+        } catch (error) {
+          console.error('❌ Failed to call sdk.actions.ready():', error);
           setReadyCallStatus('error');
-          setTimeout(callReady, 1000);
         }
       }
     };
 
-    // Start checking after a small delay to ensure component is mounted
-    console.log('🚀 Setting up SDK ready call...');
-    const timer = setTimeout(callReady, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    callReady();
+  }, [sdkReady, isConnected]);
 
   // Helper functions for token data (using Alchemy)
   const checkCurrentAllowance = async (tokenContract, owner, spender) => {
