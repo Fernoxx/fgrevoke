@@ -26,6 +26,7 @@ function App() {
   const [, setContext] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
+  const [readyCallStatus, setReadyCallStatus] = useState('pending'); // 'pending', 'success', 'error', 'not-miniapp'
 
   // Activity states for all chains
   const [chainActivity, setChainActivity] = useState([]);
@@ -942,18 +943,55 @@ function App() {
 
   // CRITICAL: Call sdk.actions.ready() after app is fully loaded (official docs pattern)
   useEffect(() => {
-    // Once you're sure your UI and data are ready, call sdk.actions.ready()
     const callReady = async () => {
       try {
+        console.log('🔍 Checking SDK availability...');
+        console.log('SDK object:', typeof sdk);
+        console.log('SDK actions:', typeof sdk?.actions);
+        console.log('SDK ready function:', typeof sdk?.actions?.ready);
+
+        // Wait for SDK to be available and initialized
+        if (!sdk || !sdk.actions || typeof sdk.actions.ready !== 'function') {
+          console.log('⏳ SDK not ready yet, retrying in 100ms...');
+          setTimeout(callReady, 100);
+          return;
+        }
+
+        // Check if we're in a miniapp first
+        console.log('🔍 Checking if in miniapp...');
+        const isInMiniApp = await sdk.isInMiniApp();
+        console.log('📱 Is in MiniApp:', isInMiniApp);
+
         console.log('📞 Calling sdk.actions.ready() after app is ready...');
         await sdk.actions.ready();
         console.log('✅ SDK ready called successfully!');
+        
+        // Set a flag to indicate ready was called
+        window.farcasterReadyCalled = true;
+        setReadyCallStatus('success');
+        
       } catch (error) {
         console.error('❌ Failed to call sdk.actions.ready():', error);
+        console.error('Error details:', error);
+        console.error('Error stack:', error.stack);
+        
+        // If we're not in a miniapp context, this might fail - that's okay
+        if (error.message && (error.message.includes('not in miniapp') || error.message.includes('not supported'))) {
+          console.log('🌐 Running in web browser - miniapp features not available');
+          setReadyCallStatus('not-miniapp');
+        } else {
+          // Retry once more after a delay
+          console.log('🔄 Retrying ready call in 1 second...');
+          setReadyCallStatus('error');
+          setTimeout(callReady, 1000);
+        }
       }
     };
 
-    callReady();
+    // Start checking after a small delay to ensure component is mounted
+    console.log('🚀 Setting up SDK ready call...');
+    const timer = setTimeout(callReady, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   // Helper functions for token data (using Alchemy)
@@ -1416,6 +1454,22 @@ Secure yours too: https://fgrevoke.vercel.app`;
             <div className="flex items-center gap-3 mb-4 sm:mb-0">
               <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
               <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
+              
+              {/* SDK Status Indicator */}
+              <div className="flex items-center space-x-2 text-xs ml-4">
+                <div className={`w-2 h-2 rounded-full ${
+                  readyCallStatus === 'success' ? 'bg-green-400' :
+                  readyCallStatus === 'error' ? 'bg-red-400' :
+                  readyCallStatus === 'not-miniapp' ? 'bg-yellow-400' :
+                  'bg-gray-400 animate-pulse'
+                }`}></div>
+                <span className="text-purple-200/70">
+                  {readyCallStatus === 'success' ? 'SDK Ready' :
+                   readyCallStatus === 'error' ? 'SDK Error' :
+                   readyCallStatus === 'not-miniapp' ? 'Web Mode' :
+                   'SDK Loading...'}
+                </span>
+              </div>
             </div>
             
             <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
