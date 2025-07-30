@@ -1024,7 +1024,7 @@ function App() {
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(null); // Store approval to revoke
   const [isRevoking, setIsRevoking] = useState(false);
 
-  // Revoke ALL approvals
+  // Revoke ALL approvals - TEMPORARY: Direct call to test contract
   const handleRevokeAll = async () => {
     console.log("🔥 Revoke button clicked!"); // DEBUG LOG
     console.log("📊 Current state:", {
@@ -1047,15 +1047,22 @@ function App() {
       return;
     }
 
-    console.log("✅ Showing confirmation dialog");
-    // Show custom confirmation instead of window.confirm()
-    setShowRevokeAllConfirm(true);
-    console.log("🎯 Dialog state set to TRUE");
+    // TEMPORARY: Skip dialog and call contract directly to test
+    console.log("🚀 TESTING: Calling contract directly (no dialog)");
+    
+    const userConfirmed = window.confirm(`Are you sure you want to revoke ALL ${approvals.length} token approvals? This will submit a batch transaction to the smart contract.`);
+    
+    if (userConfirmed) {
+      console.log("✅ User confirmed, calling contract...");
+      await confirmRevokeAll();
+    } else {
+      console.log("❌ User cancelled");
+    }
   };
 
   const confirmRevokeAll = async () => {
     console.log("🚀 confirmRevokeAll called!");
-    setShowRevokeAllConfirm(false);
+    // setShowRevokeAllConfirm(false); // Temporarily disabled since we're not using dialog
     
     if (!provider || !address) {
       console.log("❌ Missing provider or address");
