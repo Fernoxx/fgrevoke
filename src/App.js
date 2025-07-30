@@ -4,7 +4,8 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-// Removed getWalletClient import - using direct provider approach
+import { useAccount } from 'wagmi';
+import { writeContract } from 'wagmi/actions';
 import { wagmiConfig } from './lib/wagmi';
 
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
@@ -1082,6 +1083,9 @@ function App() {
 
   // State for revoke operations
   const [isRevoking, setIsRevoking] = useState(false);
+  
+  // Add wagmi account hook
+  const { connector, address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
 
   // Revoke ALL approvals - Direct contract call
   const handleRevokeAll = async () => {
@@ -1240,18 +1244,47 @@ function App() {
          return;
        }
        
-              // Skip wagmi entirely and use direct provider approach (more reliable in Farcaster)
-       console.log("🚀 All validations passed - using direct provider approach...");
+                     // Use correct wagmi approach with connector
+       console.log("🚀 All validations passed - using correct wagmi approach...");
        
        let tx;
        try {
-         // Skip getWalletClient() entirely - it's causing the connections error
-         throw new Error("Skipping wagmi - using direct provider");
+         // Check wagmi connection first
+         if (!connector || !wagmiConnected) {
+           console.error("🚨 Wallet not connected via wagmi");
+           throw new Error("Wallet not connected via wagmi");
+         }
+
+         console.log("🧠 Wagmi Address:", wagmiAddress);
+         console.log("🧠 Connector:", !!connector);
+         console.log("🧠 Connected:", wagmiConnected);
+
+         const walletClient = await connector.getWalletClient();
+
+         if (!walletClient) {
+           console.error("🚨 Wallet client not ready");
+           throw new Error("Wallet client not ready");
+         }
+
+         console.log("🧠 Wallet Client:", !!walletClient);
+         console.log("🧠 Tokens:", tokenAddresses);
+         console.log("🧠 Spenders:", spenderAddresses);
+
+         tx = await writeContract({
+           account: wagmiAddress,
+           walletClient,
+           abi: revokeABI,
+           address: REVOKE_HELPER_ADDRESS,
+           functionName: 'revokeERC20',
+           args: [tokenAddresses, spenderAddresses],
+         });
+
+         console.log("✅ writeContract call successful:", tx);
        } catch (writeError) {
          console.error("❌ writeContract failed:", writeError);
          console.error("❌ Error name:", writeError.name);
          console.error("❌ Error message:", writeError.message);
-         
+
          // If wagmi writeContract fails, fall back to direct provider call
          console.log("🔄 Falling back to direct provider call...");
          
