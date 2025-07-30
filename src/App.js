@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useReadContract, useWriteContract, useAccount, useConnect } from 'wagmi';
+import { useReadContract } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
 
 
@@ -1105,40 +1105,59 @@ function App() {
 
 
 
-  // Wagmi connection hooks
-  const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
-
-  // Reward Claimer Contract Interactions
+  // Reward Claimer Contract Interactions using same provider as revoke
   const { data: totalClaims } = useReadContract({
     abi: rewardClaimerABI,
     address: rewardClaimerAddress,
     functionName: 'totalClaims',
   });
 
-  const { writeContractAsync } = useWriteContract();
-
   const handleClaim = async () => {
     try {
       setError(null);
-      console.log('🎁 Starting claim process...');
+      console.log('🎁 Starting claim process using existing Farcaster/Coinbase wallet...');
       
-      // Connect wagmi if not connected
-      if (!wagmiConnected) {
-        console.log('🔗 Connecting wagmi...');
-        const connector = connectors.find(c => c.name === 'Injected');
-        if (connector) {
-          await connectAsync({ connector });
-        }
+      if (!provider || !isConnected) {
+        console.log('❌ Wallet not connected properly');
+        setError('Please connect your wallet first');
+        return;
       }
+
+      // Ensure we're on Base chain for the claim
+      const baseChainId = '0x2105'; // Base chain ID in hex
       
-      const tx = await writeContractAsync({
-        abi: rewardClaimerABI,
-        address: rewardClaimerAddress,
-        functionName: 'claimReward',
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' });
+        if (currentChainId !== baseChainId) {
+          console.log('🔄 Switching to Base chain for claim...');
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: baseChainId }],
+          });
+        }
+      } catch (switchError) {
+        console.log('Chain switch error:', switchError);
+      }
+
+      // Encode claimReward() function call
+      const claimFunctionSignature = '0xb88a802f'; // claimReward()
+      
+      const txParams = {
+        to: rewardClaimerAddress,
+        data: claimFunctionSignature,
+        from: address,
+        value: '0x0'
+      };
+
+      console.log('📝 Claim transaction params:', txParams);
+      console.log('📝 Calling claimReward() on Base contract - wallet popup should appear...');
+      
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [txParams]
       });
-      
-      console.log('✅ Claim successful:', tx);
+
+      console.log('✅ Claim transaction submitted successfully:', txHash);
       console.log('💰 User successfully claimed 0.5 USDC from Base contract');
       
       // Mark as claimed in localStorage and show share button
@@ -1148,7 +1167,12 @@ function App() {
       console.log('🔒 Claim button will now be hidden (hasClaimed = true)');
     } catch (error) {
       console.error('❌ Claim failed:', error);
-      setError(`Claim failed: ${error.message}`);
+      
+      if (error.code === 4001) {
+        setError('Transaction cancelled by user');
+      } else {
+        setError(`Claim failed: ${error.message}`);
+      }
     }
   };
 
