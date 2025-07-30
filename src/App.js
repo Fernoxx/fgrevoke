@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useReadContract, useWriteContract } from 'wagmi';
+import { useReadContract, useWriteContract, useAccount, useConnect } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
 
 
@@ -1105,6 +1105,10 @@ function App() {
 
 
 
+  // Wagmi connection hooks
+  const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
+  const { connectAsync, connectors } = useConnect();
+
   // Reward Claimer Contract Interactions
   const { data: totalClaims } = useReadContract({
     abi: rewardClaimerABI,
@@ -1119,6 +1123,15 @@ function App() {
       setError(null);
       console.log('🎁 Starting claim process...');
       
+      // Connect wagmi if not connected
+      if (!wagmiConnected) {
+        console.log('🔗 Connecting wagmi...');
+        const connector = connectors.find(c => c.name === 'Injected');
+        if (connector) {
+          await connectAsync({ connector });
+        }
+      }
+      
       const tx = await writeContractAsync({
         abi: rewardClaimerABI,
         address: rewardClaimerAddress,
@@ -1131,6 +1144,8 @@ function App() {
       // Mark as claimed in localStorage and show share button
       localStorage.setItem('hasClaimed', 'true');
       setShowShare(true);
+      
+      console.log('🔒 Claim button will now be hidden (hasClaimed = true)');
     } catch (error) {
       console.error('❌ Claim failed:', error);
       setError(`Claim failed: ${error.message}`);
