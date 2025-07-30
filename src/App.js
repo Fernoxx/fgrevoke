@@ -1074,9 +1074,14 @@ function App() {
         const looksLikeERC20 = a.symbol && a.symbol.length <= 10;
         const notNFT = a.amount !== '1' || a.symbol?.includes('LP') || a.symbol?.includes('Token');
         
-        // EXTRA STRICT: Only include if amount is a valid number > 0
-        const amountNum = parseFloat(a.amount || '0');
-        const hasValidAmount = !isNaN(amountNum) && amountNum > 0;
+                 // EXTRA STRICT: Only include if amount is a valid number > 0
+         const amountNum = parseFloat(a.amount || '0');
+         const hasValidAmount = !isNaN(amountNum) && amountNum > 0;
+         
+         // DEBUG: Log amount parsing issues
+         if (!hasValidAmount) {
+           console.log(`🔍 Amount parsing issue for ${a.name}: "${a.amount}" → ${amountNum} (isNaN: ${isNaN(amountNum)})`);
+         }
         
         // EXTRA STRICT: Must have valid contract and spender addresses
         const validContract = a.contract && a.contract.startsWith('0x') && a.contract.length === 42;
