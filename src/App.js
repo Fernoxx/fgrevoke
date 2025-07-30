@@ -963,38 +963,61 @@ function App() {
     setShowRevokeConfirm(approval);
   };
 
-  // Individual revoke using wagmi writeContract
+  // RESTORE WORKING INDIVIDUAL REVOKE - Direct ERC20 approve(spender, 0) call
   const handleRevokeApproval = async (approval) => {
     console.log('🎯 handleRevokeApproval called for:', approval.name);
+    console.log('🔌 Provider state:', { hasProvider: !!provider, isConnected, address });
     
+    if (!provider || !isConnected) {
+      console.log('❌ Wallet not connected properly');
+      setError('Please connect your wallet first');
+      return;
+    }
+
     try {
       console.log('🔄 Starting individual revoke for:', approval.name);
-      console.log('📋 Approval details:', { contract: approval.contract, spender: approval.spender });
       
-      // Use wagmi writeContract for individual revoke
-      const tx = await writeContract(wagmiConfig, {
-        address: REVOKE_HELPER_ADDRESS,
-        abi: revokeHelperABI,
-        functionName: 'revokeERC20',
-        args: [[approval.contract], [approval.spender]], // Arrays with single items
-        chainId: 8453 // Base chain
+      // Ensure we're on the right chain
+      const chainConfig = chains.find(c => c.value === selectedChain);
+      const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
+      
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' });
+        if (currentChainId !== expectedChainId) {
+          console.log('🔄 Switching to correct chain...');
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: expectedChainId }],
+          });
+        }
+      } catch (switchError) {
+        console.log('Chain switch error (might be expected):', switchError);
+      }
+
+      // ERC20 approve(spender, 0) call data
+      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
+      
+      const txParams = {
+        to: approval.contract,
+        data: revokeData,
+        from: address,
+        value: '0x0'
+      };
+
+      console.log('📝 Submitting revoke transaction...');
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [txParams]
       });
 
-      console.log('✅ Individual revoke tx sent:', tx);
-      alert(`✅ Revoke submitted for ${approval.name}! Check your wallet.`);
+      console.log('✅ Revoke transaction submitted:', txHash);
       
       // Update UI optimistically
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
 
     } catch (error) {
-      console.error('❌ Individual revoke failed:', error);
-      console.error('❌ Error message:', error.message);
-      
-      if (error.message?.includes('User rejected')) {
-        alert('❌ Transaction rejected by user');
-      } else {
-        alert(`❌ Failed to revoke ${approval.name}: ${error.message}`);
-      }
+      console.error('❌ Revoke failed:', error);
+      setError(`Failed to revoke approval: ${error.message}`);
     }
   };
 
