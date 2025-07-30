@@ -957,18 +957,23 @@ function App() {
 
   // Show confirmation for individual revoke
   const requestRevokeApproval = (approval) => {
+    console.log("🔄 Individual revoke requested for:", approval.name);
     setShowRevokeConfirm(approval);
   };
 
   // PROPER revoke function using the connected provider
   const handleRevokeApproval = async (approval) => {
+    console.log('🎯 handleRevokeApproval called for:', approval.name);
+    console.log('🔌 Provider state:', { hasProvider: !!provider, isConnected, address });
+    
     if (!provider || !isConnected) {
+      console.log('❌ Wallet not connected properly');
       setError('Please connect your wallet first');
       return;
     }
 
     try {
-      console.log('🔄 Revoking approval:', approval.name);
+      console.log('🔄 Starting individual revoke for:', approval.name);
       
       // Ensure we're on the right chain
       const chainConfig = chains.find(c => c.value === selectedChain);
@@ -1045,6 +1050,7 @@ function App() {
     console.log("✅ Showing confirmation dialog");
     // Show custom confirmation instead of window.confirm()
     setShowRevokeAllConfirm(true);
+    console.log("🎯 Dialog state set to TRUE");
   };
 
   const confirmRevokeAll = async () => {
@@ -1122,9 +1128,11 @@ function App() {
   };
 
   const confirmRevokeIndividual = async () => {
+    console.log("🚀 Individual revoke confirmed for:", showRevokeConfirm?.name);
     if (showRevokeConfirm) {
+      const approvalToRevoke = showRevokeConfirm;
       setShowRevokeConfirm(null);
-      await handleRevokeApproval(showRevokeConfirm);
+      await handleRevokeApproval(approvalToRevoke);
     }
   };
 
@@ -1404,9 +1412,22 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
               {/* Custom Revoke All Confirmation Dialog */}
               {showRevokeAllConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center" style={{ zIndex: 9999 }}>
-                  <div className="bg-purple-800 border-2 border-purple-500 rounded-lg p-6 m-4 max-w-md shadow-2xl">
-                    <h3 className="text-xl font-bold text-white mb-3">⚠️ Revoke All Approvals</h3>
+                <div 
+                  className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center" 
+                  style={{ zIndex: 99999 }}
+                  onClick={(e) => {
+                    console.log("🎯 Dialog backdrop clicked");
+                    e.stopPropagation();
+                  }}
+                >
+                  <div 
+                    className="bg-purple-800 border-4 border-yellow-400 rounded-lg p-6 m-4 max-w-md shadow-2xl"
+                    onClick={(e) => {
+                      console.log("🎯 Dialog content clicked");
+                      e.stopPropagation();
+                    }}
+                  >
+                    <h3 className="text-xl font-bold text-yellow-400 mb-3">⚠️ REVOKE ALL APPROVALS</h3>
                     <p className="text-purple-200 mb-4">
                       Are you sure you want to revoke ALL {approvals.length} token approvals? 
                       This will use a single batch transaction via smart contract.
