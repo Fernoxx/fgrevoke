@@ -1005,15 +1005,24 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
-  // Track if user has revoked at least one approval
-  const hasRevokedAtLeastOne = localStorage.getItem('revoked') === 'true';
+  // Track revoke and claim status with localStorage
+  const hasRevoked = localStorage.getItem('hasRevoked') === 'true';
+  const hasClaimedLocally = localStorage.getItem('hasClaimed') === 'true';
+  const [showShare, setShowShare] = useState(false);
+
+  // Initialize showShare state based on localStorage
+  useEffect(() => {
+    if (hasClaimedLocally) {
+      setShowShare(true);
+    }
+  }, [hasClaimedLocally]);
 
   // Mock revoke function (since we're focusing on reward claiming now)
   const requestRevokeApproval = (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
     
     // Mark as revoked in localStorage and remove from UI
-    localStorage.setItem('revoked', 'true');
+    localStorage.setItem('hasRevoked', 'true');
     setApprovals(prev => prev.filter(a => a.id !== approval.id));
     
     console.log('✅ Approval revoked (simulated):', approval.name);
@@ -1026,14 +1035,6 @@ function App() {
 
 
   // Reward Claimer Contract Interactions
-  const { data: hasClaimed } = useReadContract({
-    abi: rewardClaimerABI,
-    address: rewardClaimerAddress,
-    functionName: 'hasClaimed',
-    args: [address],
-    enabled: !!address,
-  });
-
   const { data: totalClaims } = useReadContract({
     abi: rewardClaimerABI,
     address: rewardClaimerAddress,
@@ -1054,6 +1055,11 @@ function App() {
       });
       
       console.log('✅ Claim successful:', tx);
+      
+      // Mark as claimed in localStorage and show share button
+      localStorage.setItem('hasClaimed', 'true');
+      setShowShare(true);
+      
       alert('🎉 Claim successful! You received 0.5 USDC!');
     } catch (error) {
       console.error('❌ Claim failed:', error);
@@ -1450,7 +1456,7 @@ https://fgrevoke.vercel.app`;
               {/* Reward Claimer Section */}
               {isConnected && address && (
                 <div className="mb-6">
-                  {!hasClaimed && totalClaims < 50 && hasRevokedAtLeastOne && (
+                  {hasRevoked && !hasClaimedLocally && totalClaims < 50 && (
                     <div className="bg-gradient-to-r from-green-600 to-blue-600 border border-green-500 rounded-lg p-4 mb-4">
                       <h3 className="text-white font-bold text-lg mb-2">🎁 Claim Your Reward!</h3>
                       <p className="text-green-100 text-sm mb-3">
@@ -1468,7 +1474,7 @@ https://fgrevoke.vercel.app`;
                     </div>
                   )}
 
-                  {hasClaimed && (
+                  {showShare && (
                     <div className="bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-500 rounded-lg p-4 mb-4">
                       <h3 className="text-white font-bold text-lg mb-2">✅ Reward Claimed!</h3>
                       <p className="text-purple-100 text-sm mb-3">
@@ -1486,7 +1492,7 @@ https://fgrevoke.vercel.app`;
                     </div>
                   )}
 
-                  {!hasRevokedAtLeastOne && totalClaims < 50 && (
+                  {!hasRevoked && totalClaims < 50 && (
                     <div className="bg-yellow-900/50 border border-yellow-500 rounded-lg p-4 mb-4">
                       <h3 className="text-yellow-200 font-bold text-lg mb-2">💡 Earn 0.5 USDC</h3>
                       <p className="text-yellow-300 text-sm">
@@ -1495,7 +1501,7 @@ https://fgrevoke.vercel.app`;
                     </div>
                   )}
 
-                  {totalClaims >= 50 && !hasClaimed && (
+                  {totalClaims >= 50 && !hasClaimedLocally && (
                     <div className="bg-gray-700 border border-gray-500 rounded-lg p-4 mb-4">
                       <h3 className="text-gray-200 font-bold text-lg mb-2">🔒 Rewards Ended</h3>
                       <p className="text-gray-300 text-sm">
