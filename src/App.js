@@ -1075,23 +1075,95 @@ function App() {
       console.log('🔄 Starting revoke all with direct provider call...');
       console.log('📍 Contract address:', REVOKE_HELPER_ADDRESS);
       
-      // Get token and spender addresses from approvals
-      const tokenAddresses = approvals.map(approval => approval.contract);
-      const spenderAddresses = approvals.map(approval => approval.spender);
+      // ENHANCED VALIDATION AND FILTERING
+      console.log("🔍 Original approvals:", approvals.length);
+      console.log("🔍 Approval details:", approvals.map(a => ({ 
+        name: a.name, 
+        amount: a.amount, 
+        contract: a.contract?.slice(0,8) + '...', 
+        spender: a.spender?.slice(0,8) + '...',
+        isActive: a.isActive 
+      })));
+      
+      // Filter 1: Only include active approvals with non-zero amounts
+      const nonZeroApprovals = approvals.filter(approval => {
+        // Check if approval is active and has a valid amount
+        const isActive = approval.isActive !== false; // Default to true if not specified
+        const hasAmount = approval.amount && approval.amount !== '0' && approval.amount !== '0.0';
+        
+        if (!isActive) {
+          console.log(`⚠️ Skipping ${approval.name} - not active`);
+          return false;
+        }
+        
+        if (!hasAmount) {
+          console.log(`⚠️ Skipping ${approval.name} - zero or missing amount: ${approval.amount}`);
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log("✅ Non-zero approvals:", nonZeroApprovals.length);
+      
+             // Filter 2: Only include valid ERC20 contract addresses
+       const validApprovals = nonZeroApprovals.filter(approval => {
+         const validContract = approval.contract && approval.contract.startsWith('0x') && approval.contract.length === 42;
+         const validSpender = approval.spender && approval.spender.startsWith('0x') && approval.spender.length === 42;
+         
+         // Additional check: Make sure this looks like an ERC20 approval (has amount field)
+         const hasValidAmount = approval.amount && typeof approval.amount === 'string';
+         
+         // Skip if it looks like an NFT (ERC721) - those usually don't have decimal amounts
+         const looksLikeNFT = approval.amount === '1' && !approval.symbol?.includes('LP') && !approval.symbol?.includes('Token');
+         
+         if (!validContract || !validSpender) {
+           console.log(`⚠️ Skipping ${approval.name} - invalid addresses`);
+           console.log(`   Contract: ${approval.contract}, Spender: ${approval.spender}`);
+           return false;
+         }
+         
+         if (!hasValidAmount) {
+           console.log(`⚠️ Skipping ${approval.name} - invalid amount format: ${approval.amount}`);
+           return false;
+         }
+         
+         if (looksLikeNFT) {
+           console.log(`⚠️ Skipping ${approval.name} - looks like NFT approval (amount=1)`);
+           return false;
+         }
+         
+         return true;
+       });
+      
+      console.log("✅ Valid approvals:", validApprovals.length);
+      
+      if (validApprovals.length === 0) {
+        console.error("❌ No valid approvals to revoke!");
+        console.log('❌ All approvals either have zero allowance or invalid addresses');
+        return;
+      }
+      
+      // Get token and spender addresses from FILTERED approvals
+      const tokenAddresses = validApprovals.map(approval => approval.contract);
+      const spenderAddresses = validApprovals.map(approval => approval.spender);
       
       // ENHANCED LOGGING AS REQUESTED
-      console.log("🧾 Token list:", tokenAddresses);
-      console.log("🧾 Spender list:", spenderAddresses);
+      console.log("🧾 Final token list:", tokenAddresses);
+      console.log("🧾 Final spender list:", spenderAddresses);
+      console.log("🧾 Tokens being revoked:", validApprovals.map(a => a.name));
 
-      // Validation checks
+      // Final validation checks
       if (!tokenAddresses.length || !spenderAddresses.length) {
-        console.error("❌ Empty arrays detected!");
-        throw new Error("No valid approvals found");
+        console.error("❌ Empty arrays detected after filtering!");
+        console.log('❌ No valid approvals to revoke after filtering');
+        return;
       }
 
       if (tokenAddresses.length !== spenderAddresses.length) {
-        console.error("❌ Array length mismatch!");
-        throw new Error('Token and spender arrays length mismatch');
+        console.error("❌ Array length mismatch after filtering!");
+        console.log('❌ Token and spender arrays length mismatch after filtering');
+        return;
       }
 
       // Check if we're on the right chain (Base = 8453)
@@ -1151,8 +1223,8 @@ function App() {
       console.log('✅ Revoke all transaction submitted:', txHash);
       console.log('✅ All approvals revoked successfully!');
       
-      // Clear approvals from UI
-      setApprovals([]);
+      // Clear ONLY the successfully revoked approvals from UI
+      setApprovals(prev => prev.filter(approval => !validApprovals.some(valid => valid.id === approval.id)));
       
     } catch (error) {
       console.error('❌ Revoke all failed:', error);
