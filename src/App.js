@@ -1066,15 +1066,14 @@ function App() {
     
     if (!provider || !address) {
       console.log("❌ Missing provider or address");
-      alert('Please connect your wallet first');
+      console.log('❌ Revoke all failed: Please connect your wallet first');
       return;
     }
 
     try {
       setIsRevoking(true);
-      console.log('🔄 Starting revoke all with contract...');
+      console.log('🔄 Starting revoke all with direct provider call...');
       console.log('📍 Contract address:', REVOKE_HELPER_ADDRESS);
-      console.log('📍 ABI loaded:', !!revokeHelperABI);
       
       // Get token and spender addresses from approvals
       const tokenAddresses = approvals.map(approval => approval.contract);
@@ -1114,45 +1113,59 @@ function App() {
         }
       }
 
-      // Use ethers.js Contract for better transaction handling
-      console.log("🔧 Creating ethers contract instance...");
-      const ethersProvider = new ethers.providers.Web3Provider(provider);
-      const signer = ethersProvider.getSigner();
-      const contract = new ethers.Contract(REVOKE_HELPER_ADDRESS, revokeHelperABI, signer);
+      // Create contract call data manually (same approach as individual revoke)
+      console.log("🔧 Creating contract call data...");
       
-      console.log("📤 Calling contract.revokeERC20...");
-      console.log("📋 Args:", { tokenAddresses, spenderAddresses });
+      // revokeERC20(address[] tokens, address[] spenders) function signature
+      const functionSignature = '0x6b6f5a1e'; // keccak256("revokeERC20(address[],address[])")[:4]
       
-      // Call the contract function directly
-      const tx = await contract.revokeERC20(tokenAddresses, spenderAddresses);
+      // Encode the arrays
+      const encodedTokens = ethers.utils.defaultAbiCoder.encode(['address[]'], [tokenAddresses]);
+      const encodedSpenders = ethers.utils.defaultAbiCoder.encode(['address[]'], [spenderAddresses]);
       
-      console.log("✅ Transaction sent!", tx.hash);
-      console.log("⏳ Waiting for confirmation...");
+      // Remove the first 32 bytes (0x + 64 chars) from each encoded array (offset info)
+      const tokensData = encodedTokens.slice(66);
+      const spendersData = encodedSpenders.slice(66);
       
-      // Wait for transaction confirmation
-      const receipt = await tx.wait();
+      // Calculate offsets
+      const tokensOffset = '0000000000000000000000000000000000000000000000000000000000000040'; // 64 bytes
+      const spendersOffset = (64 + tokensData.length / 2).toString(16).padStart(64, '0');
       
-      console.log("✅ Transaction confirmed!", receipt.transactionHash);
-      console.log("⛽ Gas used:", receipt.gasUsed.toString());
+      const callData = functionSignature + tokensOffset + spendersOffset + tokensData + spendersData;
       
-      alert(`✅ Revoke transaction confirmed! Hash: ${receipt.transactionHash}`);
+      console.log("📋 Call data:", callData);
+      
+      const txParams = {
+        to: REVOKE_HELPER_ADDRESS,
+        data: callData,
+        from: address,
+        value: '0x0'
+      };
+
+      console.log('📝 Submitting revoke all transaction...');
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [txParams]
+      });
+
+      console.log('✅ Revoke all transaction submitted:', txHash);
+      console.log('✅ All approvals revoked successfully!');
       
       // Clear approvals from UI
       setApprovals([]);
       
     } catch (error) {
-      console.error('❌ Revoke failed:', error);
+      console.error('❌ Revoke all failed:', error);
       console.error('❌ Error message:', error.message);
       console.error('❌ Error code:', error.code);
-      console.error('❌ Error reason:', error.reason);
       
       // Handle specific error types
       if (error.code === 4001) {
-        alert('❌ Transaction rejected by user');
+        console.log('❌ Transaction rejected by user');
       } else if (error.code === -32603) {
-        alert('❌ Transaction failed - check gas limits and network');
+        console.log('❌ Transaction failed - check gas limits and network');
       } else {
-        alert(`❌ Revoke failed: ${error.message}`);
+        console.log(`❌ Revoke failed: ${error.message}`);
       }
     } finally {
       setIsRevoking(false);
