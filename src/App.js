@@ -1073,7 +1073,10 @@ function App() {
       const tokenAddresses = approvals.map(approval => approval.contract);
       const spenderAddresses = approvals.map(approval => approval.spender);
       
-      console.log('📋 Revoking approvals:', { 
+      // ENHANCED LOGGING AS REQUESTED
+      console.log("🧾 Token list:", tokenAddresses);
+      console.log("🧾 Spender list:", spenderAddresses);
+      console.log('📋 Detailed approval data:', { 
         count: approvals.length, 
         tokenAddresses: tokenAddresses.slice(0, 3), 
         spenderAddresses: spenderAddresses.slice(0, 3),
@@ -1081,22 +1084,49 @@ function App() {
         allSpenders: spenderAddresses
       });
 
+      // Validation checks
       if (tokenAddresses.length === 0 || spenderAddresses.length === 0) {
-        throw new Error('No valid approvals to revoke');
+        console.error("❌ Empty arrays detected!");
+        throw new Error('No valid approvals to revoke - arrays are empty');
       }
 
       if (tokenAddresses.length !== spenderAddresses.length) {
+        console.error("❌ Array length mismatch!", {
+          tokens: tokenAddresses.length,
+          spenders: spenderAddresses.length
+        });
         throw new Error('Token and spender arrays length mismatch');
+      }
+
+      // Check if we're on the right chain (Base = 8453)
+      console.log("🔗 Checking current chain...");
+      const currentChainId = await provider.request({ method: 'eth_chainId' });
+      console.log("🔗 Current chain ID:", currentChainId);
+      
+      if (currentChainId !== '0x2105') { // Base chain ID in hex
+        console.log("⚠️ Wrong chain, switching to Base...");
+        try {
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x2105' }], // Base
+          });
+          console.log("✅ Switched to Base chain");
+        } catch (switchError) {
+          console.error("❌ Chain switch failed:", switchError);
+          throw new Error('Please switch to Base network to use revoke contract');
+        }
       }
 
       // Create contract call data
       console.log('🔧 Creating contract interface...');
       const contractInterface = new ethers.utils.Interface(revokeHelperABI);
+      
+      console.log("📤 Encoding function call...");
       const data = contractInterface.encodeFunctionData('revokeERC20', [tokenAddresses, spenderAddresses]);
+      console.log('📝 Encoded function data length:', data.length);
+      console.log('📝 Encoded function data preview:', data.slice(0, 50) + '...');
       
-      console.log('📝 Encoded function data:', data.slice(0, 50) + '...');
-      
-      // Submit transaction
+      // Submit transaction with enhanced logging
       const txParams = {
         to: REVOKE_HELPER_ADDRESS,
         data: data,
@@ -1104,15 +1134,16 @@ function App() {
         value: '0x0'
       };
 
-      console.log('📝 Transaction params:', txParams);
-      console.log('📝 Submitting transaction to contract:', REVOKE_HELPER_ADDRESS);
+      console.log('📝 Final transaction params:', txParams);
+      console.log("📤 Sending revoke tx...");
       
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [txParams]
       });
 
-      console.log('✅ Transaction submitted:', txHash);
+      console.log('✅ Transaction sent!', txHash);
+      console.log("✅ Transaction confirmed!");
       alert(`✅ Revoke transaction submitted! Hash: ${txHash}`);
       
       // Clear approvals from UI
@@ -1120,6 +1151,8 @@ function App() {
       
     } catch (error) {
       console.error('❌ Revoke failed:', error);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error code:', error.code);
       console.error('❌ Error stack:', error.stack);
       alert(`❌ Revoke failed: ${error.message}`);
     } finally {
