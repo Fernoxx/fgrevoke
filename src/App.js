@@ -4,10 +4,22 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { writeContract } from '@wagmi/core';
+import { usePrivy, useLogin, useLogout } from '@privy-io/react-auth';
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { wagmiConfig } from './lib/wagmi';
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
 
 function App() {
+  // Privy hooks for enhanced wallet connection
+  const { ready, authenticated, user } = usePrivy();
+  const { login } = useLogin();
+  const { logout } = useLogout();
+  
+  // Wagmi hooks for wallet state
+  const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
+
   const [selectedChain, setSelectedChain] = useState('ethereum');
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -568,18 +580,14 @@ function App() {
     initializeSDK();
   }, []);
 
-  // Enhanced Wallet Connection - handles both verified addresses and manual connections
+  // Enhanced Wallet Connection with Privy + Farcaster + Coinbase Wallet
   const connectWallet = async () => {
-    console.log('🔌 Starting wallet connection...');
+    console.log('🔌 Starting enhanced wallet connection...');
     setIsConnecting(true);
     setError(null);
 
     try {
-      if (!sdkReady) {
-        throw new Error('SDK not ready. Please wait for initialization.');
-      }
-
-      // If user already has verified addresses, use those first
+      // 1. If user already has verified Farcaster addresses, use those first
       if (userAddresses.length > 0) {
         console.log('🔑 Using verified Farcaster addresses:', userAddresses);
         const primaryAddress = userAddresses[0].toLowerCase();
@@ -589,14 +597,53 @@ function App() {
         return;
       }
 
-      // Try to get wallet provider (miniapp SDK first, then fallback to web3)
-      console.log('🌐 Getting Ethereum provider...');
+      // 2. Try Privy authentication (includes Farcaster + Coinbase Wallet)
+      if (ready && !authenticated) {
+        console.log('🎯 Opening Privy wallet selector...');
+        await login();
+        return; // Privy will handle the rest via useEffect
+      }
+
+      // 3. If Privy is authenticated, sync with wagmi
+      if (authenticated && user) {
+        console.log('✅ Privy authenticated, syncing with wagmi...');
+        
+        // If wagmi is not connected, try to connect with available connectors
+        if (!wagmiConnected && connectors.length > 0) {
+          console.log('🔗 Connecting wagmi with available connectors...');
+          
+          // Prefer Coinbase Wallet for Base app users
+          const coinbaseConnector = connectors.find(c => c.name.toLowerCase().includes('coinbase'));
+          const connector = coinbaseConnector || connectors[0];
+          
+          try {
+            await connect({ connector });
+          } catch (connectError) {
+            console.log('⚠️ Wagmi connect failed, trying fallback...', connectError);
+          }
+        }
+
+        // Use wagmi address if available, otherwise fallback to Privy
+        const finalAddress = wagmiAddress || user.wallet?.address;
+        if (finalAddress) {
+          setAddress(finalAddress.toLowerCase());
+          setIsConnected(true);
+          console.log('✅ Connected via Privy/Wagmi:', finalAddress);
+        }
+        
+        return;
+      }
+
+      // 4. Fallback to traditional connection (SDK + window.ethereum)
+      console.log('🌐 Fallback to traditional wallet connection...');
       let ethProvider = null;
       
       try {
         // Try miniapp SDK first (for Farcaster/Base App)
-        ethProvider = await sdk.wallet.getEthereumProvider();
-        console.log('✅ Got provider from miniapp SDK');
+        if (sdkReady) {
+          ethProvider = await sdk.wallet.getEthereumProvider();
+          console.log('✅ Got provider from miniapp SDK');
+        }
       } catch (sdkError) {
         console.log('⚠️ Miniapp provider failed, trying web3 fallback...');
         
@@ -604,13 +651,11 @@ function App() {
         if (typeof window !== 'undefined' && window.ethereum) {
           ethProvider = window.ethereum;
           console.log('✅ Got provider from window.ethereum');
-        } else {
-          throw new Error('No wallet available. Please install MetaMask or use this app in Farcaster/Base App.');
         }
       }
       
       if (!ethProvider) {
-        throw new Error('No wallet provider available. Please ensure you have verified addresses in your Farcaster profile or connect a wallet.');
+        throw new Error('No wallet available. Please use Privy connection or install MetaMask.');
       }
 
       console.log('✅ Provider obtained, requesting accounts...');
@@ -626,7 +671,7 @@ function App() {
       }
 
       const walletAddress = accounts[0].toLowerCase();
-      console.log('👛 Manual wallet connected:', walletAddress);
+      console.log('👛 Fallback wallet connected:', walletAddress);
 
       // Get current chain
       const chainId = await ethProvider.request({ method: 'eth_chainId' });
@@ -644,7 +689,7 @@ function App() {
       setAddress(walletAddress);
       setIsConnected(true);
 
-      console.log('🎉 Manual wallet connection successful! Ready to fetch real data...');
+      console.log('🎉 Fallback wallet connection successful!');
 
     } catch (error) {
       console.error('❌ Wallet connection failed:', error);
@@ -653,6 +698,39 @@ function App() {
       setIsConnecting(false);
     }
   };
+
+  // Sync Privy authentication with our state
+  useEffect(() => {
+    if (ready) {
+      console.log('🔄 Privy ready state changed:', { authenticated, user: !!user });
+      
+      if (authenticated && user) {
+        // User is authenticated via Privy
+        const privyAddress = wagmiAddress || user.wallet?.address;
+        if (privyAddress && privyAddress !== address) {
+          console.log('✅ Syncing Privy address:', privyAddress);
+          setAddress(privyAddress.toLowerCase());
+          setIsConnected(true);
+        }
+        
+        // If user has Farcaster data, update current user
+        if (user.farcaster) {
+          setCurrentUser({
+            username: user.farcaster.username || '',
+            displayName: user.farcaster.displayName || '',
+            pfpUrl: user.farcaster.pfpUrl || '',
+            fid: user.farcaster.fid
+          });
+        }
+      } else if (!authenticated && isConnected) {
+        // User logged out from Privy
+        console.log('🔌 Privy logged out, clearing state...');
+        setAddress(null);
+        setIsConnected(false);
+        setCurrentUser(null);
+      }
+    }
+  }, [ready, authenticated, user, wagmiAddress]);
 
   // Listen for account changes
   useEffect(() => {
@@ -1178,7 +1256,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
-  const disconnect = () => {
+  const disconnect = async () => {
+    console.log('🔌 Starting enhanced disconnect...');
+    
+    // Clear local state
     setAddress(null);
     setIsConnected(false);
     setApprovals([]);
@@ -1194,9 +1275,29 @@ Secure yours too: https://fgrevoke.vercel.app`;
       lastActivity: null
     });
     
+    // Disconnect from wagmi if connected
+    if (wagmiConnected) {
+      try {
+        await wagmiDisconnect();
+        console.log('✅ Wagmi disconnected');
+      } catch (error) {
+        console.log('⚠️ Wagmi disconnect error:', error);
+      }
+    }
+    
+    // Logout from Privy if authenticated  
+    if (authenticated) {
+      try {
+        await logout();
+        console.log('✅ Privy logged out');
+      } catch (error) {
+        console.log('⚠️ Privy logout error:', error);
+      }
+    }
+    
     // Note: We keep currentUser and userAddresses as they come from Farcaster profile
     // and should persist across wallet connections/disconnections
-    console.log('🔌 Disconnected wallet but kept Farcaster user profile data');
+    console.log('🔌 Enhanced disconnect completed - kept Farcaster profile data');
   };
 
   return (
@@ -1288,15 +1389,29 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={connectWallet}
-                  disabled={isConnecting || !sdkReady}
-                  className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                >
-                  <Wallet className="w-5 h-5 mr-2" />
-                  {isConnecting ? 'Connecting...' : 
-                   userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}
-                </button>
+                <>
+                  <button
+                    onClick={connectWallet}
+                    disabled={isConnecting || (!ready && !sdkReady)}
+                    className="flex items-center justify-center px-6 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                  >
+                    <Wallet className="w-5 h-5 mr-2" />
+                    {isConnecting ? 'Connecting...' : 
+                     authenticated ? 'Sync Wallet' :
+                     userAddresses.length > 0 ? 'Use Verified Address' : 
+                     ready ? 'Connect with Privy' : 'Connect Wallet'}
+                  </button>
+                  
+                  {/* Privy Status Indicator */}
+                  {ready && !isConnected && (
+                    <div className="mt-2 text-sm text-purple-300 text-center">
+                      {authenticated ? 
+                        '✅ Privy connected - Click to sync wallet' : 
+                        '🎯 Privy ready - Supports Farcaster & Coinbase Wallet'
+                      }
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
