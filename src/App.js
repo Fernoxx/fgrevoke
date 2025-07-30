@@ -4,7 +4,7 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-import { writeContract } from '@wagmi/core';
+import { writeContract, getWalletClient } from '@wagmi/core';
 import { wagmiConfig } from './lib/wagmi';
 
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
@@ -1187,17 +1187,25 @@ function App() {
          return;
        }
        
-              // Use writeContract with config as first parameter (as requested)
-       console.log("🚀 All validations passed - calling writeContract with config...");
+              // Use writeContract with walletClient (as requested - THE CORRECT WAY)
+       console.log("🚀 All validations passed - getting wallet client with signer...");
        
        let tx;
        try {
-         tx = await writeContract(wagmiConfig, {
+         const walletClient = await getWalletClient(); // ✅ signer included
+         console.log("🔍 Wallet client obtained:", !!walletClient);
+         console.log("🔍 Wallet client account:", walletClient?.account?.address);
+         
+         if (!walletClient) {
+           throw new Error("No wallet client available");
+         }
+         
+         tx = await writeContract({
            address: REVOKE_HELPER_ADDRESS,
            abi: revokeABI,
            functionName: 'revokeERC20',
            args: [tokenAddresses, spenderAddresses],
-           account: address, // connected user wallet
+           account: walletClient.account.address, // ✅ signer account
          });
          
          console.log("✅ writeContract call successful:", tx);
