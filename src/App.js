@@ -4,7 +4,7 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-import { writeContract, getWalletClient } from '@wagmi/core';
+import { writeContract } from '@wagmi/core';
 import { wagmiConfig } from './lib/wagmi';
 
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
@@ -1187,28 +1187,56 @@ function App() {
          return;
        }
        
-       // Get wallet client and use wagmiConfig (as requested)
-       console.log("🔧 Getting wallet client...");
-       const walletClient = await getWalletClient(wagmiConfig);
-       console.log("🔍 Wallet client:", !!walletClient);
-       console.log("🔍 Wallet address:", walletClient?.account?.address);
+              // Use writeContract with config as first parameter (as requested)
+       console.log("🚀 All validations passed - calling writeContract with config...");
        
-       if (!walletClient) {
-         console.error("❌ No wallet client available");
-         throw new Error("Wallet not connected properly");
-       }
-       
-       console.log("🚀 All validations passed - calling writeContract with wagmiConfig...");
-       const tx = await writeContract(wagmiConfig, {
-         address: REVOKE_HELPER_ADDRESS,
-         abi: revokeABI,
-         functionName: 'revokeERC20',
-         args: [tokenAddresses, spenderAddresses],
-         account: address, // connected user wallet
-       });
+       let tx;
+       try {
+         tx = await writeContract(wagmiConfig, {
+           address: REVOKE_HELPER_ADDRESS,
+           abi: revokeABI,
+           functionName: 'revokeERC20',
+           args: [tokenAddresses, spenderAddresses],
+           account: address, // connected user wallet
+         });
+         
+         console.log("✅ writeContract call successful:", tx);
+       } catch (writeError) {
+         console.error("❌ writeContract failed:", writeError);
+         console.error("❌ Error name:", writeError.name);
+         console.error("❌ Error message:", writeError.message);
+         
+         // If wagmi writeContract fails, fall back to direct provider call
+         console.log("🔄 Falling back to direct provider call...");
+         
+         // Create contract call data manually
+         const functionSignature = '0x6b6f5a1e'; // revokeERC20(address[],address[])
+         const encodedTokens = ethers.utils.defaultAbiCoder.encode(['address[]'], [tokenAddresses]);
+         const encodedSpenders = ethers.utils.defaultAbiCoder.encode(['address[]'], [spenderAddresses]);
+         
+         const tokensData = encodedTokens.slice(66);
+         const spendersData = encodedSpenders.slice(66);
+         const tokensOffset = '0000000000000000000000000000000000000000000000000000000000000040';
+         const spendersOffset = (64 + tokensData.length / 2).toString(16).padStart(64, '0');
+         const callData = functionSignature + tokensOffset + spendersOffset + tokensData + spendersData;
 
-      console.log("✅ Revoke submitted:", tx);
-      console.log('✅ Revoke submitted');
+         const txParams = {
+           to: REVOKE_HELPER_ADDRESS,
+           data: callData,
+           from: address,
+           value: '0x0'
+         };
+
+         tx = await provider.request({
+           method: 'eth_sendTransaction',
+           params: [txParams]
+         });
+         
+         console.log("✅ Fallback transaction successful:", tx);
+       }
+
+       console.log("✅ Revoke submitted:", tx);
+       console.log('✅ Revoke submitted');
       
              // Clear revoked approvals from UI
        setApprovals(prev => prev.filter(approval => !validApprovals.some(revoked => revoked.id === approval.id)));
