@@ -498,65 +498,68 @@ function App() {
       console.log('🚀 Initializing Farcaster SDK...');
       
       try {
-        // Check if we're in a miniapp context
+        // Check if we're in a miniapp context (Farcaster or Base App)
         const isInMiniApp = await sdk.isInMiniApp();
         console.log('📱 Is in MiniApp:', isInMiniApp);
         
-        if (!isInMiniApp) {
-          console.log('⚠️ Not running in Farcaster miniapp');
-          setError('This app must be opened in Farcaster');
-          return;
-        }
+        if (isInMiniApp) {
+          console.log('✅ Running in miniapp environment (Farcaster/Base App)');
+          
+          // Get context data with real user information
+          const contextData = await sdk.context;
+          console.log('📊 Full Context data:', contextData);
+          setContext(contextData);
 
-        // Get context data with real user information
-        const contextData = await sdk.context;
-        console.log('📊 Full Context data:', contextData);
-        setContext(contextData);
-
-        // Extract Real Farcaster User Data
-        if (contextData?.user) {
-          console.log('👤 Real Farcaster user found:', contextData.user);
-          
-          const realUserData = {
-            fid: contextData.user.fid,                    // Real FID (e.g., 242597)
-            username: contextData.user.username,          // Real username (e.g., "ferno")  
-            displayName: contextData.user.displayName,    // Real display name
-            pfpUrl: contextData.user.pfpUrl,             // Profile picture URL
-            bio: contextData.user.bio,                   // User bio
-            followerCount: contextData.user.followerCount,
-            followingCount: contextData.user.followingCount
-          };
-          
-          console.log('🎯 Extracted real user data:', realUserData);
-          setCurrentUser(realUserData);
-          
-          // Get user's verified addresses from Farcaster
-          if (contextData.user.verifiedAddresses && contextData.user.verifiedAddresses.length > 0) {
-            console.log('🔑 Found verified addresses:', contextData.user.verifiedAddresses);
-            setUserAddresses(contextData.user.verifiedAddresses);
+          // Extract Real Farcaster User Data
+          if (contextData?.user) {
+            console.log('👤 Real Farcaster user found:', contextData.user);
             
-            // Set the first verified address as primary
-            const primaryAddress = contextData.user.verifiedAddresses[0];
-            setAddress(primaryAddress.toLowerCase());
-            setIsConnected(true);
-            console.log('✅ Auto-connected with verified address:', primaryAddress);
+            const realUserData = {
+              fid: contextData.user.fid,                    // Real FID (e.g., 242597)
+              username: contextData.user.username,          // Real username (e.g., "ferno")  
+              displayName: contextData.user.displayName,    // Real display name
+              pfpUrl: contextData.user.pfpUrl,             // Profile picture URL
+              bio: contextData.user.bio,                   // User bio
+              followerCount: contextData.user.followerCount,
+              followingCount: contextData.user.followingCount
+            };
+            
+            console.log('🎯 Extracted real user data:', realUserData);
+            setCurrentUser(realUserData);
+            
+            // Get user's verified addresses from Farcaster
+            if (contextData.user.verifiedAddresses && contextData.user.verifiedAddresses.length > 0) {
+              console.log('🔑 Found verified addresses:', contextData.user.verifiedAddresses);
+              setUserAddresses(contextData.user.verifiedAddresses);
+              
+              // Set the first verified address as primary
+              const primaryAddress = contextData.user.verifiedAddresses[0];
+              setAddress(primaryAddress.toLowerCase());
+              setIsConnected(true);
+              console.log('✅ Auto-connected with verified address:', primaryAddress);
+            } else {
+              console.log('⚠️ No verified addresses found for user, will need wallet connection');
+            }
           } else {
-            console.log('⚠️ No verified addresses found for user, will need wallet connection');
+            console.log('⚠️ No user data in context');
           }
-        } else {
-          console.log('⚠️ No user data in context');
-        }
 
-        // CRITICAL: Call ready() to hide splash screen
-        console.log('📞 Calling sdk.actions.ready()...');
-        await sdk.actions.ready();
-        console.log('✅ SDK ready called successfully!');
+          // CRITICAL: Call ready() to hide splash screen in miniapp
+          console.log('📞 Calling sdk.actions.ready()...');
+          await sdk.actions.ready();
+          console.log('✅ SDK ready called successfully!');
+        } else {
+          console.log('🌐 Running in web browser (not miniapp)');
+          // For web browser usage, just set SDK as ready without miniapp features
+        }
         
         setSdkReady(true);
         
       } catch (error) {
         console.error('❌ SDK initialization failed:', error);
-        setError(`Failed to initialize: ${error.message}`);
+        // Don't show error for web usage, just log it
+        console.log('🌐 Continuing with web-only mode');
+        setSdkReady(true);
       }
     };
 
@@ -584,12 +587,28 @@ function App() {
         return;
       }
 
-      // Otherwise, try to get wallet provider for manual connection
-      console.log('🌐 Getting Ethereum provider for manual connection...');
-      const ethProvider = await sdk.wallet.getEthereumProvider();
+      // Try to get wallet provider (miniapp SDK first, then fallback to web3)
+      console.log('🌐 Getting Ethereum provider...');
+      let ethProvider = null;
+      
+      try {
+        // Try miniapp SDK first (for Farcaster/Base App)
+        ethProvider = await sdk.wallet.getEthereumProvider();
+        console.log('✅ Got provider from miniapp SDK');
+      } catch (sdkError) {
+        console.log('⚠️ Miniapp provider failed, trying web3 fallback...');
+        
+        // Fallback to window.ethereum for web browsers
+        if (typeof window !== 'undefined' && window.ethereum) {
+          ethProvider = window.ethereum;
+          console.log('✅ Got provider from window.ethereum');
+        } else {
+          throw new Error('No wallet available. Please install MetaMask or use this app in Farcaster/Base App.');
+        }
+      }
       
       if (!ethProvider) {
-        throw new Error('No wallet available. Please ensure you have verified addresses in your Farcaster profile or connect a wallet.');
+        throw new Error('No wallet provider available. Please ensure you have verified addresses in your Farcaster profile or connect a wallet.');
       }
 
       console.log('✅ Provider obtained, requesting accounts...');
@@ -1309,10 +1328,13 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       </div>
                     </div>
                   ) : (
-                    !isConnected && userAddresses.length === 0 && (
-                      <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-3 mb-4">
-                        <p className="text-yellow-300 text-sm">
-                          🔗 No verified addresses found. You can connect a wallet manually.
+                    !isConnected && (
+                      <div className="bg-blue-600/20 border border-blue-500 rounded-lg p-3 mb-4">
+                        <p className="text-blue-200 text-sm">
+                          {userAddresses.length > 0 
+                            ? '🔗 Ready to connect with your verified Farcaster addresses'
+                            : '🔗 Connect your wallet to view token approvals and activity'
+                          }
                         </p>
                       </div>
                     )

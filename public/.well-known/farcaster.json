@@ -1,4 +1,28 @@
 {
+  "accountAssociation": {
+    "header": "eyJmaWQiOjgxODAyNi...",
+    "payload": "eyJkb21haW4iOiJmZ3Jldm9rZS52ZXJjZWwuYXBwIn0=",
+    "signature": "MHhmOGQ1YzQyMmU3ZTZlMWNhMzU1..."
+  },
+  "frame": {
+    "version": "1",
+    "name": "FarGuard - Token Security Tool",
+    "subtitle": "Protect Your Wallet from Risky Approvals",
+    "description": "FarGuard helps you find and revoke all your ERC-20/NFT approvals safely. View real token approvals, analyze risks, and revoke dangerous permissions with a single transaction. Works across Ethereum, Base, and Arbitrum.",
+    "iconUrl": "https://fgrevoke.vercel.app/farguard-logo.png",
+    "homeUrl": "https://fgrevoke.vercel.app",
+    "splashImageUrl": "https://fgrevoke.vercel.app/farguard-logo.png",
+    "splashBackgroundColor": "#1e1b4b",
+    "heroImageUrl": "https://fgrevoke.vercel.app/og-image.png",
+    "tagline": "Secure your wallet from risky token approvals",
+    "screenshotUrls": [
+      "https://fgrevoke.vercel.app/screenshot-1.png",
+      "https://fgrevoke.vercel.app/screenshot-2.png"
+    ],
+    "primaryCategory": "finance",
+    "tags": ["security", "defi", "wallet", "approvals", "revoke"],
+    "webhookUrl": "https://fgrevoke.vercel.app/api/webhook"
+  },
   "miniapp": {
     "version": "1",
     "name": "FarGuard",
