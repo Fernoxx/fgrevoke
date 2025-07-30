@@ -960,10 +960,11 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
-  // Show confirmation for individual revoke
+  // Direct individual revoke (no confirmation dialog)
   const requestRevokeApproval = (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
-    setShowRevokeConfirm(approval);
+    console.log("🚀 Calling individual revoke directly...");
+    handleRevokeApproval(approval);
   };
 
   // RESTORE WORKING INDIVIDUAL REVOKE - Direct ERC20 approve(spender, 0) call
@@ -1025,7 +1026,6 @@ function App() {
   };
 
   // State for revoke operations
-  const [showRevokeConfirm, setShowRevokeConfirm] = useState(null); // Store approval to revoke
   const [isRevoking, setIsRevoking] = useState(false);
 
   // Revoke ALL approvals - Direct contract call
@@ -1172,14 +1172,7 @@ function App() {
     }
   };
 
-  const confirmRevokeIndividual = async () => {
-    console.log("🚀 Individual revoke confirmed for:", showRevokeConfirm?.name);
-    if (showRevokeConfirm) {
-      const approvalToRevoke = showRevokeConfirm;
-      setShowRevokeConfirm(null);
-      await handleRevokeApproval(approvalToRevoke);
-    }
-  };
+
 
   // Share to Farcaster using proper SDK method
   const handleShare = async () => {
@@ -1466,35 +1459,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
 
 
-              {/* Individual Revoke Confirmation Dialog */}
-              {showRevokeConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-purple-800 border border-purple-600 rounded-lg p-6 m-4 max-w-md">
-                    <h3 className="text-xl font-bold text-white mb-3">⚠️ Revoke Approval</h3>
-                    <p className="text-purple-200 mb-4">
-                      Are you sure you want to revoke approval for <strong>{showRevokeConfirm.name}</strong> ({showRevokeConfirm.symbol}) 
-                      to <strong>{showRevokeConfirm.spenderName}</strong>?
-                    </p>
-                    <p className="text-purple-300 text-sm mb-4">
-                      This will require one transaction confirmation.
-                    </p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setShowRevokeConfirm(null)}
-                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={confirmRevokeIndividual}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors"
-                      >
-                        Revoke
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
 
 
