@@ -1475,13 +1475,13 @@ https://fgrevoke.vercel.app`;
                         You've successfully claimed 0.5 USDC! Share your success:
                       </p>
                       <a
-                        href={`https://warpcast.com/~/compose?text=${encodeURIComponent('🎉 Just claimed 0.5 USDC for securing my wallet with FarGuard! https://fgrevoke.vercel.app')}`}
+                        href={`https://warpcast.com/~/compose?text=${encodeURIComponent('Claimed 0.5 USDC for just securing my wallet https://fgrevoke.vercel.app')}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition-colors"
                       >
                         <Share2 className="w-4 h-4" />
-                        Share on Farcaster
+                        Share
                       </a>
                     </div>
                   )}
