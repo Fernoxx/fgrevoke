@@ -943,13 +943,27 @@ function App() {
     }
   }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
 
-  // CRITICAL: Call sdk.actions.ready() immediately when component mounts (official docs pattern)
+  // CRITICAL: Call sdk.actions.ready() after app is fully loaded (official docs pattern)
   useEffect(() => {
-    console.log('📞 Calling sdk.actions.ready() after app is ready...');
-    sdk.actions.ready();
-    console.log('✅ SDK ready called successfully!');
-    setReadyCallStatus('success');
-  }, []);
+    const callReady = async () => {
+      // Only call ready() when key UI states are loaded
+      if (sdkReady && (isConnected || !sdk)) {
+        try {
+          if (sdk && typeof sdk.actions?.ready === 'function') {
+            console.log('📞 Calling sdk.actions.ready() after app is ready...');
+            await sdk.actions.ready();
+            console.log('✅ SDK ready called successfully!');
+            setReadyCallStatus('success');
+          }
+        } catch (error) {
+          console.error('❌ Failed to call sdk.actions.ready():', error);
+          setReadyCallStatus('error');
+        }
+      }
+    };
+
+    callReady();
+  }, [sdkReady, isConnected]);
 
   // Helper functions for token data (using Alchemy)
   const checkCurrentAllowance = async (tokenContract, owner, spender) => {

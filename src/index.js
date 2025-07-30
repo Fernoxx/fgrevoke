@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import App from './App'
 
-console.log('🔧 Using direct SDK import with proper ready() call');
+console.log('🔧 Using simple setup - Farcaster SDK + Direct wallet connection');
 
 ReactDOM.render(
   <React.StrictMode>
