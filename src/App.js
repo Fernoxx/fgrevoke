@@ -1177,7 +1177,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet — try it here: https://fgrevoke.vercel.app");
+    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app");
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
