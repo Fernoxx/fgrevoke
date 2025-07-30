@@ -4,16 +4,17 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { writeContract } from '@wagmi/core';
-import { usePrivy, useLogin, useLogout } from '@privy-io/react-auth';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { wagmiConfig } from './lib/wagmi';
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
 
 function App() {
-  // Privy hooks for enhanced wallet connection
-  const { ready, authenticated, user } = usePrivy();
-  const { login } = useLogin();
-  const { logout } = useLogout();
+  // Simplified wallet connection (without Privy for now)
+  const ready = true; // Always ready for basic wagmi
+  const authenticated = false; // Not using Privy auth for now
+  const user = null;
+  const login = () => console.log('💡 Privy not configured - using basic wallet connection');
+  const logout = () => console.log('💡 Privy not configured - using basic disconnect');
   
   // Wagmi hooks for wallet state
   const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
@@ -1397,18 +1398,13 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   >
                     <Wallet className="w-5 h-5 mr-2" />
                     {isConnecting ? 'Connecting...' : 
-                     authenticated ? 'Sync Wallet' :
-                     userAddresses.length > 0 ? 'Use Verified Address' : 
-                     ready ? 'Connect with Privy' : 'Connect Wallet'}
+                     userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}
                   </button>
                   
-                  {/* Privy Status Indicator */}
-                  {ready && !isConnected && (
+                  {/* Connection Status */}
+                  {!isConnected && (
                     <div className="mt-2 text-sm text-purple-300 text-center">
-                      {authenticated ? 
-                        '✅ Privy connected - Click to sync wallet' : 
-                        '🎯 Privy ready - Supports Farcaster & Coinbase Wallet'
-                      }
+                      🔗 Enhanced wagmi + Coinbase Wallet support
                     </div>
                   )}
                 </>

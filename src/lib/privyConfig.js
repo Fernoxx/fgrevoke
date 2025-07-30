@@ -1,19 +1,16 @@
+// Temporary: Disable Privy until proper API keys are obtained
 export const privyConfig = {
-  appId: 'clxxx-app-id-replace-me', // Replace with your actual Privy App ID
-  loginMethods: ['wallet', 'farcaster'], // Enable wallet and Farcaster login
+  // NOTE: You need to:
+  // 1. Sign up at https://privy.io
+  // 2. Create an app and get your App ID
+  // 3. Replace 'DISABLED-GET-REAL-PRIVY-APP-ID' with your actual App ID
+  appId: process.env.REACT_APP_PRIVY_APP_ID || 'DISABLED-GET-REAL-PRIVY-APP-ID',
+  loginMethods: ['wallet'], // Simplified for now
   embeddedWallets: {
-    requireUserPassword: false,
-    createOnLogin: 'users-without-wallets'
+    requireUserPassword: false
   },
   appearance: {
     theme: 'dark',
-    showWalletLoginFirst: true,
-    walletList: ['coinbase_wallet', 'metamask', 'wallet_connect'],
-    accentColor: '#8B5CF6',
-    logo: 'https://your-logo-url.com/logo.png' // Optional: Add your logo
-  },
-  farcaster: {
-    redirectUrl: window.location.origin // For Farcaster auth redirects
-  },
-  walletConnectCloudProjectId: 'your-walletconnect-project-id' // Optional: for WalletConnect
+    showWalletLoginFirst: true
+  }
 };
