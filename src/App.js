@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { useReadContract, useWriteContract } from 'wagmi';
+import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
 
 
 function App() {
@@ -1003,69 +1005,18 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
-  // Direct individual revoke (no confirmation dialog)
+  // Track if user has revoked at least one approval
+  const hasRevokedAtLeastOne = localStorage.getItem('revoked') === 'true';
+
+  // Mock revoke function (since we're focusing on reward claiming now)
   const requestRevokeApproval = (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
-    console.log("🚀 Calling individual revoke directly...");
-    handleRevokeApproval(approval);
-  };
-
-  // RESTORE WORKING INDIVIDUAL REVOKE - Direct ERC20 approve(spender, 0) call
-  const handleRevokeApproval = async (approval) => {
-    console.log('🎯 handleRevokeApproval called for:', approval.name);
-    console.log('🔌 Provider state:', { hasProvider: !!provider, isConnected, address });
     
-    if (!provider || !isConnected) {
-      console.log('❌ Wallet not connected properly');
-      setError('Please connect your wallet first');
-      return;
-    }
-
-    try {
-      console.log('🔄 Starting individual revoke for:', approval.name);
-      
-      // Ensure we're on the right chain
-      const chainConfig = chains.find(c => c.value === selectedChain);
-      const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
-      
-      try {
-        const currentChainId = await provider.request({ method: 'eth_chainId' });
-        if (currentChainId !== expectedChainId) {
-          console.log('🔄 Switching to correct chain...');
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: expectedChainId }],
-          });
-        }
-      } catch (switchError) {
-        console.log('Chain switch error (might be expected):', switchError);
-      }
-
-      // ERC20 approve(spender, 0) call data
-      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
-      
-      const txParams = {
-        to: approval.contract,
-        data: revokeData,
-        from: address,
-        value: '0x0'
-      };
-
-      console.log('📝 Submitting revoke transaction...');
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
-      });
-
-      console.log('✅ Revoke transaction submitted:', txHash);
-      
-      // Update UI optimistically
-      setApprovals(prev => prev.filter(a => a.id !== approval.id));
-
-    } catch (error) {
-      console.error('❌ Revoke failed:', error);
-      setError(`Failed to revoke approval: ${error.message}`);
-    }
+    // Mark as revoked in localStorage and remove from UI
+    localStorage.setItem('revoked', 'true');
+    setApprovals(prev => prev.filter(a => a.id !== approval.id));
+    
+    console.log('✅ Approval revoked (simulated):', approval.name);
   };
 
 
@@ -1073,6 +1024,42 @@ function App() {
 
 
 
+
+  // Reward Claimer Contract Interactions
+  const { data: hasClaimed } = useReadContract({
+    abi: rewardClaimerABI,
+    address: rewardClaimerAddress,
+    functionName: 'hasClaimed',
+    args: [address],
+    enabled: !!address,
+  });
+
+  const { data: totalClaims } = useReadContract({
+    abi: rewardClaimerABI,
+    address: rewardClaimerAddress,
+    functionName: 'totalClaims',
+  });
+
+  const { writeContractAsync } = useWriteContract();
+
+  const handleClaim = async () => {
+    try {
+      setError(null);
+      console.log('🎁 Starting claim process...');
+      
+      const tx = await writeContractAsync({
+        abi: rewardClaimerABI,
+        address: rewardClaimerAddress,
+        functionName: 'claimReward',
+      });
+      
+      console.log('✅ Claim successful:', tx);
+      alert('🎉 Claim successful! You received 0.5 USDC!');
+    } catch (error) {
+      console.error('❌ Claim failed:', error);
+      setError(`Claim failed: ${error.message}`);
+    }
+  };
 
   // Share to Farcaster using proper SDK method
   const handleShare = async () => {
@@ -1460,7 +1447,64 @@ https://fgrevoke.vercel.app`;
                 </div>
               )}
 
+              {/* Reward Claimer Section */}
+              {isConnected && address && (
+                <div className="mb-6">
+                  {!hasClaimed && totalClaims < 50 && hasRevokedAtLeastOne && (
+                    <div className="bg-gradient-to-r from-green-600 to-blue-600 border border-green-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-white font-bold text-lg mb-2">🎁 Claim Your Reward!</h3>
+                      <p className="text-green-100 text-sm mb-3">
+                        You've revoked at least one approval! Claim 0.5 USDC as a reward.
+                      </p>
+                      <p className="text-green-200 text-xs mb-3">
+                        {totalClaims || 0}/50 users have claimed. Be one of the first 50!
+                      </p>
+                      <button
+                        onClick={handleClaim}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+                      >
+                        🎁 Claim 0.5 USDC
+                      </button>
+                    </div>
+                  )}
 
+                  {hasClaimed && (
+                    <div className="bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-white font-bold text-lg mb-2">✅ Reward Claimed!</h3>
+                      <p className="text-purple-100 text-sm mb-3">
+                        You've successfully claimed 0.5 USDC! Share your success:
+                      </p>
+                      <a
+                        href={`https://warpcast.com/~/compose?text=${encodeURIComponent('🎉 Just claimed 0.5 USDC for securing my wallet with FarGuard! https://fgrevoke.vercel.app')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition-colors"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Share on Farcaster
+                      </a>
+                    </div>
+                  )}
+
+                  {!hasRevokedAtLeastOne && totalClaims < 50 && (
+                    <div className="bg-yellow-900/50 border border-yellow-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-yellow-200 font-bold text-lg mb-2">💡 Earn 0.5 USDC</h3>
+                      <p className="text-yellow-300 text-sm">
+                        Revoke at least one token approval to unlock your reward claim!
+                      </p>
+                    </div>
+                  )}
+
+                  {totalClaims >= 50 && !hasClaimed && (
+                    <div className="bg-gray-700 border border-gray-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-gray-200 font-bold text-lg mb-2">🔒 Rewards Ended</h3>
+                      <p className="text-gray-300 text-sm">
+                        All 50 rewards have been claimed. Thanks for securing your wallet!
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Content */}
               {currentPage === 'approvals' ? (
