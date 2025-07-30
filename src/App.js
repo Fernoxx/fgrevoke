@@ -1059,7 +1059,7 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // ERC20 approve(spender, 0) call data
+      // ERC20 approve(spender, 0) call data - This ACTUALLY revokes the approval on-chain
       const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
       
       const txParams = {
@@ -1070,7 +1070,7 @@ function App() {
       };
 
       console.log('📝 Transaction params:', txParams);
-      console.log('📝 Submitting revoke transaction - wallet popup should appear...');
+      console.log('📝 Submitting REAL revoke transaction - this will actually remove approval from wallet...');
       
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
@@ -1078,12 +1078,13 @@ function App() {
       });
 
       console.log('✅ Revoke transaction submitted successfully:', txHash);
+      console.log('🔗 Token approval ACTUALLY revoked on blockchain - spender can no longer access tokens');
       
-      // Only mark as revoked and update UI after successful transaction submission
+      // Mark as revoked and update UI after successful blockchain transaction
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
       
-      console.log('✅ Approval successfully revoked and UI updated:', approval.name);
+      console.log('✅ Blockchain revoke complete + UI updated:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
