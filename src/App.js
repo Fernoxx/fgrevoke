@@ -1074,28 +1074,29 @@ function App() {
         const looksLikeERC20 = a.symbol && a.symbol.length <= 10;
         const notNFT = a.amount !== '1' || a.symbol?.includes('LP') || a.symbol?.includes('Token');
         
-                 // EXTRA STRICT: Only include if amount is a valid number > 0
-         const amountNum = parseFloat(a.amount || '0');
-         const hasValidAmount = !isNaN(amountNum) && amountNum > 0;
+                 // FIXED: Handle "Unlimited" approvals properly
+         const amountStr = a.amount || '';
+         const isUnlimited = amountStr.toLowerCase().includes('unlimited') || amountStr === '∞';
+         const amountNum = parseFloat(amountStr);
+         const hasValidAmount = isUnlimited || (!isNaN(amountNum) && amountNum > 0);
          
-         // DEBUG: Log amount parsing issues
-         if (!hasValidAmount) {
-           console.log(`🔍 Amount parsing issue for ${a.name}: "${a.amount}" → ${amountNum} (isNaN: ${isNaN(amountNum)})`);
-         }
+         // DEBUG: Log amount parsing for transparency
+         console.log(`🔍 ${a.name}: "${amountStr}" → Unlimited:${isUnlimited}, Numeric:${amountNum}, Valid:${hasValidAmount}`);
         
         // EXTRA STRICT: Must have valid contract and spender addresses
         const validContract = a.contract && a.contract.startsWith('0x') && a.contract.length === 42;
         const validSpender = a.spender && a.spender.startsWith('0x') && a.spender.length === 42;
         
-        const isValid = isActive && hasAmount && hasValidAmount && looksLikeERC20 && notNFT && validContract && validSpender;
-        
-        if (!isValid) {
-          console.log(`⚠️ FILTERED OUT: ${a.name} - Active:${isActive}, HasAmount:${hasAmount}, ValidAmount:${hasValidAmount}, ERC20:${looksLikeERC20}, NotNFT:${notNFT}, ValidContract:${validContract}, ValidSpender:${validSpender}`);
-        } else {
-          console.log(`✅ INCLUDED: ${a.name} (${a.symbol}) - Amount: ${a.amount}`);
-        }
-        
-        return isValid;
+                 // Final validation check (as requested)
+         const isValid = isActive && hasValidAmount && looksLikeERC20 && notNFT && validContract && validSpender;
+         
+         if (isValid) {
+           console.log(`✅ INCLUDED: ${a.name} (${a.symbol}) - Amount: ${a.amount}`);
+         } else {
+           console.log(`⚠️ FILTERED OUT: ${a.name} - Active:${isActive}, ValidAmount:${hasValidAmount}, ERC20:${looksLikeERC20}, NotNFT:${notNFT}, ValidContract:${validContract}, ValidSpender:${validSpender}`);
+         }
+         
+         return isValid;
       });
 
       const tokenAddresses = erc20Approvals.map(a => a.contract);
