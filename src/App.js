@@ -3,7 +3,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
-
+import { getAddress } from 'viem';
+import { writeContract } from '@wagmi/core';
+import { wagmiConfig } from './lib/wagmi';
 
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
 
@@ -1099,25 +1101,25 @@ function App() {
          return isValid;
       });
 
-      // Convert to checksummed addresses with error handling
-      const tokenAddresses = [];
-      const spenderAddresses = [];
-      const validApprovals = [];
-      
-      for (const approval of erc20Approvals) {
-        try {
-          const checksummedToken = ethers.utils.getAddress(approval.contract);
-          const checksummedSpender = ethers.utils.getAddress(approval.spender);
-          
-          tokenAddresses.push(checksummedToken);
-          spenderAddresses.push(checksummedSpender);
-          validApprovals.push(approval);
-          
-          console.log(`✅ Checksummed: ${approval.name} - ${checksummedToken} → ${checksummedSpender}`);
-        } catch (error) {
-          console.log(`⚠️ Invalid address for ${approval.name}: ${error.message}`);
-        }
-      }
+             // Convert to checksummed addresses using Viem (as requested)
+       const tokenAddresses = [];
+       const spenderAddresses = [];
+       const validApprovals = [];
+       
+       for (const approval of erc20Approvals) {
+         try {
+           const checksummedToken = getAddress(approval.contract);
+           const checksummedSpender = getAddress(approval.spender);
+           
+           tokenAddresses.push(checksummedToken);
+           spenderAddresses.push(checksummedSpender);
+           validApprovals.push(approval);
+           
+           console.log(`✅ Checksummed: ${approval.name} - ${checksummedToken} → ${checksummedSpender}`);
+         } catch (error) {
+           console.log(`⚠️ Invalid address for ${approval.name}: ${error.message}`);
+         }
+       }
 
       if (tokenAddresses.length !== spenderAddresses.length) {
         console.error("❌ Length mismatch");
@@ -1145,29 +1147,54 @@ function App() {
          console.log(`      Amount: ${approval.amount}`);
        }
 
-      // Since writeContract doesn't work with Farcaster SDK, use provider.request
-      // Create contract call data
-      const functionSignature = '0x6b6f5a1e'; // revokeERC20(address[],address[])
-      const encodedTokens = ethers.utils.defaultAbiCoder.encode(['address[]'], [tokenAddresses]);
-      const encodedSpenders = ethers.utils.defaultAbiCoder.encode(['address[]'], [spenderAddresses]);
-      
-      const tokensData = encodedTokens.slice(66);
-      const spendersData = encodedSpenders.slice(66);
-      const tokensOffset = '0000000000000000000000000000000000000000000000000000000000000040';
-      const spendersOffset = (64 + tokensData.length / 2).toString(16).padStart(64, '0');
-      const callData = functionSignature + tokensOffset + spendersOffset + tokensData + spendersData;
+             // Use writeContract with proper ABI (as requested)
+       const revokeABI = [
+         {
+           "inputs": [
+             { "internalType": "address[]", "name": "tokens", "type": "address[]" },
+             { "internalType": "address[]", "name": "spenders", "type": "address[]" }
+           ],
+           "name": "revokeERC20",
+           "outputs": [],
+           "stateMutability": "nonpayable",
+           "type": "function"
+         }
+       ];
 
-      const txParams = {
-        to: REVOKE_HELPER_ADDRESS,
-        data: callData,
-        from: address,
-        value: '0x0'
-      };
-
-      const tx = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
-      });
+       // Final validation before contract call (as requested)
+       if (tokenAddresses.length === 0 || spenderAddresses.length === 0) {
+         console.error("❌ Empty arrays - cannot call contract");
+         return;
+       }
+       
+       if (tokenAddresses.length !== spenderAddresses.length) {
+         console.error("❌ Array length mismatch - cannot call contract");
+         return;
+       }
+       
+       // Validate all addresses are checksum valid
+       const allAddressesValid = [...tokenAddresses, ...spenderAddresses].every(addr => {
+         try {
+           getAddress(addr);
+           return true;
+         } catch {
+           return false;
+         }
+       });
+       
+       if (!allAddressesValid) {
+         console.error("❌ Invalid addresses detected - cannot call contract");
+         return;
+       }
+       
+       console.log("🚀 All validations passed - calling writeContract with wagmi...");
+       const tx = await writeContract(wagmiConfig, {
+         address: REVOKE_HELPER_ADDRESS,
+         abi: revokeABI,
+         functionName: 'revokeERC20',
+         args: [tokenAddresses, spenderAddresses],
+         account: address, // connected user wallet
+       });
 
       console.log("✅ Revoke submitted:", tx);
       console.log('✅ Revoke submitted');
