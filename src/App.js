@@ -1008,6 +1008,7 @@ function App() {
   // Track revoke and claim status with localStorage
   const hasRevoked = localStorage.getItem('hasRevoked') === 'true';
   const hasClaimedLocally = localStorage.getItem('hasClaimed') === 'true';
+  const showClaim = localStorage.getItem('hasRevoked') === 'true' && localStorage.getItem('hasClaimed') !== 'true';
   const [showShare, setShowShare] = useState(false);
 
   // Initialize showShare state based on localStorage
@@ -1065,6 +1066,11 @@ function App() {
       console.error('❌ Claim failed:', error);
       setError(`Claim failed: ${error.message}`);
     }
+  };
+
+  const shareCast = () => {
+    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet — try it here: https://fgrevoke.vercel.app");
+    window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
   // Share to Farcaster using proper SDK method
@@ -1456,7 +1462,7 @@ https://fgrevoke.vercel.app`;
               {/* Reward Claimer Section */}
               {isConnected && address && (
                 <div className="mb-6">
-                  {hasRevoked && !hasClaimedLocally && totalClaims < 50 && (
+                  {showClaim && totalClaims < 50 && (
                     <div className="bg-gradient-to-r from-green-600 to-blue-600 border border-green-500 rounded-lg p-4 mb-4">
                       <h3 className="text-white font-bold text-lg mb-2">🎁 Claim Your Reward!</h3>
                       <p className="text-green-100 text-sm mb-3">
@@ -1480,15 +1486,13 @@ https://fgrevoke.vercel.app`;
                       <p className="text-purple-100 text-sm mb-3">
                         You've successfully claimed 0.5 USDC! Share your success:
                       </p>
-                      <a
-                        href={`https://warpcast.com/~/compose?text=${encodeURIComponent('Claimed 0.5 USDC for just securing my wallet https://fgrevoke.vercel.app')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={shareCast}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition-colors"
                       >
                         <Share2 className="w-4 h-4" />
                         Share
-                      </a>
+                      </button>
                     </div>
                   )}
 
