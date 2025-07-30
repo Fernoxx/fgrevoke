@@ -1025,15 +1025,64 @@ function App() {
     setActivityPageNumber(1);
   }, [selectedChain, currentPage]);
 
-  // Mock revoke function (since we're focusing on reward claiming now)
-  const requestRevokeApproval = (approval) => {
+  // Real revoke function - requires wallet popup and successful transaction
+  const requestRevokeApproval = async (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
     
-    // Mark as revoked in localStorage and remove from UI
-    localStorage.setItem('hasRevoked', 'true');
-    setApprovals(prev => prev.filter(a => a.id !== approval.id));
-    
-    console.log('✅ Approval revoked (simulated):', approval.name);
+    if (!provider || !isConnected) {
+      console.log('❌ Wallet not connected properly');
+      setError('Please connect your wallet first');
+      return;
+    }
+
+    try {
+      console.log('🔄 Starting individual revoke for:', approval.name);
+      
+      // Ensure we're on the right chain
+      const chainConfig = chains.find(c => c.value === selectedChain);
+      const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
+      
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' });
+        if (currentChainId !== expectedChainId) {
+          console.log('🔄 Switching to correct chain...');
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: expectedChainId }],
+          });
+        }
+      } catch (switchError) {
+        console.log('Chain switch error (might be expected):', switchError);
+      }
+
+      // ERC20 approve(spender, 0) call data
+      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
+      
+      const txParams = {
+        to: approval.contract,
+        data: revokeData,
+        from: address,
+        value: '0x0'
+      };
+
+      console.log('📝 Submitting revoke transaction...');
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [txParams]
+      });
+
+      console.log('✅ Revoke transaction submitted:', txHash);
+      
+      // Only mark as revoked after successful transaction
+      localStorage.setItem('hasRevoked', 'true');
+      setApprovals(prev => prev.filter(a => a.id !== approval.id));
+      
+      console.log('✅ Approval successfully revoked:', approval.name);
+
+    } catch (error) {
+      console.error('❌ Revoke failed:', error);
+      setError(`Failed to revoke approval: ${error.message}`);
+    }
   };
 
 
@@ -1470,17 +1519,10 @@ https://fgrevoke.vercel.app`;
               {isConnected && address && (
                 <div className="mb-6">
                   {showClaim && totalClaims < 50 && (
-                    <div className="bg-gradient-to-r from-green-600 to-blue-600 border border-green-500 rounded-lg p-4 mb-4">
-                      <h3 className="text-white font-bold text-lg mb-2">🎁 Claim Your Reward!</h3>
-                      <p className="text-green-100 text-sm mb-3">
-                        You've revoked at least one approval! Claim 0.5 USDC as a reward.
-                      </p>
-                      <p className="text-green-200 text-xs mb-3">
-                        {totalClaims || 0}/50 users have claimed. Be one of the first 50!
-                      </p>
+                    <div className="mb-4">
                       <button
                         onClick={handleClaim}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-colors"
                       >
                         🎁 Claim 0.5 USDC
                       </button>
