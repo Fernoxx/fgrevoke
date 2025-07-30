@@ -581,9 +581,9 @@ function App() {
     initializeSDK();
   }, []);
 
-  // Enhanced Wallet Connection with Privy + Farcaster + Coinbase Wallet
+  // Enhanced Wallet Connection - Farcaster + Wagmi + Traditional
   const connectWallet = async () => {
-    console.log('🔌 Starting enhanced wallet connection...');
+    console.log('🔌 Starting wallet connection...');
     setIsConnecting(true);
     setError(null);
 
@@ -598,45 +598,35 @@ function App() {
         return;
       }
 
-      // 2. Try Privy authentication (includes Farcaster + Coinbase Wallet)
-      if (ready && !authenticated) {
-        console.log('🎯 Opening Privy wallet selector...');
-        await login();
-        return; // Privy will handle the rest via useEffect
-      }
-
-      // 3. If Privy is authenticated, sync with wagmi
-      if (authenticated && user) {
-        console.log('✅ Privy authenticated, syncing with wagmi...');
+      // 2. Try Wagmi connectors (Coinbase Wallet, Injected, etc.)
+      if (!wagmiConnected && connectors.length > 0) {
+        console.log('🔗 Trying wagmi connectors...');
         
-        // If wagmi is not connected, try to connect with available connectors
-        if (!wagmiConnected && connectors.length > 0) {
-          console.log('🔗 Connecting wagmi with available connectors...');
+        // Prefer Coinbase Wallet for Base app users
+        const coinbaseConnector = connectors.find(c => c.name.toLowerCase().includes('coinbase'));
+        const injectedConnector = connectors.find(c => c.name.toLowerCase().includes('injected'));
+        const connector = coinbaseConnector || injectedConnector || connectors[0];
+        
+        try {
+          console.log('🎯 Connecting with:', connector.name);
+          await connect({ connector });
           
-          // Prefer Coinbase Wallet for Base app users
-          const coinbaseConnector = connectors.find(c => c.name.toLowerCase().includes('coinbase'));
-          const connector = coinbaseConnector || connectors[0];
+          // Wait a moment for wagmi to sync
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
-          try {
-            await connect({ connector });
-          } catch (connectError) {
-            console.log('⚠️ Wagmi connect failed, trying fallback...', connectError);
+          if (wagmiAddress) {
+            setAddress(wagmiAddress.toLowerCase());
+            setIsConnected(true);
+            console.log('✅ Connected via wagmi:', wagmiAddress);
+            return;
           }
+        } catch (connectError) {
+          console.log('⚠️ Wagmi connect failed, trying fallback...', connectError);
         }
-
-        // Use wagmi address if available, otherwise fallback to Privy
-        const finalAddress = wagmiAddress || user.wallet?.address;
-        if (finalAddress) {
-          setAddress(finalAddress.toLowerCase());
-          setIsConnected(true);
-          console.log('✅ Connected via Privy/Wagmi:', finalAddress);
-        }
-        
-        return;
       }
 
-      // 4. Fallback to traditional connection (SDK + window.ethereum)
-      console.log('🌐 Fallback to traditional wallet connection...');
+      // 3. Fallback to Farcaster SDK + Traditional wallet connection
+      console.log('🌐 Trying SDK/traditional wallet connection...');
       let ethProvider = null;
       
       try {
@@ -656,7 +646,7 @@ function App() {
       }
       
       if (!ethProvider) {
-        throw new Error('No wallet available. Please use Privy connection or install MetaMask.');
+        throw new Error('No wallet available. Please install MetaMask or use this app in Farcaster/Base App.');
       }
 
       console.log('✅ Provider obtained, requesting accounts...');
@@ -672,7 +662,7 @@ function App() {
       }
 
       const walletAddress = accounts[0].toLowerCase();
-      console.log('👛 Fallback wallet connected:', walletAddress);
+      console.log('👛 Wallet connected:', walletAddress);
 
       // Get current chain
       const chainId = await ethProvider.request({ method: 'eth_chainId' });
@@ -690,7 +680,7 @@ function App() {
       setAddress(walletAddress);
       setIsConnected(true);
 
-      console.log('🎉 Fallback wallet connection successful!');
+      console.log('🎉 Wallet connection successful!');
 
     } catch (error) {
       console.error('❌ Wallet connection failed:', error);
@@ -700,38 +690,19 @@ function App() {
     }
   };
 
-  // Sync Privy authentication with our state
+  // Sync wagmi address with our state
   useEffect(() => {
-    if (ready) {
-      console.log('🔄 Privy ready state changed:', { authenticated, user: !!user });
-      
-      if (authenticated && user) {
-        // User is authenticated via Privy
-        const privyAddress = wagmiAddress || user.wallet?.address;
-        if (privyAddress && privyAddress !== address) {
-          console.log('✅ Syncing Privy address:', privyAddress);
-          setAddress(privyAddress.toLowerCase());
-          setIsConnected(true);
-        }
-        
-        // If user has Farcaster data, update current user
-        if (user.farcaster) {
-          setCurrentUser({
-            username: user.farcaster.username || '',
-            displayName: user.farcaster.displayName || '',
-            pfpUrl: user.farcaster.pfpUrl || '',
-            fid: user.farcaster.fid
-          });
-        }
-      } else if (!authenticated && isConnected) {
-        // User logged out from Privy
-        console.log('🔌 Privy logged out, clearing state...');
-        setAddress(null);
-        setIsConnected(false);
-        setCurrentUser(null);
-      }
+    if (wagmiConnected && wagmiAddress && wagmiAddress !== address) {
+      console.log('✅ Syncing wagmi address:', wagmiAddress);
+      setAddress(wagmiAddress.toLowerCase());
+      setIsConnected(true);
+    } else if (!wagmiConnected && isConnected && !provider) {
+      // Only disconnect if we don't have a manual provider connection
+      console.log('🔌 Wagmi disconnected, clearing state...');
+      setAddress(null);
+      setIsConnected(false);
     }
-  }, [ready, authenticated, user, wagmiAddress]);
+  }, [wagmiConnected, wagmiAddress, address, isConnected, provider]);
 
   // Listen for account changes
   useEffect(() => {
@@ -1258,7 +1229,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
   };
 
   const disconnect = async () => {
-    console.log('🔌 Starting enhanced disconnect...');
+    console.log('🔌 Starting disconnect...');
     
     // Clear local state
     setAddress(null);
@@ -1286,19 +1257,9 @@ Secure yours too: https://fgrevoke.vercel.app`;
       }
     }
     
-    // Logout from Privy if authenticated  
-    if (authenticated) {
-      try {
-        await logout();
-        console.log('✅ Privy logged out');
-      } catch (error) {
-        console.log('⚠️ Privy logout error:', error);
-      }
-    }
-    
     // Note: We keep currentUser and userAddresses as they come from Farcaster profile
     // and should persist across wallet connections/disconnections
-    console.log('🔌 Enhanced disconnect completed - kept Farcaster profile data');
+    console.log('🔌 Disconnect completed - kept Farcaster profile data');
   };
 
   return (
