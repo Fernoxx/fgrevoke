@@ -732,18 +732,45 @@ function App() {
 
   // Fetch chain activity using Alchemy - much more reliable
   const fetchChainActivity = useCallback(async (userAddress) => {
-    if (!userAddress || !selectedChain) return;
+    if (!userAddress) return;
     
     setLoadingActivity(true);
     setError(null);
-    console.log('🔍 Fetching activity using Alchemy for:', userAddress, 'on chain:', selectedChain);
+    console.log('🔍 Fetching COMPLETE activity for:', userAddress, 'across all chains');
     
     try {
-      await fetchActivityWithAlchemy(userAddress);
+      const result = await fetchCompleteActivityWithEtherscanV2(userAddress);
+      
+      if (result.activities && result.activities.length > 0) {
+        setChainActivity(result.activities);
+        
+        if (result.stats) {
+          setActivityStats({
+            totalTransactions: result.stats.totalTxns,
+            totalValue: result.stats.totalEthSent,
+            totalGasFees: result.stats.totalGasETH,
+            dappsUsed: result.stats.dAppsUsed,
+            lastActivity: result.activities[0]?.timeStamp || null,
+            chainStats: result.stats.chainStats
+          });
+        }
+        
+        console.log(`✅ Processed ${result.activities.length} activities with complete analytics`);
+      } else {
+        console.log('⚠️ No activities found');
+        setChainActivity([]);
+        setActivityStats({
+          totalTransactions: 0,
+          totalValue: 0,
+          totalGasFees: 0,
+          dappsUsed: 0,
+          lastActivity: null
+        });
+      }
       
     } catch (error) {
-      console.error('❌ Alchemy activity fetching failed:', error);
-      setError(`Failed to fetch ${selectedChain} activity: ${error.message}`);
+      console.error('❌ Complete activity fetching failed:', error);
+      setError(`Failed to fetch complete activity: ${error.message}`);
       setChainActivity([]);
       setActivityStats({
         totalTransactions: 0,
@@ -757,125 +784,151 @@ function App() {
     }
   }, [selectedChain]);
 
-  // Fetch activity using Alchemy
-  const fetchActivityWithAlchemy = async (userAddress) => {
+  // Fetch COMPLETE activity using Etherscan V2 APIs across all chains
+  const fetchCompleteActivityWithEtherscanV2 = async (userAddress) => {
     try {
-      console.log('🔍 Fetching activity using Alchemy for:', userAddress);
+      console.log('🔍 Fetching COMPLETE activity for:', userAddress, 'on chain:', selectedChain);
       
-      // Get latest block
-      const latestBlock = await makeAlchemyCall('eth_blockNumber', [], 'Latest Block for Activity');
-      const latestBlockNum = parseInt(latestBlock, 16);
-      const fromBlock = Math.max(0, latestBlockNum - 5000); // Last 5k blocks for performance
-      
-      console.log(`📊 Using Alchemy activity block range: ${fromBlock} to ${latestBlockNum}`);
+      const chains = [
+        { name: 'ethereum', url: 'https://api.etherscan.io/v2/api', chainId: 1 },
+        { name: 'base', url: 'https://api.etherscan.io/v2/api', chainId: 8453 },
+        { name: 'arbitrum', url: 'https://api.etherscan.io/v2/api', chainId: 42161 }
+      ];
       
       let allActivity = [];
+      let totalStats = {
+        totalTxns: 0,
+        totalGasETH: 0,
+        totalEthSent: 0,
+        uniqueContracts: new Set(),
+        chainStats: {}
+      };
       
-      // Get recent transaction hashes for this address
-      // Use Alchemy's enhanced API for better performance
-      try {
-        // Get transfers TO this address (received) - use address field instead of topics for better compatibility
-        const receivedLogs = await makeAlchemyCall('alchemy_getAssetTransfers', [{
-          fromBlock: `0x${fromBlock.toString(16)}`,
-          toBlock: 'latest',
-          toAddress: userAddress.toLowerCase(),
-          category: ['erc20', 'erc721', 'erc1155', 'external'],
-          withMetadata: false,
-          excludeZeroValue: true,
-          maxCount: '0x64' // 100 transfers max
-        }], 'Received Transfers');
-        
-        // Get transfers FROM this address (sent)
-        const sentLogs = await makeAlchemyCall('alchemy_getAssetTransfers', [{
-          fromBlock: `0x${fromBlock.toString(16)}`,
-          toBlock: 'latest',
-          fromAddress: userAddress.toLowerCase(),
-          category: ['erc20', 'erc721', 'erc1155', 'external'],
-          withMetadata: false,
-          excludeZeroValue: true,
-          maxCount: '0x64' // 100 transfers max
-        }], 'Sent Transfers');
-        
-        console.log(`✅ Found ${receivedLogs?.transfers?.length || 0} received and ${sentLogs?.transfers?.length || 0} sent transfers`);
-        
-        // Process the transfers from Alchemy's enhanced API
-        const allTransfers = [
-          ...(receivedLogs?.transfers || []),
-          ...(sentLogs?.transfers || [])
-        ];
-        
-        console.log(`🔍 Processing ${allTransfers.length} transfers`);
-        
-        // Process transfers directly (limit to prevent overwhelming)
-        const transfersToProcess = allTransfers.slice(0, 20);
-        
-        for (const transfer of transfersToProcess) {
-          try {
-            const value = transfer.category === 'external' 
-              ? parseFloat(transfer.value || '0') 
-              : 0; // For ERC20 tokens, we'll show token amount separately
+      // Fetch from all chains or just selected chain
+      const chainsToFetch = selectedChain === 'all' ? chains : chains.filter(c => c.name === selectedChain);
+      
+      for (const chain of chainsToFetch) {
+        try {
+          console.log(`🔍 Fetching complete history for ${chain.name}...`);
+          
+          // Build the complete transaction history URL
+          const txListUrl = `${chain.url}?chainid=${chain.chainId}&module=account&action=txlist&address=${userAddress}&startblock=0&endblock=99999999&page=1&offset=10000&sort=asc&apikey=${ETHERSCAN_API_KEY}`;
+          
+          console.log(`🌐 ${chain.name.toUpperCase()} Complete TX History:`, txListUrl.replace(ETHERSCAN_API_KEY, '***'));
+          
+          const response = await fetch(txListUrl);
+          const data = await response.json();
+          
+          if (data.status === '1' && Array.isArray(data.result)) {
+            const txList = data.result;
+            console.log(`✅ Found ${txList.length} transactions on ${chain.name}`);
             
-            const blockNum = parseInt(transfer.blockNum, 16);
-            const timestamp = blockNum * 12000 + 1640000000000; // Approximate timestamp
+            let chainGasETH = 0;
+            let chainEthSent = 0;
+            let chainTxns = txList.length;
             
-            const activity = {
-              hash: transfer.hash,
-              timeStamp: timestamp,
-              from: transfer.from?.toLowerCase() || '',
-              to: transfer.to?.toLowerCase() || '',
-              value: value,
-              gasFee: 0, // We'll get this from transaction receipt if needed
-              gasUsed: 0,
-              methodId: transfer.category === 'external' ? '0x' : '0xa9059cbb',
-              functionName: transfer.category === 'external' ? 'ETH Transfer' : `${transfer.asset} Transfer`,
-              isError: false, // Alchemy only returns successful transfers
-              blockNumber: blockNum,
-              type: transfer.category,
-              tokenSymbol: transfer.asset || 'ETH',
-              tokenValue: transfer.category !== 'external' ? parseFloat(transfer.value || '0') : null
+            // Process each transaction for analytics
+            for (const tx of txList) {
+              try {
+                // Calculate gas fees (gasUsed * gasPrice)
+                const gasUsed = Number(tx.gasUsed || 0);
+                const gasPrice = Number(tx.gasPrice || 0);
+                const gasFeeWei = gasUsed * gasPrice;
+                const gasFeeETH = gasFeeWei / 1e18;
+                
+                chainGasETH += gasFeeETH;
+                
+                // Calculate ETH sent (only for outgoing transactions)
+                if (tx.from.toLowerCase() === userAddress.toLowerCase()) {
+                  const valueETH = Number(tx.value || 0) / 1e18;
+                  chainEthSent += valueETH;
+                  
+                  // Track unique contracts interacted with
+                  if (tx.to && tx.to !== userAddress.toLowerCase() && tx.input && tx.input !== '0x') {
+                    totalStats.uniqueContracts.add(tx.to.toLowerCase());
+                  }
+                }
+                
+                // Add to activity list (limit display to last 50 for UI performance)
+                if (allActivity.length < 50) {
+                  const activity = {
+                    hash: tx.hash,
+                    timeStamp: parseInt(tx.timeStamp) * 1000,
+                    from: tx.from?.toLowerCase() || '',
+                    to: tx.to?.toLowerCase() || '',
+                    value: Number(tx.value || 0) / 1e18,
+                    gasFee: gasFeeETH,
+                    gasUsed: gasUsed,
+                    methodId: tx.methodId || (tx.input?.substring(0, 10)) || '0x',
+                    functionName: tx.functionName || (tx.input && tx.input !== '0x' ? 'Contract Interaction' : 'ETH Transfer'),
+                    isError: tx.isError === '1',
+                    blockNumber: parseInt(tx.blockNumber || 0),
+                    chain: chain.name,
+                    chainId: chain.chainId
+                  };
+                  
+                  allActivity.push(activity);
+                }
+                
+              } catch (txError) {
+                console.warn(`⚠️ Failed to process transaction ${tx.hash}:`, txError.message);
+              }
+            }
+            
+            // Store chain-specific stats
+            totalStats.chainStats[chain.name] = {
+              totalTxns: chainTxns,
+              totalGasETH: chainGasETH,
+              totalEthSent: chainEthSent
             };
             
-            allActivity.push(activity);
+            totalStats.totalTxns += chainTxns;
+            totalStats.totalGasETH += chainGasETH;
+            totalStats.totalEthSent += chainEthSent;
             
-            // Small delay to avoid overwhelming
-            await new Promise(resolve => setTimeout(resolve, 50));
+            console.log(`✅ ${chain.name.toUpperCase()} Stats:`, {
+              transactions: chainTxns,
+              gasSpent: `${chainGasETH.toFixed(6)} ETH`,
+              ethSent: `${chainEthSent.toFixed(6)} ETH`
+            });
             
-          } catch (transferError) {
-            console.warn('⚠️ Failed to process transfer:', transferError.message);
+          } else {
+            console.warn(`⚠️ ${chain.name} API returned:`, data.message || 'No data');
           }
+          
+          // Small delay between chain requests
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+        } catch (chainError) {
+          console.error(`❌ Failed to fetch ${chain.name} activity:`, chainError.message);
         }
-        
-      } catch (error) {
-        console.warn('⚠️ Could not fetch activity logs:', error.message);
       }
       
-      // Sort by block number (newest first)
-      allActivity.sort((a, b) => b.blockNumber - a.blockNumber);
+      // Final comprehensive stats
+      const dAppsUsed = totalStats.uniqueContracts.size;
       
-      // Calculate stats
-      const totalValue = allActivity.reduce((sum, tx) => sum + (tx.value || 0), 0);
-      const totalGasFees = allActivity.reduce((sum, tx) => sum + (tx.gasFee || 0), 0);
-      const uniqueContracts = new Set(
-        allActivity
-          .filter(tx => tx.to !== userAddress.toLowerCase() && tx.to && tx.to !== '0x0000000000000000000000000000000000000000')
-          .map(tx => tx.to)
-      );
-      const lastActivity = allActivity.length > 0 ? new Date(allActivity[0].timeStamp) : null;
-      
-      setActivityStats({
-        totalTransactions: allActivity.length,
-        totalValue: totalValue,
-        totalGasFees: totalGasFees,
-        dappsUsed: uniqueContracts.size,
-        lastActivity: lastActivity
+      console.log('🎯 COMPLETE WALLET ANALYTICS:', {
+        totalTransactions: totalStats.totalTxns,
+        totalGasSpent: `${totalStats.totalGasETH.toFixed(6)} ETH`,
+        totalEthSent: `${totalStats.totalEthSent.toFixed(6)} ETH`,
+        dAppsInteracted: dAppsUsed,
+        chainBreakdown: totalStats.chainStats
       });
       
-      setChainActivity(allActivity);
-      console.log(`✅ Processed ${allActivity.length} activities using Alchemy`);
+      return {
+        activities: allActivity.sort((a, b) => b.timeStamp - a.timeStamp), // Sort by newest first
+        stats: {
+          totalTxns: totalStats.totalTxns,
+          totalGasETH: totalStats.totalGasETH,
+          totalEthSent: totalStats.totalEthSent,
+          dAppsUsed: dAppsUsed,
+          chainStats: totalStats.chainStats
+        }
+      };
       
     } catch (error) {
-      console.error('❌ Alchemy activity fetch failed:', error);
-      throw error;
+      console.error('❌ Complete activity fetch failed:', error);
+      return { activities: [], stats: null };
     }
   };
 
@@ -1680,9 +1733,22 @@ Secure yours too: https://fgrevoke.vercel.app`;
                         </>
                       ) : (
                         <>
-          
-                          <p><strong>Activities Count:</strong> {chainActivity.length}</p>
-                          <p><strong>dApps Used:</strong> {activityStats.dappsUsed}</p>
+                          <p><strong>Total Transactions:</strong> {activityStats.totalTransactions?.toLocaleString() || 0}</p>
+                          <p><strong>Total Gas Spent:</strong> {activityStats.totalGasFees?.toFixed(6) || '0.000000'} ETH</p>
+                          <p><strong>Total ETH Sent:</strong> {activityStats.totalValue?.toFixed(6) || '0.000000'} ETH</p>
+                          <p><strong>dApps Interacted:</strong> {activityStats.dappsUsed || 0}</p>
+                          {activityStats.chainStats && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-sm text-purple-300">Chain Breakdown</summary>
+                              <div className="mt-1 pl-4 text-xs">
+                                {Object.entries(activityStats.chainStats).map(([chain, stats]) => (
+                                  <div key={chain} className="text-purple-400">
+                                    <strong>{chain.toUpperCase()}:</strong> {stats.totalTxns} txns, {stats.totalGasETH.toFixed(4)} ETH gas, {stats.totalEthSent.toFixed(4)} ETH sent
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
                         </>
                       )}
                     </div>
@@ -1781,9 +1847,9 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 ) : chainActivity.length === 0 ? (
                   <div className="text-center py-8">
                     <Activity className="w-12 h-12 text-blue-400 mx-auto mb-3" />
-                    <p className="text-blue-300 text-lg font-semibold">No recent activity found</p>
+                    <p className="text-blue-300 text-lg font-semibold">No activity found</p>
                     <p className="text-purple-400 text-sm mt-2">
-                      No transactions found in the last 10,000 blocks on {chains.find(c => c.value === selectedChain)?.name}
+                      No transactions found in complete wallet history across all chains
                     </p>
                   </div>
                 ) : (
@@ -1791,7 +1857,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     {activityStats.lastActivity && (
                       <div className="bg-purple-700 rounded-lg p-4 mb-4">
                         <p className="text-purple-200 text-sm">
-                          <strong>Last Activity:</strong> {activityStats.lastActivity.toLocaleDateString()} at {activityStats.lastActivity.toLocaleTimeString()}
+                          <strong>Last Activity:</strong> {new Date(activityStats.lastActivity).toLocaleDateString()} at {new Date(activityStats.lastActivity).toLocaleTimeString()}
                         </p>
                       </div>
                     )}
@@ -1811,6 +1877,11 @@ Secure yours too: https://fgrevoke.vercel.app`;
                               <p className="text-xs text-purple-400">
                                 {new Date(tx.timeStamp).toLocaleDateString()} at {new Date(tx.timeStamp).toLocaleTimeString()}
                               </p>
+                              {tx.chain && (
+                                <p className="text-xs text-blue-400 mt-1">
+                                  <span className="bg-blue-600 px-2 py-1 rounded text-white">{tx.chain.toUpperCase()}</span>
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="text-right">
