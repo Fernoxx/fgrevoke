@@ -1443,40 +1443,60 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
 
 
-              {/* Custom Revoke All Confirmation Dialog */}
+              {/* Custom Revoke All Confirmation Dialog - SUPER VISIBLE */}
               {showRevokeAllConfirm && (
                 <div 
-                  className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center" 
-                  style={{ zIndex: 99999 }}
+                  className="fixed top-0 left-0 w-full h-full bg-red-600 bg-opacity-95 flex items-center justify-center" 
+                  style={{ 
+                    zIndex: 999999,
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0
+                  }}
                   onClick={(e) => {
-                    console.log("🎯 Dialog backdrop clicked");
+                    console.log("🎯 RED Dialog backdrop clicked");
                     e.stopPropagation();
                   }}
                 >
                   <div 
-                    className="bg-purple-800 border-4 border-yellow-400 rounded-lg p-6 m-4 max-w-md shadow-2xl"
+                    className="bg-white border-8 border-red-500 rounded-lg p-8 m-4 max-w-md shadow-2xl"
+                    style={{
+                      backgroundColor: 'white',
+                      color: 'black',
+                      border: '8px solid red',
+                      minWidth: '300px',
+                      minHeight: '200px'
+                    }}
                     onClick={(e) => {
-                      console.log("🎯 Dialog content clicked");
+                      console.log("🎯 WHITE Dialog content clicked");
                       e.stopPropagation();
                     }}
                   >
-                    <h3 className="text-xl font-bold text-yellow-400 mb-3">⚠️ REVOKE ALL APPROVALS</h3>
-                    <p className="text-purple-200 mb-4">
-                      Are you sure you want to revoke ALL {approvals.length} token approvals? 
+                    <h3 className="text-2xl font-bold text-red-600 mb-4 text-center">⚠️ REVOKE ALL APPROVALS</h3>
+                    <p className="text-black mb-6 text-center text-lg">
+                      Are you sure you want to revoke ALL <strong>{approvals.length}</strong> token approvals? 
                       This will use a single batch transaction via smart contract.
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex gap-4">
                       <button
-                        onClick={() => setShowRevokeAllConfirm(false)}
-                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md transition-colors"
+                        onClick={() => {
+                          console.log("🚫 Cancel clicked");
+                          setShowRevokeAllConfirm(false);
+                        }}
+                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-6 rounded-md text-lg font-bold transition-colors"
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={confirmRevokeAll}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors"
+                        onClick={() => {
+                          console.log("🚀 REVOKE ALL CLICKED!");
+                          confirmRevokeAll();
+                        }}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-6 rounded-md text-lg font-bold transition-colors"
                       >
-                        Revoke All
+                        REVOKE ALL
                       </button>
                     </div>
                   </div>
@@ -1617,17 +1637,29 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     {isRevoking ? 'Revoking Approvals...' : `Revoke All ${approvals.length} Approvals`}
                   </button>
                   
-                  {/* Debug button - remove after testing */}
-                  <button
-                    onClick={() => {
-                      console.log("🧪 Debug test button clicked");
-                      console.log("Function exists:", typeof handleRevokeAll);
-                      console.log("Current state:", { approvals: approvals.length, isConnected, provider: !!provider });
-                    }}
-                    className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                  >
-                    🧪 Test Debug (check console)
-                  </button>
+                  {/* Debug buttons - remove after testing */}
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => {
+                        console.log("🧪 Debug test button clicked");
+                        console.log("Function exists:", typeof handleRevokeAll);
+                        console.log("Current state:", { approvals: approvals.length, isConnected, provider: !!provider });
+                      }}
+                      className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                    >
+                      🧪 Test Debug (check console)
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        console.log("🎯 Manually showing dialog");
+                        setShowRevokeAllConfirm(true);
+                      }}
+                      className="w-full px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors"
+                    >
+                      🎯 Force Show Dialog
+                    </button>
+                  </div>
                 </div>
               )}
 
