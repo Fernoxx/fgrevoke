@@ -1028,6 +1028,7 @@ function App() {
   // Real revoke function - requires wallet popup and successful transaction
   const requestRevokeApproval = async (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
+    console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
     
     if (!provider || !isConnected) {
       console.log('❌ Wallet not connected properly');
@@ -1037,6 +1038,9 @@ function App() {
 
     try {
       console.log('🔄 Starting individual revoke for:', approval.name);
+      
+      // Clear any previous errors
+      setError(null);
       
       // Ensure we're on the right chain
       const chainConfig = chains.find(c => c.value === selectedChain);
@@ -1065,23 +1069,32 @@ function App() {
         value: '0x0'
       };
 
-      console.log('📝 Submitting revoke transaction...');
+      console.log('📝 Transaction params:', txParams);
+      console.log('📝 Submitting revoke transaction - wallet popup should appear...');
+      
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [txParams]
       });
 
-      console.log('✅ Revoke transaction submitted:', txHash);
+      console.log('✅ Revoke transaction submitted successfully:', txHash);
       
-      // Only mark as revoked after successful transaction
+      // Only mark as revoked and update UI after successful transaction submission
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
       
-      console.log('✅ Approval successfully revoked:', approval.name);
+      console.log('✅ Approval successfully revoked and UI updated:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
-      setError(`Failed to revoke approval: ${error.message}`);
+      console.error('❌ Error details:', error);
+      
+      // Don't remove the approval from UI if transaction failed
+      if (error.code === 4001) {
+        setError('Transaction cancelled by user');
+      } else {
+        setError(`Failed to revoke approval: ${error.message}`);
+      }
     }
   };
 
