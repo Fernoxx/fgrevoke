@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-// Removed getWalletClient import - using direct provider approach
+import { getWalletClient, writeContract } from 'wagmi/actions';
 import { wagmiConfig } from './lib/wagmi';
 
-import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
+import { REVOKE_HELPER_ADDRESS } from './lib/revokeHelperABI';
+
+const BASE_CHAIN_ID = 8453;
 
 function App() {
 
@@ -255,14 +256,7 @@ function App() {
     console.log(`✅ Processed ${finalApprovals.length} active approvals using Etherscan V2`);
   };
 
-  // Get ethers provider for reliable blockchain interactions
-  const getEthersProvider = (chain) => {
-    const chainConfig = chains.find(c => c.value === chain);
-    if (!chainConfig) return null;
-    
-    // Use the first RPC URL for the chain
-    return new ethers.providers.JsonRpcProvider(chainConfig.rpcUrls[0]);
-  };
+
 
 
 
@@ -1116,165 +1110,79 @@ function App() {
     await confirmRevokeAll();
   };
 
-    // Clean Safe Revoke Pattern (as requested)
   const confirmRevokeAll = async () => {
     try {
       setIsRevoking(true);
-      
-      // Filter only ERC20 approvals with STRICT validation
+
       const erc20Approvals = approvals.filter(a => {
-        // Since we don't have tokenType field, use our existing logic
         const isActive = a.isActive !== false;
-        const hasAmount = a.amount && a.amount !== '0' && a.amount !== '0.0';
+        const amountStr = a.amount || '';
+        const isUnlimited = amountStr.toLowerCase().includes('unlimited') || amountStr === '∞';
+        const amountNum = parseFloat(amountStr);
+        const hasValidAmount = isUnlimited || (!isNaN(amountNum) && amountNum > 0);
         const looksLikeERC20 = a.symbol && a.symbol.length <= 10;
         const notNFT = a.amount !== '1' || a.symbol?.includes('LP') || a.symbol?.includes('Token');
-        
-                 // FIXED: Handle "Unlimited" approvals properly
-         const amountStr = a.amount || '';
-         const isUnlimited = amountStr.toLowerCase().includes('unlimited') || amountStr === '∞';
-         const amountNum = parseFloat(amountStr);
-         const hasValidAmount = isUnlimited || (!isNaN(amountNum) && amountNum > 0);
-         
-         // DEBUG: Log amount parsing for transparency
-         console.log(`🔍 ${a.name}: "${amountStr}" → Unlimited:${isUnlimited}, Numeric:${amountNum}, Valid:${hasValidAmount}`);
-        
-        // EXTRA STRICT: Must have valid contract and spender addresses
-        const validContract = a.contract && a.contract.startsWith('0x') && a.contract.length === 42;
-        const validSpender = a.spender && a.spender.startsWith('0x') && a.spender.length === 42;
-        
-                 // Final validation check (as requested)
-         const isValid = isActive && hasValidAmount && looksLikeERC20 && notNFT && validContract && validSpender;
-         
-         if (isValid) {
-           console.log(`✅ INCLUDED: ${a.name} (${a.symbol}) - Amount: ${a.amount}`);
-         } else {
-           console.log(`⚠️ FILTERED OUT: ${a.name} - Active:${isActive}, ValidAmount:${hasValidAmount}, ERC20:${looksLikeERC20}, NotNFT:${notNFT}, ValidContract:${validContract}, ValidSpender:${validSpender}`);
-         }
-         
-         return isValid;
+        const validContract = a.contract?.startsWith('0x') && a.contract.length === 42;
+        const validSpender = a.spender?.startsWith('0x') && a.spender.length === 42;
+        return isActive && hasValidAmount && looksLikeERC20 && notNFT && validContract && validSpender;
       });
 
-             // Convert to checksummed addresses using Viem (as requested)
-       const tokenAddresses = [];
-       const spenderAddresses = [];
-       const validApprovals = [];
-       
-       for (const approval of erc20Approvals) {
-         try {
-           const checksummedToken = getAddress(approval.contract);
-           const checksummedSpender = getAddress(approval.spender);
-           
-           tokenAddresses.push(checksummedToken);
-           spenderAddresses.push(checksummedSpender);
-           validApprovals.push(approval);
-           
-           console.log(`✅ Checksummed: ${approval.name} - ${checksummedToken} → ${checksummedSpender}`);
-         } catch (error) {
-           console.log(`⚠️ Invalid address for ${approval.name}: ${error.message}`);
-         }
-       }
+      const tokenAddresses = [];
+      const spenderAddresses = [];
+      const validApprovals = [];
 
-      if (tokenAddresses.length !== spenderAddresses.length) {
-        console.error("❌ Length mismatch");
-        return;
+      for (const approval of erc20Approvals) {
+        try {
+          const token = getAddress(approval.contract);
+          const spender = getAddress(approval.spender);
+          tokenAddresses.push(token);
+          spenderAddresses.push(spender);
+          validApprovals.push(approval);
+        } catch (err) {
+          console.log(`⚠️ Invalid address: ${approval.name}`);
+        }
       }
 
       if (tokenAddresses.length === 0) {
-        console.log('❌ No valid approvals to revoke');
+        console.error('❌ No valid approvals to revoke');
         return;
       }
 
-      console.log("📥 Tokens:", tokenAddresses);
-      console.log("📥 Spenders:", spenderAddresses);
-      console.log("✅ Equal length:", tokenAddresses.length === spenderAddresses.length);
-      
-             // FINAL VALIDATION: Check checksummed addresses before contract call
-       console.log("🔍 FINAL VALIDATION - Checksummed addresses ready for contract:");
-       for (let i = 0; i < Math.min(tokenAddresses.length, spenderAddresses.length); i++) {
-         const token = tokenAddresses[i];
-         const spender = spenderAddresses[i];
-         const approval = validApprovals[i];
-         console.log(`  ${i}: ${approval.name} → ${approval.spenderName || 'Unknown Contract'}`);
-         console.log(`      Token: ${token}`);
-         console.log(`      Spender: ${spender}`);
-         console.log(`      Amount: ${approval.amount}`);
-       }
+      const walletClient = await getWalletClient(wagmiConfig, { chainId: BASE_CHAIN_ID });
 
-             
+      if (!walletClient) {
+        throw new Error('Wallet client not ready');
+      }
 
-       // Final validation before contract call (as requested)
-       if (tokenAddresses.length === 0 || spenderAddresses.length === 0) {
-         console.error("❌ Empty arrays - cannot call contract");
-         return;
-       }
-       
-       if (tokenAddresses.length !== spenderAddresses.length) {
-         console.error("❌ Array length mismatch - cannot call contract");
-         return;
-       }
-       
-       // Validate all addresses are checksum valid
-       const allAddressesValid = [...tokenAddresses, ...spenderAddresses].every(addr => {
-         try {
-           getAddress(addr);
-           return true;
-         } catch {
-           return false;
-         }
-       });
-       
-       if (!allAddressesValid) {
-         console.error("❌ Invalid addresses detected - cannot call contract");
-         return;
-       }
-       
-                    console.log("🚀 All validations passed - executing revoke transaction...");
-      
-            let tx;
-      try {
-        // Create contract call data using proper ABI encoding
-        const iface = new ethers.utils.Interface(revokeHelperABI);
-        const callData = iface.encodeFunctionData('revokeERC20', [tokenAddresses, spenderAddresses]);
-        
-        console.log("📝 Encoded call data:", callData);
-        console.log("🔍 Function signature:", callData.slice(0, 10));
-
-        const txParams = {
-          to: REVOKE_HELPER_ADDRESS,
-          data: callData,
-          from: address,
-          value: '0x0'
-        };
-
-        console.log("📤 Transaction parameters:", txParams);
-        console.log("🎯 Contract address:", REVOKE_HELPER_ADDRESS);
-        console.log("👤 From address:", address);
-        
-        tx = await provider.request({
-          method: 'eth_sendTransaction',
-          params: [txParams]
-        });
-        
-        console.log("✅ Transaction successful:", tx);
-
-             console.log("✅ Revoke submitted:", tx);
-      
-      // Clear revoked approvals from UI
-      setApprovals(prev => prev.filter(approval => !validApprovals.some(revoked => revoked.id === approval.id)));
-      
-      // Show success message
-      setError(null); // Clear any previous errors
-      console.log(`✅ Successfully revoked ${validApprovals.length} approvals!`);
-      
-    } catch (err) {
-      console.error("❌ Revoke failed:", err);
-      console.error("❌ Error details:", {
-        name: err.name,
-        message: err.message,
-        code: err.code,
-        data: err.data
+      const tx = await writeContract(wagmiConfig, {
+        account: walletClient.account.address,
+        abi: [
+          {
+            name: 'revokeERC20',
+            type: 'function',
+            stateMutability: 'nonpayable',
+            inputs: [
+              { name: 'tokens', type: 'address[]' },
+              { name: 'spenders', type: 'address[]' }
+            ],
+            outputs: []
+          }
+        ],
+        address: REVOKE_HELPER_ADDRESS,
+        functionName: 'revokeERC20',
+        args: [tokenAddresses, spenderAddresses]
       });
-      setError(`Failed to revoke approvals: ${err.message || 'Unknown error'}`);
+
+      console.log('✅ Tx sent:', tx);
+
+      setApprovals(prev =>
+        prev.filter(approval =>
+          !validApprovals.some(revoked => revoked.id === approval.id)
+        )
+      );
+    } catch (err) {
+      console.error('❌ Revoke failed:', err);
+      setError(err.message || 'Revoke failed');
     } finally {
       setIsRevoking(false);
     }
