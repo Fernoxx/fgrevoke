@@ -1,14 +1,8 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { getAddress } from 'viem';
-import { getWalletClient, writeContract } from 'wagmi/actions';
-import { wagmiConfig } from './lib/wagmi';
 
-import { REVOKE_HELPER_ADDRESS } from './lib/revokeHelperABI';
-
-const BASE_CHAIN_ID = 8453;
 
 function App() {
 
@@ -1074,119 +1068,9 @@ function App() {
     }
   };
 
-  // State for revoke operations
-  const [isRevoking, setIsRevoking] = useState(false);
 
-  // Revoke ALL approvals - Direct contract call
-  const handleRevokeAll = async () => {
-    console.log("🔥 Revoke All button clicked!");
-    console.log("📊 Current state:", {
-      approvalsCount: approvals.length,
-      isConnected,
-      hasProvider: !!provider,
-      address,
-      isRevoking
-    });
-    
-    if (approvals.length === 0) {
-      console.log("❌ No approvals to revoke");
-      setError('No approvals to revoke!');
-      return;
-    }
 
-    if (!provider || !address) {
-      console.log("❌ Wallet not connected");
-      setError('Please connect your wallet first');
-      return;
-    }
 
-    if (isRevoking) {
-      console.log("❌ Already revoking");
-      return;
-    }
-
-    // Direct call to contract - no confirm dialog (doesn't work in sandboxed environment)
-    console.log("🚀 Calling revoke contract directly...");
-    await confirmRevokeAll();
-  };
-
-  const confirmRevokeAll = async () => {
-    try {
-      setIsRevoking(true);
-
-      const erc20Approvals = approvals.filter(a => {
-        const isActive = a.isActive !== false;
-        const amountStr = a.amount || '';
-        const isUnlimited = amountStr.toLowerCase().includes('unlimited') || amountStr === '∞';
-        const amountNum = parseFloat(amountStr);
-        const hasValidAmount = isUnlimited || (!isNaN(amountNum) && amountNum > 0);
-        const looksLikeERC20 = a.symbol && a.symbol.length <= 10;
-        const notNFT = a.amount !== '1' || a.symbol?.includes('LP') || a.symbol?.includes('Token');
-        const validContract = a.contract?.startsWith('0x') && a.contract.length === 42;
-        const validSpender = a.spender?.startsWith('0x') && a.spender.length === 42;
-        return isActive && hasValidAmount && looksLikeERC20 && notNFT && validContract && validSpender;
-      });
-
-      const tokenAddresses = [];
-      const spenderAddresses = [];
-      const validApprovals = [];
-
-      for (const approval of erc20Approvals) {
-        try {
-          const token = getAddress(approval.contract);
-          const spender = getAddress(approval.spender);
-          tokenAddresses.push(token);
-          spenderAddresses.push(spender);
-          validApprovals.push(approval);
-        } catch (err) {
-          console.log(`⚠️ Invalid address: ${approval.name}`);
-        }
-      }
-
-      if (tokenAddresses.length === 0) {
-        console.error('❌ No valid approvals to revoke');
-        return;
-      }
-
-      const walletClient = await getWalletClient(wagmiConfig, { chainId: BASE_CHAIN_ID });
-
-      if (!walletClient) {
-        throw new Error('Wallet client not ready');
-      }
-
-      const tx = await writeContract(wagmiConfig, {
-        account: walletClient.account.address,
-        abi: [
-          {
-            name: 'revokeERC20',
-            type: 'function',
-            stateMutability: 'nonpayable',
-            inputs: [
-              { name: 'tokens', type: 'address[]' },
-              { name: 'spenders', type: 'address[]' }
-            ],
-            outputs: []
-          }
-        ],
-        address: REVOKE_HELPER_ADDRESS,
-        functionName: 'revokeERC20',
-        args: [tokenAddresses, spenderAddresses]
-      });
-
-      console.log('✅ Tx sent:', tx);
-
-      setApprovals(prev =>
-        prev.filter(approval =>
-          !validApprovals.some(revoked => revoked.id === approval.id)
-        )
-      );
-    } catch (err) {
-      console.error('❌ Revoke failed:', err);
-      setError(err.message || 'Revoke failed');
-    } finally {
-      setIsRevoking(false);
-    }
-  };
 
 
 
@@ -1207,7 +1091,9 @@ Track your journey: https://fgrevoke.vercel.app`
 ✅ Reviewed ${approvals.length} token approvals
 🔒 Protecting my assets from risky permissions
 
-Secure yours too: https://fgrevoke.vercel.app`;
+Secure yours too:
+
+https://fgrevoke.vercel.app`;
 
     try {
       if (sdk?.actions?.composeCast) {
@@ -1355,12 +1241,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                      userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}
                   </button>
                   
-                  {/* Connection Status */}
-                  {!isConnected && (
-                    <div className="mt-2 text-sm text-purple-300 text-center">
-                      🔗 Farcaster SDK + Direct wallet connection
-                    </div>
-                  )}
+
                 </>
               )}
             </div>
@@ -1569,20 +1450,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
-              {/* Revoke All Button - Only show for approvals */}
-              {currentPage === 'approvals' && approvals.length > 0 && (
-                <div className="mb-6 space-y-2">
-                  <button
-                    onClick={handleRevokeAll}
-                    disabled={isRevoking}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                    {isRevoking ? 'Revoking Approvals...' : `Revoke All ${approvals.length} Approvals`}
-                  </button>
 
-                </div>
-              )}
 
               {/* Error Display */}
               {error && (
@@ -1592,47 +1460,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
-              {/* Debug Info */}
-              {isConnected && (
-                <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4 text-xs">
-                  <details>
-                    <summary className="text-blue-300 cursor-pointer">🔍 Debug Info</summary>
-                    <div className="mt-2 space-y-1 text-blue-200">
-                      <p><strong>Farcaster User:</strong> {currentUser ? `@${currentUser.username} (FID: ${currentUser.fid})` : 'None'}</p>
-                      <p><strong>Verified Addresses:</strong> {userAddresses.length}</p>
-                      <p><strong>Current Address:</strong> {address}</p>
-                      <p><strong>Chain:</strong> {selectedChain}</p>
-                      <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
-                      <p><strong>Current Page:</strong> {currentPage}</p>
-                      {currentPage === 'approvals' ? (
-                        <>
-                          <p><strong>Loading Approvals:</strong> {loading ? 'Yes' : 'No'}</p>
-                          <p><strong>Approvals Count:</strong> {approvals.length}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p><strong>Total Transactions:</strong> {activityStats.totalTransactions?.toLocaleString() || 0}</p>
-                          <p><strong>Total Gas Spent:</strong> {activityStats.totalGasFees?.toFixed(6) || '0.000000'} ETH</p>
-                          <p><strong>Total ETH Sent:</strong> {activityStats.totalValue?.toFixed(6) || '0.000000'} ETH</p>
-                          <p><strong>dApps Interacted:</strong> {activityStats.dappsUsed || 0}</p>
-                          {activityStats.chainStats && (
-                            <details className="mt-2">
-                              <summary className="cursor-pointer text-sm text-purple-300">Chain Breakdown</summary>
-                              <div className="mt-1 pl-4 text-xs">
-                                {Object.entries(activityStats.chainStats).map(([chain, stats]) => (
-                                  <div key={chain} className="text-purple-400">
-                                    <strong>{chain.toUpperCase()}:</strong> {stats.totalTxns} txns, {stats.totalGasETH.toFixed(4)} ETH gas, {stats.totalEthSent.toFixed(4)} ETH sent
-                                  </div>
-                                ))}
-                              </div>
-                            </details>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </details>
-                </div>
-              )}
+
 
               {/* Content */}
               {currentPage === 'approvals' ? (
