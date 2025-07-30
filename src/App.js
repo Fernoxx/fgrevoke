@@ -552,7 +552,11 @@ function App() {
             console.log('⚠️ No user data in context');
           }
 
-          // Don't call ready() here - it should be called after UI is ready
+          // CRITICAL: Call ready() to hide splash screen in miniapp
+          console.log('📞 Calling sdk.actions.ready()...');
+          await sdk.actions.ready();
+          console.log('✅ SDK ready called successfully!');
+          setReadyCallStatus('success');
         } else {
           console.log('🌐 Running in web browser (not miniapp)');
           // For web browser usage, just set SDK as ready without miniapp features
@@ -943,27 +947,7 @@ function App() {
     }
   }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
 
-  // CRITICAL: Call sdk.actions.ready() after app is fully loaded (official docs pattern)
-  useEffect(() => {
-    const callReady = async () => {
-      // Only call ready() when key UI states are loaded
-      if (sdkReady && (isConnected || !sdk)) {
-        try {
-          if (sdk && typeof sdk.actions?.ready === 'function') {
-            console.log('📞 Calling sdk.actions.ready() after app is ready...');
-            await sdk.actions.ready();
-            console.log('✅ SDK ready called successfully!');
-            setReadyCallStatus('success');
-          }
-        } catch (error) {
-          console.error('❌ Failed to call sdk.actions.ready():', error);
-          setReadyCallStatus('error');
-        }
-      }
-    };
 
-    callReady();
-  }, [sdkReady, isConnected]);
 
   // Helper functions for token data (using Alchemy)
   const checkCurrentAllowance = async (tokenContract, owner, spender) => {
