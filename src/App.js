@@ -1099,8 +1099,25 @@ function App() {
          return isValid;
       });
 
-      const tokenAddresses = erc20Approvals.map(a => a.contract);
-      const spenderAddresses = erc20Approvals.map(a => a.spender);
+      // Convert to checksummed addresses with error handling
+      const tokenAddresses = [];
+      const spenderAddresses = [];
+      const validApprovals = [];
+      
+      for (const approval of erc20Approvals) {
+        try {
+          const checksummedToken = ethers.utils.getAddress(approval.contract);
+          const checksummedSpender = ethers.utils.getAddress(approval.spender);
+          
+          tokenAddresses.push(checksummedToken);
+          spenderAddresses.push(checksummedSpender);
+          validApprovals.push(approval);
+          
+          console.log(`✅ Checksummed: ${approval.name} - ${checksummedToken} → ${checksummedSpender}`);
+        } catch (error) {
+          console.log(`⚠️ Invalid address for ${approval.name}: ${error.message}`);
+        }
+      }
 
       if (tokenAddresses.length !== spenderAddresses.length) {
         console.error("❌ Length mismatch");
@@ -1116,17 +1133,17 @@ function App() {
       console.log("📥 Spenders:", spenderAddresses);
       console.log("✅ Equal length:", tokenAddresses.length === spenderAddresses.length);
       
-      // FINAL VALIDATION: Check actual allowances before contract call
-      console.log("🔍 FINAL VALIDATION - Checking actual allowances...");
-      for (let i = 0; i < Math.min(tokenAddresses.length, spenderAddresses.length); i++) {
-        const token = tokenAddresses[i];
-        const spender = spenderAddresses[i];
-        const approval = erc20Approvals[i];
-        console.log(`  ${i}: ${approval.name} → ${approval.spenderName}`);
-        console.log(`      Token: ${token}`);
-        console.log(`      Spender: ${spender}`);
-        console.log(`      Stored Amount: ${approval.amount}`);
-      }
+             // FINAL VALIDATION: Check checksummed addresses before contract call
+       console.log("🔍 FINAL VALIDATION - Checksummed addresses ready for contract:");
+       for (let i = 0; i < Math.min(tokenAddresses.length, spenderAddresses.length); i++) {
+         const token = tokenAddresses[i];
+         const spender = spenderAddresses[i];
+         const approval = validApprovals[i];
+         console.log(`  ${i}: ${approval.name} → ${approval.spenderName || 'Unknown Contract'}`);
+         console.log(`      Token: ${token}`);
+         console.log(`      Spender: ${spender}`);
+         console.log(`      Amount: ${approval.amount}`);
+       }
 
       // Since writeContract doesn't work with Farcaster SDK, use provider.request
       // Create contract call data
@@ -1155,8 +1172,8 @@ function App() {
       console.log("✅ Revoke submitted:", tx);
       console.log('✅ Revoke submitted');
       
-      // Clear revoked approvals from UI
-      setApprovals(prev => prev.filter(approval => !erc20Approvals.some(revoked => revoked.id === approval.id)));
+             // Clear revoked approvals from UI
+       setApprovals(prev => prev.filter(approval => !validApprovals.some(revoked => revoked.id === approval.id)));
       
     } catch (err) {
       console.error("❌ Revoke failed:", err);
