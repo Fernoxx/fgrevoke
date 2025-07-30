@@ -1076,25 +1076,15 @@ function App() {
       // ENHANCED LOGGING AS REQUESTED
       console.log("🧾 Token list:", tokenAddresses);
       console.log("🧾 Spender list:", spenderAddresses);
-      console.log('📋 Detailed approval data:', { 
-        count: approvals.length, 
-        tokenAddresses: tokenAddresses.slice(0, 3), 
-        spenderAddresses: spenderAddresses.slice(0, 3),
-        allTokens: tokenAddresses,
-        allSpenders: spenderAddresses
-      });
 
       // Validation checks
-      if (tokenAddresses.length === 0 || spenderAddresses.length === 0) {
+      if (!tokenAddresses.length || !spenderAddresses.length) {
         console.error("❌ Empty arrays detected!");
-        throw new Error('No valid approvals to revoke - arrays are empty');
+        throw new Error("No valid approvals found");
       }
 
       if (tokenAddresses.length !== spenderAddresses.length) {
-        console.error("❌ Array length mismatch!", {
-          tokens: tokenAddresses.length,
-          spenders: spenderAddresses.length
-        });
+        console.error("❌ Array length mismatch!");
         throw new Error('Token and spender arrays length mismatch');
       }
 
@@ -1117,34 +1107,28 @@ function App() {
         }
       }
 
-      // Create contract call data
-      console.log('🔧 Creating contract interface...');
-      const contractInterface = new ethers.utils.Interface(revokeHelperABI);
+      // Use ethers.js Contract for better transaction handling
+      console.log("🔧 Creating ethers contract instance...");
+      const ethersProvider = new ethers.providers.Web3Provider(provider);
+      const signer = ethersProvider.getSigner();
+      const contract = new ethers.Contract(REVOKE_HELPER_ADDRESS, revokeHelperABI, signer);
       
-      console.log("📤 Encoding function call...");
-      const data = contractInterface.encodeFunctionData('revokeERC20', [tokenAddresses, spenderAddresses]);
-      console.log('📝 Encoded function data length:', data.length);
-      console.log('📝 Encoded function data preview:', data.slice(0, 50) + '...');
+      console.log("📤 Calling contract.revokeERC20...");
+      console.log("📋 Args:", { tokenAddresses, spenderAddresses });
       
-      // Submit transaction with enhanced logging
-      const txParams = {
-        to: REVOKE_HELPER_ADDRESS,
-        data: data,
-        from: address,
-        value: '0x0'
-      };
-
-      console.log('📝 Final transaction params:', txParams);
-      console.log("📤 Sending revoke tx...");
+      // Call the contract function directly
+      const tx = await contract.revokeERC20(tokenAddresses, spenderAddresses);
       
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
-      });
-
-      console.log('✅ Transaction sent!', txHash);
-      console.log("✅ Transaction confirmed!");
-      alert(`✅ Revoke transaction submitted! Hash: ${txHash}`);
+      console.log("✅ Transaction sent!", tx.hash);
+      console.log("⏳ Waiting for confirmation...");
+      
+      // Wait for transaction confirmation
+      const receipt = await tx.wait();
+      
+      console.log("✅ Transaction confirmed!", receipt.transactionHash);
+      console.log("⛽ Gas used:", receipt.gasUsed.toString());
+      
+      alert(`✅ Revoke transaction confirmed! Hash: ${receipt.transactionHash}`);
       
       // Clear approvals from UI
       setApprovals([]);
@@ -1153,8 +1137,16 @@ function App() {
       console.error('❌ Revoke failed:', error);
       console.error('❌ Error message:', error.message);
       console.error('❌ Error code:', error.code);
-      console.error('❌ Error stack:', error.stack);
-      alert(`❌ Revoke failed: ${error.message}`);
+      console.error('❌ Error reason:', error.reason);
+      
+      // Handle specific error types
+      if (error.code === 4001) {
+        alert('❌ Transaction rejected by user');
+      } else if (error.code === -32603) {
+        alert('❌ Transaction failed - check gas limits and network');
+      } else {
+        alert(`❌ Revoke failed: ${error.message}`);
+      }
     } finally {
       setIsRevoking(false);
     }
