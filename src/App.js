@@ -1066,7 +1066,7 @@ function App() {
     try {
       setIsRevoking(true);
       
-      // Filter only ERC20 approvals (adjust based on your structure)
+      // Filter only ERC20 approvals with STRICT validation
       const erc20Approvals = approvals.filter(a => {
         // Since we don't have tokenType field, use our existing logic
         const isActive = a.isActive !== false;
@@ -1074,7 +1074,23 @@ function App() {
         const looksLikeERC20 = a.symbol && a.symbol.length <= 10;
         const notNFT = a.amount !== '1' || a.symbol?.includes('LP') || a.symbol?.includes('Token');
         
-        return isActive && hasAmount && looksLikeERC20 && notNFT;
+        // EXTRA STRICT: Only include if amount is a valid number > 0
+        const amountNum = parseFloat(a.amount || '0');
+        const hasValidAmount = !isNaN(amountNum) && amountNum > 0;
+        
+        // EXTRA STRICT: Must have valid contract and spender addresses
+        const validContract = a.contract && a.contract.startsWith('0x') && a.contract.length === 42;
+        const validSpender = a.spender && a.spender.startsWith('0x') && a.spender.length === 42;
+        
+        const isValid = isActive && hasAmount && hasValidAmount && looksLikeERC20 && notNFT && validContract && validSpender;
+        
+        if (!isValid) {
+          console.log(`⚠️ FILTERED OUT: ${a.name} - Active:${isActive}, HasAmount:${hasAmount}, ValidAmount:${hasValidAmount}, ERC20:${looksLikeERC20}, NotNFT:${notNFT}, ValidContract:${validContract}, ValidSpender:${validSpender}`);
+        } else {
+          console.log(`✅ INCLUDED: ${a.name} (${a.symbol}) - Amount: ${a.amount}`);
+        }
+        
+        return isValid;
       });
 
       const tokenAddresses = erc20Approvals.map(a => a.contract);
@@ -1093,6 +1109,18 @@ function App() {
       console.log("📥 Tokens:", tokenAddresses);
       console.log("📥 Spenders:", spenderAddresses);
       console.log("✅ Equal length:", tokenAddresses.length === spenderAddresses.length);
+      
+      // FINAL VALIDATION: Check actual allowances before contract call
+      console.log("🔍 FINAL VALIDATION - Checking actual allowances...");
+      for (let i = 0; i < Math.min(tokenAddresses.length, spenderAddresses.length); i++) {
+        const token = tokenAddresses[i];
+        const spender = spenderAddresses[i];
+        const approval = erc20Approvals[i];
+        console.log(`  ${i}: ${approval.name} → ${approval.spenderName}`);
+        console.log(`      Token: ${token}`);
+        console.log(`      Spender: ${spender}`);
+        console.log(`      Stored Amount: ${approval.amount}`);
+      }
 
       // Since writeContract doesn't work with Farcaster SDK, use provider.request
       // Create contract call data
