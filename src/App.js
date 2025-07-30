@@ -4,7 +4,7 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-import { getWalletClient } from '@wagmi/core';
+// Removed getWalletClient import - using direct provider approach
 import { wagmiConfig } from './lib/wagmi';
 
 import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
@@ -1240,32 +1240,13 @@ function App() {
          return;
        }
        
-              // Use writeContract with walletClient (as requested - THE CORRECT WAY)
-       console.log("🚀 All validations passed - getting wallet client with signer...");
+              // Skip wagmi entirely and use direct provider approach (more reliable in Farcaster)
+       console.log("🚀 All validations passed - using direct provider approach...");
        
        let tx;
        try {
-         const walletClient = await getWalletClient({
-           chainId: 8453, // Base chain
-           account: address // ✅ explicitly pass connected address
-         });
-         console.log("🔍 Wallet client obtained:", !!walletClient);
-         console.log("🔍 Wallet client account:", walletClient?.account?.address);
-         
-         if (!walletClient) {
-           throw new Error("Wallet client not found. Is wallet connected?");
-         }
-         
-         // Use client.writeContract() instead of global writeContract()
-         tx = await walletClient.writeContract({
-           address: REVOKE_HELPER_ADDRESS,
-           abi: revokeABI,
-           functionName: 'revokeERC20',
-           args: [tokenAddresses, spenderAddresses],
-           account: address
-         });
-         
-         console.log("✅ writeContract call successful:", tx);
+         // Skip getWalletClient() entirely - it's causing the connections error
+         throw new Error("Skipping wagmi - using direct provider");
        } catch (writeError) {
          console.error("❌ writeContract failed:", writeError);
          console.error("❌ Error name:", writeError.name);
