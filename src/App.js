@@ -1126,12 +1126,11 @@ function App() {
       });
       
       console.log('✅ Claim successful:', tx);
+      console.log('💰 User successfully claimed 0.5 USDC from Base contract');
       
       // Mark as claimed in localStorage and show share button
       localStorage.setItem('hasClaimed', 'true');
       setShowShare(true);
-      
-      alert('🎉 Claim successful! You received 0.5 USDC!');
     } catch (error) {
       console.error('❌ Claim failed:', error);
       setError(`Claim failed: ${error.message}`);
@@ -1544,18 +1543,29 @@ https://fgrevoke.vercel.app`;
                   )}
 
                   {showShare && (
-                    <div className="bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-500 rounded-lg p-4 mb-4">
-                      <h3 className="text-white font-bold text-lg mb-2">✅ Reward Claimed!</h3>
-                      <p className="text-purple-100 text-sm mb-3">
-                        You've successfully claimed 0.5 USDC! Share your success:
-                      </p>
-                      <button
-                        onClick={shareCast}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition-colors"
-                      >
-                        <Share2 className="w-4 h-4" />
-                        Share
-                      </button>
+                    <div className="bg-gradient-to-r from-green-600 to-blue-600 border border-green-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-white font-bold text-lg mb-3 text-center">Success. Thanks for using Farguard</h3>
+                      
+                      <div className="space-y-3">
+                        <button
+                          onClick={shareCast}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          Share
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setCurrentPage('approvals');
+                            setShowShare(false);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Revoke More
+                        </button>
+                      </div>
                     </div>
                   )}
 
