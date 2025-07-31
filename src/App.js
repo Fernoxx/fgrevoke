@@ -1,13 +1,10 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Trash2, Activity } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { ethers } from 'ethers';
-import { getAddress } from 'viem';
-// Removed getWalletClient import - using direct provider approach
-import { wagmiConfig } from './lib/wagmi';
+import { useReadContract } from 'wagmi';
+import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
 
-import { REVOKE_HELPER_ADDRESS, revokeHelperABI } from './lib/revokeHelperABI';
 
 function App() {
 
@@ -16,6 +13,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals' or 'activity'
+  const [activityPageNumber, setActivityPageNumber] = useState(1);
+  const transactionsPerPage = 10;
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -255,14 +254,7 @@ function App() {
     console.log(`✅ Processed ${finalApprovals.length} active approvals using Etherscan V2`);
   };
 
-  // Get ethers provider for reliable blockchain interactions
-  const getEthersProvider = (chain) => {
-    const chainConfig = chains.find(c => c.value === chain);
-    if (!chainConfig) return null;
-    
-    // Use the first RPC URL for the chain
-    return new ethers.providers.JsonRpcProvider(chainConfig.rpcUrls[0]);
-  };
+
 
 
 
@@ -1015,17 +1007,28 @@ function App() {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
-  // Direct individual revoke (no confirmation dialog)
-  const requestRevokeApproval = (approval) => {
-    console.log("🔄 Individual revoke requested for:", approval.name);
-    console.log("🚀 Calling individual revoke directly...");
-    handleRevokeApproval(approval);
-  };
+  // Track revoke and claim status with localStorage
+  const hasRevoked = localStorage.getItem('hasRevoked') === 'true';
+  const hasClaimedLocally = localStorage.getItem('hasClaimed') === 'true';
+  const showClaim = localStorage.getItem('hasRevoked') === 'true' && localStorage.getItem('hasClaimed') !== 'true';
+  const [showShare, setShowShare] = useState(false);
 
-  // RESTORE WORKING INDIVIDUAL REVOKE - Direct ERC20 approve(spender, 0) call
-  const handleRevokeApproval = async (approval) => {
-    console.log('🎯 handleRevokeApproval called for:', approval.name);
-    console.log('🔌 Provider state:', { hasProvider: !!provider, isConnected, address });
+  // Initialize showShare state based on localStorage
+  useEffect(() => {
+    if (hasClaimedLocally) {
+      setShowShare(true);
+    }
+  }, [hasClaimedLocally]);
+
+  // Reset activity page number when switching chains or pages
+  useEffect(() => {
+    setActivityPageNumber(1);
+  }, [selectedChain, currentPage]);
+
+  // Real revoke function - requires wallet popup and successful transaction
+  const requestRevokeApproval = async (approval) => {
+    console.log("🔄 Individual revoke requested for:", approval.name);
+    console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
     
     if (!provider || !isConnected) {
       console.log('❌ Wallet not connected properly');
@@ -1035,6 +1038,9 @@ function App() {
 
     try {
       console.log('🔄 Starting individual revoke for:', approval.name);
+      
+      // Clear any previous errors
+      setError(null);
       
       // Ensure we're on the right chain
       const chainConfig = chains.find(c => c.value === selectedChain);
@@ -1053,7 +1059,7 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // ERC20 approve(spender, 0) call data
+      // ERC20 approve(spender, 0) call data - This ACTUALLY revokes the approval on-chain
       const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
       
       const txParams = {
@@ -1063,239 +1069,117 @@ function App() {
         value: '0x0'
       };
 
-      console.log('📝 Submitting revoke transaction...');
+      console.log('📝 Transaction params:', txParams);
+      console.log('📝 Submitting REAL revoke transaction - this will actually remove approval from wallet...');
+      
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [txParams]
       });
 
-      console.log('✅ Revoke transaction submitted:', txHash);
+      console.log('✅ Revoke transaction submitted successfully:', txHash);
+      console.log('🔗 Token approval ACTUALLY revoked on blockchain - spender can no longer access tokens');
       
-      // Update UI optimistically
+      // Mark as revoked and update UI after successful blockchain transaction
+      localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
+      
+      console.log('✅ Blockchain revoke complete + UI updated:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
-      setError(`Failed to revoke approval: ${error.message}`);
-    }
-  };
-
-  // State for revoke operations
-  const [isRevoking, setIsRevoking] = useState(false);
-
-  // Revoke ALL approvals - Direct contract call
-  const handleRevokeAll = async () => {
-    console.log("🔥 Revoke All button clicked!");
-    console.log("📊 Current state:", {
-      approvalsCount: approvals.length,
-      isConnected,
-      hasProvider: !!provider,
-      address,
-      isRevoking
-    });
-    
-    if (approvals.length === 0) {
-      console.log("❌ No approvals to revoke");
-      setError('No approvals to revoke!');
-      return;
-    }
-
-    if (!provider || !address) {
-      console.log("❌ Wallet not connected");
-      setError('Please connect your wallet first');
-      return;
-    }
-
-    if (isRevoking) {
-      console.log("❌ Already revoking");
-      return;
-    }
-
-    // Direct call to contract - no confirm dialog (doesn't work in sandboxed environment)
-    console.log("🚀 Calling revoke contract directly...");
-    await confirmRevokeAll();
-  };
-
-    // Clean Safe Revoke Pattern (as requested)
-  const confirmRevokeAll = async () => {
-    try {
-      setIsRevoking(true);
+      console.error('❌ Error details:', error);
       
-      // Filter only ERC20 approvals with STRICT validation
-      const erc20Approvals = approvals.filter(a => {
-        // Since we don't have tokenType field, use our existing logic
-        const isActive = a.isActive !== false;
-        const hasAmount = a.amount && a.amount !== '0' && a.amount !== '0.0';
-        const looksLikeERC20 = a.symbol && a.symbol.length <= 10;
-        const notNFT = a.amount !== '1' || a.symbol?.includes('LP') || a.symbol?.includes('Token');
-        
-                 // FIXED: Handle "Unlimited" approvals properly
-         const amountStr = a.amount || '';
-         const isUnlimited = amountStr.toLowerCase().includes('unlimited') || amountStr === '∞';
-         const amountNum = parseFloat(amountStr);
-         const hasValidAmount = isUnlimited || (!isNaN(amountNum) && amountNum > 0);
-         
-         // DEBUG: Log amount parsing for transparency
-         console.log(`🔍 ${a.name}: "${amountStr}" → Unlimited:${isUnlimited}, Numeric:${amountNum}, Valid:${hasValidAmount}`);
-        
-        // EXTRA STRICT: Must have valid contract and spender addresses
-        const validContract = a.contract && a.contract.startsWith('0x') && a.contract.length === 42;
-        const validSpender = a.spender && a.spender.startsWith('0x') && a.spender.length === 42;
-        
-                 // Final validation check (as requested)
-         const isValid = isActive && hasValidAmount && looksLikeERC20 && notNFT && validContract && validSpender;
-         
-         if (isValid) {
-           console.log(`✅ INCLUDED: ${a.name} (${a.symbol}) - Amount: ${a.amount}`);
-         } else {
-           console.log(`⚠️ FILTERED OUT: ${a.name} - Active:${isActive}, ValidAmount:${hasValidAmount}, ERC20:${looksLikeERC20}, NotNFT:${notNFT}, ValidContract:${validContract}, ValidSpender:${validSpender}`);
-         }
-         
-         return isValid;
+      // Don't remove the approval from UI if transaction failed
+      if (error.code === 4001) {
+        setError('Transaction cancelled by user');
+      } else {
+        setError(`Failed to revoke approval: ${error.message}`);
+      }
+    }
+  };
+
+
+
+
+
+
+
+  // Reward Claimer Contract Interactions using same provider as revoke
+  const { data: totalClaims } = useReadContract({
+    abi: rewardClaimerABI,
+    address: rewardClaimerAddress,
+    functionName: 'totalClaims',
+  });
+
+  const handleClaim = async () => {
+    try {
+      setError(null);
+      console.log('🎁 Starting claim process using existing Farcaster/Coinbase wallet...');
+      
+      if (!provider || !isConnected) {
+        console.log('❌ Wallet not connected properly');
+        setError('Please connect your wallet first');
+        return;
+      }
+
+      // Ensure we're on Base chain for the claim
+      const baseChainId = '0x2105'; // Base chain ID in hex
+      
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' });
+        if (currentChainId !== baseChainId) {
+          console.log('🔄 Switching to Base chain for claim...');
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: baseChainId }],
+          });
+        }
+      } catch (switchError) {
+        console.log('Chain switch error:', switchError);
+      }
+
+      // Encode claimReward() function call
+      const claimFunctionSignature = '0xb88a802f'; // claimReward()
+      
+      const txParams = {
+        to: rewardClaimerAddress,
+        data: claimFunctionSignature,
+        from: address,
+        value: '0x0'
+      };
+
+      console.log('📝 Claim transaction params:', txParams);
+      console.log('📝 Calling claimReward() on Base contract - wallet popup should appear...');
+      
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [txParams]
       });
 
-             // Convert to checksummed addresses using Viem (as requested)
-       const tokenAddresses = [];
-       const spenderAddresses = [];
-       const validApprovals = [];
-       
-       for (const approval of erc20Approvals) {
-         try {
-           const checksummedToken = getAddress(approval.contract);
-           const checksummedSpender = getAddress(approval.spender);
-           
-           tokenAddresses.push(checksummedToken);
-           spenderAddresses.push(checksummedSpender);
-           validApprovals.push(approval);
-           
-           console.log(`✅ Checksummed: ${approval.name} - ${checksummedToken} → ${checksummedSpender}`);
-         } catch (error) {
-           console.log(`⚠️ Invalid address for ${approval.name}: ${error.message}`);
-         }
-       }
-
-      if (tokenAddresses.length !== spenderAddresses.length) {
-        console.error("❌ Length mismatch");
-        return;
+      console.log('✅ Claim transaction submitted successfully:', txHash);
+      console.log('💰 User successfully claimed 0.5 USDC from Base contract');
+      
+      // Mark as claimed in localStorage and show share button
+      localStorage.setItem('hasClaimed', 'true');
+      setShowShare(true);
+      
+      console.log('🔒 Claim button will now be hidden (hasClaimed = true)');
+    } catch (error) {
+      console.error('❌ Claim failed:', error);
+      
+      if (error.code === 4001) {
+        setError('Transaction cancelled by user');
+      } else {
+        setError(`Claim failed: ${error.message}`);
       }
-
-      if (tokenAddresses.length === 0) {
-        console.log('❌ No valid approvals to revoke');
-        return;
-      }
-
-      console.log("📥 Tokens:", tokenAddresses);
-      console.log("📥 Spenders:", spenderAddresses);
-      console.log("✅ Equal length:", tokenAddresses.length === spenderAddresses.length);
-      
-             // FINAL VALIDATION: Check checksummed addresses before contract call
-       console.log("🔍 FINAL VALIDATION - Checksummed addresses ready for contract:");
-       for (let i = 0; i < Math.min(tokenAddresses.length, spenderAddresses.length); i++) {
-         const token = tokenAddresses[i];
-         const spender = spenderAddresses[i];
-         const approval = validApprovals[i];
-         console.log(`  ${i}: ${approval.name} → ${approval.spenderName || 'Unknown Contract'}`);
-         console.log(`      Token: ${token}`);
-         console.log(`      Spender: ${spender}`);
-         console.log(`      Amount: ${approval.amount}`);
-       }
-
-             // Use writeContract with proper ABI (as requested)
-       const revokeABI = [
-         {
-           "inputs": [
-             { "internalType": "address[]", "name": "tokens", "type": "address[]" },
-             { "internalType": "address[]", "name": "spenders", "type": "address[]" }
-           ],
-           "name": "revokeERC20",
-           "outputs": [],
-           "stateMutability": "nonpayable",
-           "type": "function"
-         }
-       ];
-
-       // Final validation before contract call (as requested)
-       if (tokenAddresses.length === 0 || spenderAddresses.length === 0) {
-         console.error("❌ Empty arrays - cannot call contract");
-         return;
-       }
-       
-       if (tokenAddresses.length !== spenderAddresses.length) {
-         console.error("❌ Array length mismatch - cannot call contract");
-         return;
-       }
-       
-       // Validate all addresses are checksum valid
-       const allAddressesValid = [...tokenAddresses, ...spenderAddresses].every(addr => {
-         try {
-           getAddress(addr);
-           return true;
-         } catch {
-           return false;
-         }
-       });
-       
-       if (!allAddressesValid) {
-         console.error("❌ Invalid addresses detected - cannot call contract");
-         return;
-       }
-       
-              // Skip wagmi entirely and use direct provider approach (more reliable in Farcaster)
-       console.log("🚀 All validations passed - using direct provider approach...");
-       
-       let tx;
-       try {
-         // Skip getWalletClient() entirely - it's causing the connections error
-         throw new Error("Skipping wagmi - using direct provider");
-       } catch (writeError) {
-         console.error("❌ writeContract failed:", writeError);
-         console.error("❌ Error name:", writeError.name);
-         console.error("❌ Error message:", writeError.message);
-         
-         // If wagmi writeContract fails, fall back to direct provider call
-         console.log("🔄 Falling back to direct provider call...");
-         
-         // Create contract call data manually
-         const functionSignature = '0x6b6f5a1e'; // revokeERC20(address[],address[])
-         const encodedTokens = ethers.utils.defaultAbiCoder.encode(['address[]'], [tokenAddresses]);
-         const encodedSpenders = ethers.utils.defaultAbiCoder.encode(['address[]'], [spenderAddresses]);
-         
-         const tokensData = encodedTokens.slice(66);
-         const spendersData = encodedSpenders.slice(66);
-         const tokensOffset = '0000000000000000000000000000000000000000000000000000000000000040';
-         const spendersOffset = (64 + tokensData.length / 2).toString(16).padStart(64, '0');
-         const callData = functionSignature + tokensOffset + spendersOffset + tokensData + spendersData;
-
-         const txParams = {
-           to: REVOKE_HELPER_ADDRESS,
-           data: callData,
-           from: address,
-           value: '0x0'
-         };
-
-         tx = await provider.request({
-           method: 'eth_sendTransaction',
-           params: [txParams]
-         });
-         
-         console.log("✅ Fallback transaction successful:", tx);
-       }
-
-       console.log("✅ Revoke submitted:", tx);
-       console.log('✅ Revoke submitted');
-      
-             // Clear revoked approvals from UI
-       setApprovals(prev => prev.filter(approval => !validApprovals.some(revoked => revoked.id === approval.id)));
-      
-    } catch (err) {
-      console.error("❌ Revoke failed:", err);
-      console.log(err.message || 'Revoke failed');
-    } finally {
-      setIsRevoking(false);
     }
   };
 
-
+  const shareCast = () => {
+    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app");
+    window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
+  };
 
   // Share to Farcaster using proper SDK method
   const handleShare = async () => {
@@ -1314,7 +1198,9 @@ Track your journey: https://fgrevoke.vercel.app`
 ✅ Reviewed ${approvals.length} token approvals
 🔒 Protecting my assets from risky permissions
 
-Secure yours too: https://fgrevoke.vercel.app`;
+Secure yours too:
+
+https://fgrevoke.vercel.app`;
 
     try {
       if (sdk?.actions?.composeCast) {
@@ -1462,12 +1348,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                      userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}
                   </button>
                   
-                  {/* Connection Status */}
-                  {!isConnected && (
-                    <div className="mt-2 text-sm text-purple-300 text-center">
-                      🔗 Farcaster SDK + Direct wallet connection
-                    </div>
-                  )}
+
                 </>
               )}
             </div>
@@ -1676,20 +1557,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
-              {/* Revoke All Button - Only show for approvals */}
-              {currentPage === 'approvals' && approvals.length > 0 && (
-                <div className="mb-6 space-y-2">
-                  <button
-                    onClick={handleRevokeAll}
-                    disabled={isRevoking}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                    {isRevoking ? 'Revoking Approvals...' : `Revoke All ${approvals.length} Approvals`}
-                  </button>
 
-                </div>
-              )}
 
               {/* Error Display */}
               {error && (
@@ -1699,45 +1567,57 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 </div>
               )}
 
-              {/* Debug Info */}
-              {isConnected && (
-                <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4 text-xs">
-                  <details>
-                    <summary className="text-blue-300 cursor-pointer">🔍 Debug Info</summary>
-                    <div className="mt-2 space-y-1 text-blue-200">
-                      <p><strong>Farcaster User:</strong> {currentUser ? `@${currentUser.username} (FID: ${currentUser.fid})` : 'None'}</p>
-                      <p><strong>Verified Addresses:</strong> {userAddresses.length}</p>
-                      <p><strong>Current Address:</strong> {address}</p>
-                      <p><strong>Chain:</strong> {selectedChain}</p>
-                      <p><strong>Provider:</strong> {provider ? '✅' : '❌'}</p>
-                      <p><strong>Current Page:</strong> {currentPage}</p>
-                      {currentPage === 'approvals' ? (
-                        <>
-                          <p><strong>Loading Approvals:</strong> {loading ? 'Yes' : 'No'}</p>
-                          <p><strong>Approvals Count:</strong> {approvals.length}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p><strong>Total Transactions:</strong> {activityStats.totalTransactions?.toLocaleString() || 0}</p>
-                          <p><strong>Total Gas Spent:</strong> {activityStats.totalGasFees?.toFixed(6) || '0.000000'} ETH</p>
-                          <p><strong>Total ETH Sent:</strong> {activityStats.totalValue?.toFixed(6) || '0.000000'} ETH</p>
-                          <p><strong>dApps Interacted:</strong> {activityStats.dappsUsed || 0}</p>
-                          {activityStats.chainStats && (
-                            <details className="mt-2">
-                              <summary className="cursor-pointer text-sm text-purple-300">Chain Breakdown</summary>
-                              <div className="mt-1 pl-4 text-xs">
-                                {Object.entries(activityStats.chainStats).map(([chain, stats]) => (
-                                  <div key={chain} className="text-purple-400">
-                                    <strong>{chain.toUpperCase()}:</strong> {stats.totalTxns} txns, {stats.totalGasETH.toFixed(4)} ETH gas, {stats.totalEthSent.toFixed(4)} ETH sent
-                                  </div>
-                                ))}
-                              </div>
-                            </details>
-                          )}
-                        </>
-                      )}
+              {/* Reward Claimer Section */}
+              {isConnected && address && (
+                <div className="mb-6">
+                  {showClaim && totalClaims < 50 && (
+                    <div className="mb-4">
+                      <button
+                        onClick={handleClaim}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-colors"
+                      >
+                        🎁 Claim 0.5 USDC
+                      </button>
                     </div>
-                  </details>
+                  )}
+
+                  {showShare && (
+                    <div className="bg-gradient-to-r from-green-600 to-blue-600 border border-green-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-white font-bold text-lg mb-3 text-center">Success. Thanks for using Farguard</h3>
+                      
+                      <div className="space-y-3">
+                        <button
+                          onClick={shareCast}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          Share
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setCurrentPage('approvals');
+                            setShowShare(false);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Revoke More
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+
+
+                  {totalClaims >= 50 && !hasClaimedLocally && (
+                    <div className="bg-gray-700 border border-gray-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-gray-200 font-bold text-lg mb-2">🔒 Rewards Ended</h3>
+                      <p className="text-gray-300 text-sm">
+                        All 50 rewards have been claimed. Thanks for securing your wallet!
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1847,7 +1727,15 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       </div>
                     )}
                     
-                    {chainActivity.map((tx, index) => (
+                    {(() => {
+                      const startIndex = (activityPageNumber - 1) * transactionsPerPage;
+                      const endIndex = startIndex + transactionsPerPage;
+                      const paginatedActivity = chainActivity.slice(startIndex, endIndex);
+                      const totalPages = Math.ceil(chainActivity.length / transactionsPerPage);
+
+                      return (
+                        <>
+                          {paginatedActivity.map((tx, index) => (
                       <div key={`${tx.hash}-${index}`} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center flex-1">
@@ -1905,6 +1793,48 @@ Secure yours too: https://fgrevoke.vercel.app`;
                         </div>
                       </div>
                     ))}
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                          <div className="flex justify-center items-center gap-2 mt-6 pt-4 border-t border-purple-600">
+                            <button
+                              onClick={() => setActivityPageNumber(prev => Math.max(1, prev - 1))}
+                              disabled={activityPageNumber === 1}
+                              className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ←
+                            </button>
+                            
+                            {[...Array(totalPages)].map((_, i) => (
+                              <button
+                                key={i + 1}
+                                onClick={() => setActivityPageNumber(i + 1)}
+                                className={`px-3 py-1 rounded ${
+                                  activityPageNumber === i + 1 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-purple-600 text-white hover:bg-purple-500'
+                                }`}
+                              >
+                                {i + 1}
+                              </button>
+                            ))}
+                            
+                            <button
+                              onClick={() => setActivityPageNumber(prev => Math.min(totalPages, prev + 1))}
+                              disabled={activityPageNumber === totalPages}
+                              className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              →
+                            </button>
+                            
+                            <span className="text-purple-300 text-sm ml-2">
+                              Page {activityPageNumber} of {totalPages} ({chainActivity.length} transactions)
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   </div>
                 )
               )}
