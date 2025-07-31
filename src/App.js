@@ -1198,9 +1198,7 @@ Track your journey: https://fgrevoke.vercel.app`
 ✅ Reviewed ${approvals.length} token approvals
 🔒 Protecting my assets from risky permissions
 
-Secure yours too:
-
-https://fgrevoke.vercel.app`;
+Secure yours too: https://fgrevoke.vercel.app`;
 
     try {
       if (sdk?.actions?.composeCast) {
@@ -1480,19 +1478,17 @@ https://fgrevoke.vercel.app`;
           ) : (
             <div>
               {/* Connected View */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-purple-200">
-                    {currentPage === 'approvals' 
-                      ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
-                      : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
-                    }
-                  </h2>
-                  <p className="text-sm text-purple-400 mt-1">
-                    Connected: {formatAddress(address)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-purple-200">
+                  {currentPage === 'approvals' 
+                    ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
+                    : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
+                  }
+                </h2>
+                <p className="text-sm text-purple-400 mt-1">
+                  Connected: {formatAddress(address)}
+                </p>
+                <div className="flex gap-2 mt-3">
                   <button
                     onClick={handleShare}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
