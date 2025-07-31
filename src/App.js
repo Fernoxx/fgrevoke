@@ -1177,7 +1177,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app");
+            const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard");
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
@@ -1192,13 +1192,13 @@ function App() {
 🏗️ ${activityStats.dappsUsed} dApps used
 ⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
 
-Track your journey: https://fgrevoke.vercel.app`
+Track your journey: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard`
       : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! 
 
 ✅ Reviewed ${approvals.length} token approvals
 🔒 Protecting my assets from risky permissions
 
-Secure yours too: https://fgrevoke.vercel.app`;
+Secure yours too: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard`;
 
     try {
       if (sdk?.actions?.composeCast) {
