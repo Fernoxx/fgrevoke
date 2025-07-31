@@ -1193,14 +1193,14 @@ function App() {
 🏗️ ${activityStats.dappsUsed} dApps used
 ⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
 
-Track your journey: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`;
+Track your journey: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`.trim();
     } else {
       shareText = `🛡️ Just secured my ${currentChainName} wallet with FarGuard!
 
 ✅ Reviewed ${approvals.length} token approvals
 🔒 Protecting my assets from risky permissions
 
-Secure yours too: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`;
+Secure yours too: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`.trim();
     }
 
     // Ensure no trailing spaces
@@ -1497,10 +1497,10 @@ Secure yours too: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`;
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={handleShare}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                   >
-                    <Share2 className="w-4 h-4" />
-                    Share {currentPage === 'activity' ? 'Activity' : 'Success'}
+                    <Share2 className="w-4 h-4 mr-2" />
+                    <span>Share {currentPage === 'activity' ? 'Activity' : 'Success'}</span>
                   </button>
                   {currentPage === 'approvals' ? (
                     <button
@@ -1590,10 +1590,10 @@ Secure yours too: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`;
                       <div className="space-y-3">
                         <button
                           onClick={shareCast}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+                          className="w-full flex items-center justify-center px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
                         >
-                          <Share2 className="w-4 h-4" />
-                          Share
+                          <Share2 className="w-4 h-4 mr-2" />
+                          <span>Share</span>
                         </button>
                         
                         <button
