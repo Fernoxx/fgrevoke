@@ -1177,7 +1177,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard".trim());
+    const text = encodeURIComponent(`Claimed 0.5 USDC for just securing my wallet - try it here: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`.trim());
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
@@ -1185,20 +1185,26 @@ function App() {
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
-    const shareText = currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!
+    let shareText;
+    if (currentPage === 'activity') {
+      shareText = `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!
 
 💰 ${activityStats.totalTransactions} transactions
 🏗️ ${activityStats.dappsUsed} dApps used
 ⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
 
-Track your journey: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!
+Track your journey: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`;
+    } else {
+      shareText = `🛡️ Just secured my ${currentChainName} wallet with FarGuard!
 
 ✅ Reviewed ${approvals.length} token approvals
 🔒 Protecting my assets from risky permissions
 
-Secure yours too: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard`;
+Secure yours too: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`;
+    }
+
+    // Ensure no trailing spaces
+    shareText = shareText.trim();
 
     try {
       if (sdk?.actions?.composeCast) {
