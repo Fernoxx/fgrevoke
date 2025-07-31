@@ -1177,7 +1177,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard");
+    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard".trim());
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
@@ -1203,23 +1203,23 @@ Secure yours too: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard`;
     try {
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
-        await sdk.actions.composeCast({ text: shareText });
+        await sdk.actions.composeCast({ text: shareText.trim() });
         console.log('✅ Shared to Farcaster');
         return;
       }
       
       // Fallback to clipboard
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(shareText.trim());
         alert('✅ Share text copied to clipboard!');
       }
     } catch (error) {
       console.error('Share failed:', error);
       try {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(shareText.trim());
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(shareText);
+        const encoded = encodeURIComponent(shareText.trim());
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     }
