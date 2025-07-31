@@ -1177,7 +1177,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app");
+    const text = encodeURIComponent(`Claimed 0.5 USDC for just securing my wallet - try it here: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`.trim());
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
@@ -1185,41 +1185,47 @@ function App() {
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
-    const shareText = currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!
+    let shareText;
+    if (currentPage === 'activity') {
+      shareText = `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!
 
 💰 ${activityStats.totalTransactions} transactions
 🏗️ ${activityStats.dappsUsed} dApps used
 ⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
 
-Track your journey: https://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! 
+Track your journey: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`.trim();
+    } else {
+      shareText = `🛡️ Just secured my ${currentChainName} wallet with FarGuard!
 
 ✅ Reviewed ${approvals.length} token approvals
 🔒 Protecting my assets from risky permissions
 
-Secure yours too: https://fgrevoke.vercel.app`;
+Secure yours too: ${'https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard'}`.trim();
+    }
+
+    // Ensure no trailing spaces
+    shareText = shareText.trim();
 
     try {
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
-        await sdk.actions.composeCast({ text: shareText });
+        await sdk.actions.composeCast({ text: shareText.trim() });
         console.log('✅ Shared to Farcaster');
         return;
       }
       
       // Fallback to clipboard
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(shareText.trim());
         alert('✅ Share text copied to clipboard!');
       }
     } catch (error) {
       console.error('Share failed:', error);
       try {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(shareText.trim());
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(shareText);
+        const encoded = encodeURIComponent(shareText.trim());
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     }
@@ -1491,10 +1497,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={handleShare}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                   >
-                    <Share2 className="w-4 h-4" />
-                    Share {currentPage === 'activity' ? 'Activity' : 'Success'}
+                    <Share2 className="w-4 h-4 mr-2" />
+                    <span>Share {currentPage === 'activity' ? 'Activity' : 'Success'}</span>
                   </button>
                   {currentPage === 'approvals' ? (
                     <button
@@ -1584,10 +1590,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <div className="space-y-3">
                         <button
                           onClick={shareCast}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+                          className="w-full flex items-center justify-center px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
                         >
-                          <Share2 className="w-4 h-4" />
-                          Share
+                          <Share2 className="w-4 h-4 mr-2" />
+                          <span>Share</span>
                         </button>
                         
                         <button
