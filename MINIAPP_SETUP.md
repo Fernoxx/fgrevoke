@@ -100,9 +100,9 @@ REACT_APP_ARBISCAN_KEY=your_key
 
 ## 🔗 URLs to Test
 
-- **Main App**: https://fgrevoke.vercel.app
-- **Test Page**: https://fgrevoke.vercel.app/test-miniapp.html  
-- **Manifest**: https://fgrevoke.vercel.app/.well-known/farcaster.json
+- **Main App**: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard
+- **Test Page**: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard/test-miniapp.html  
+- **Manifest**: https://farcaster.xyz/miniapps/42DXu8ldDc8K/farguard/.well-known/farcaster.json
 
 ## 🎯 Next Steps
 
