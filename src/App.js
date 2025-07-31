@@ -1283,32 +1283,22 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   <div className="bg-purple-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                     <div className="flex items-center gap-2">
-                      {/* Profile Picture */}
-                      {currentUser?.pfpUrl && (
-                        <img 
-                          src={currentUser.pfpUrl} 
-                          alt="Profile" 
-                          className="w-6 h-6 rounded-full"
-                          onError={(e) => { e.target.style.display = 'none' }}
-                        />
-                      )}
-                      {/* User Info */}
+                      {/* User Info - No Profile Picture, FID integrated */}
                       <div className="flex flex-col">
                         <span className="font-medium">
                           {currentUser?.username ? `@${currentUser.username}` : 
                            currentUser?.displayName || 
                            formatAddress(address)}
+                          {currentUser?.fid && (
+                            <span className="text-purple-300 text-xs ml-2">
+                              FID: {currentUser.fid}
+                            </span>
+                          )}
                         </span>
                         {currentUser?.displayName && currentUser?.username && (
                           <span className="text-xs text-purple-300">{currentUser.displayName}</span>
                         )}
                       </div>
-                      {/* FID Badge */}
-                      {currentUser?.fid && (
-                        <span className="bg-purple-600 text-purple-200 text-xs px-2 py-1 rounded">
-                          FID: {currentUser.fid}
-                        </span>
-                      )}
                     </div>
                   </div>
                   
@@ -1390,23 +1380,13 @@ Secure yours too: https://fgrevoke.vercel.app`;
               {/* Personalized Welcome for Farcaster Users */}
               {currentUser ? (
                 <div className="mb-6">
-                  <div className="flex items-center justify-center gap-3 mb-3">
-                    {currentUser.pfpUrl && (
-                      <img 
-                        src={currentUser.pfpUrl} 
-                        alt="Profile" 
-                        className="w-12 h-12 rounded-full border-2 border-purple-400"
-                        onError={(e) => { e.target.style.display = 'none' }}
-                      />
-                    )}
-                    <div>
-                      <h2 className="text-2xl font-bold text-purple-200">
-                        Welcome, {currentUser.displayName || `@${currentUser.username}`}!
-                      </h2>
-                      <p className="text-sm text-purple-400">
-                        FID: {currentUser.fid} • Ready to secure your wallet
-                      </p>
-                    </div>
+                  <div className="text-center mb-3">
+                    <h2 className="text-2xl font-bold text-purple-200">
+                      Welcome, {currentUser.displayName || `@${currentUser.username}`}!
+                    </h2>
+                    <p className="text-sm text-purple-400">
+                      FID: {currentUser.fid} • Ready to secure your wallet
+                    </p>
                   </div>
                   
                   {userAddresses.length > 0 ? (
@@ -1839,8 +1819,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
         </main>
       </div>
 
-      {/* Footer */}
-      <footer className="mt-8 p-4 text-center border-t border-purple-700">
+      {/* Footer - Reduced margin for miniapp compatibility */}
+      <footer className="mt-4 p-2 text-center border-t border-purple-700">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-purple-300">
           <span>
             Built by{' '}
