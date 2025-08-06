@@ -16,11 +16,13 @@ function App() {
   const [activityPageNumber, setActivityPageNumber] = useState(1);
   const transactionsPerPage = 10;
 
-  // Spy functionality states
-  const [spyAddress, setSpyAddress] = useState('');
-  const [spyData, setSpyData] = useState(null);
-  const [loadingSpy, setLoadingSpy] = useState(false);
-  const [spyError, setSpyError] = useState(null);
+  // Scanner functionality states
+  const [scannerAddress, setScannerAddress] = useState('');
+  const [scannerData, setScannerData] = useState(null);
+  const [loadingScanner, setLoadingScanner] = useState(false);
+  const [scannerError, setScannerError] = useState(null);
+  const [scannerTxPage, setScannerTxPage] = useState(1);
+  const [hasMoreTxs, setHasMoreTxs] = useState(false);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -1252,22 +1254,26 @@ Secure yours too: https://fgrevoke.vercel.app`;
     console.log('🔌 Disconnected wallet but kept Farcaster user profile data');
   };
 
-  // Spy functionality - comprehensive wallet analysis
-  const searchSpyAddress = async () => {
-    if (!spyAddress || spyAddress.length !== 42) {
-      setSpyError('Please enter a valid Ethereum address (42 characters starting with 0x)');
+  // Scanner functionality - comprehensive wallet analysis
+  const searchScannerAddress = async (page = 1) => {
+    if (!scannerAddress || scannerAddress.length !== 42) {
+      setScannerError('Please enter a valid Ethereum address (42 characters starting with 0x)');
       return;
     }
 
-    setLoadingSpy(true);
-    setSpyError(null);
-    setSpyData(null);
+    setLoadingScanner(true);
+    setScannerError(null);
+    
+    if (page === 1) {
+      setScannerData(null);
+      setScannerTxPage(1);
+    }
 
     try {
-      console.log('🕵️ Starting comprehensive spy analysis for:', spyAddress);
+      console.log('🔍 Starting comprehensive scanner analysis for:', scannerAddress, 'page:', page);
       
-      const spyResults = {
-        address: spyAddress,
+      const scannerResults = page === 1 ? {
+        address: scannerAddress,
         farcasterProfile: null,
         socialProfiles: {},
         tokenHoldings: [],
@@ -1284,26 +1290,38 @@ Secure yours too: https://fgrevoke.vercel.app`;
           firstTransaction: null,
           lastTransaction: null
         }
-      };
+      } : { ...scannerData };
 
-      // Parallel data fetching for better performance
-      await Promise.allSettled([
-        fetchFarcasterProfile(spyAddress, spyResults),
-        fetchSocialProfiles(spyAddress, spyResults),
-        fetchTokenHoldings(spyAddress, spyResults),
-        fetchProfitLossData(spyAddress, spyResults),
-        fetchWalletActivity(spyAddress, spyResults)
-      ]);
+      if (page === 1) {
+        // First page - fetch all data
+        await Promise.allSettled([
+          fetchFarcasterProfile(scannerAddress, scannerResults),
+          fetchSocialProfiles(scannerAddress, scannerResults),
+          fetchTokenHoldings(scannerAddress, scannerResults),
+          fetchProfitLossData(scannerAddress, scannerResults),
+          fetchWalletActivityPaginated(scannerAddress, scannerResults, page)
+        ]);
+      } else {
+        // Subsequent pages - only fetch more transactions
+        await fetchWalletActivityPaginated(scannerAddress, scannerResults, page);
+      }
 
-      setSpyData(spyResults);
-      console.log('✅ Spy analysis complete:', spyResults);
+      setScannerData(scannerResults);
+      console.log('✅ Scanner analysis complete:', scannerResults);
 
     } catch (error) {
-      console.error('❌ Spy analysis failed:', error);
-      setSpyError('Failed to analyze address. Please try again.');
+      console.error('❌ Scanner analysis failed:', error);
+      setScannerError('Failed to analyze address. Please try again.');
     } finally {
-      setLoadingSpy(false);
+      setLoadingScanner(false);
     }
+  };
+
+  // Load more transactions
+  const loadMoreTransactions = async () => {
+    const nextPage = scannerTxPage + 1;
+    setScannerTxPage(nextPage);
+    await searchScannerAddress(nextPage);
   };
 
   // Fetch Farcaster profile using Neynar API or SDK
@@ -1663,12 +1681,26 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
-  // Fetch comprehensive wallet activity with REAL stats
-  const fetchWalletActivity = async (address, results) => {
+  // Fetch comprehensive wallet activity with REAL stats and pagination
+  const fetchWalletActivityPaginated = async (address, results, page = 1) => {
     try {
-      console.log('🔍 Fetching REAL comprehensive wallet activity for:', address);
+      console.log('🔍 Fetching REAL comprehensive wallet activity for:', address, 'page:', page);
       
-      const activity = [];
+      const itemsPerPage = 50;
+      const isFirstPage = page === 1;
+      
+      if (isFirstPage) {
+        results.walletActivity = [];
+        results.stats = {
+          totalTransactions: 0,
+          totalValue: 0,
+          dappsUsed: 0,
+          firstTransaction: null,
+          lastTransaction: null
+        };
+      }
+
+      const activity = results.walletActivity || [];
       const stats = {
         totalTransactions: 0,
         totalValue: 0,
@@ -1677,71 +1709,109 @@ Secure yours too: https://fgrevoke.vercel.app`;
         lastTransaction: null
       };
 
-      // Fetch from multiple chains
+      // Fetch from multiple chains with pagination
       const chains = [
         { 
           name: 'Ethereum', 
-          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://etherscan.io'
         },
         { 
           name: 'Base', 
-          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://basescan.org'
         }
       ];
 
+      let hasMoreTransactions = false;
+
       for (const chain of chains) {
         try {
-          console.log(`🔍 Fetching ${chain.name} activity...`);
+          console.log(`🔍 Fetching ${chain.name} activity page ${page}...`);
           const response = await fetch(chain.url);
           const data = await response.json();
           
           if (data.status === '1' && data.result && Array.isArray(data.result)) {
-            console.log(`📊 ${chain.name}: Found ${data.result.length} transactions`);
+            console.log(`📊 ${chain.name}: Found ${data.result.length} transactions on page ${page}`);
             
-            // Process all transactions for accurate stats
-            data.result.forEach(tx => {
+            if (data.result.length === itemsPerPage) {
+              hasMoreTransactions = true;
+            }
+
+            // Process transactions with full details
+            for (const tx of data.result) {
               const txDate = new Date(parseInt(tx.timeStamp) * 1000);
               const value = parseFloat(tx.value) / 1e18;
+              const gasUsed = parseInt(tx.gasUsed || 0);
+              const gasPrice = parseInt(tx.gasPrice || 0);
+              const gasFee = (gasUsed * gasPrice) / 1e18;
               
-              // Add to activity list (limit to recent 50 per chain for display)
-              if (activity.length < 100) {
-                activity.push({
-                  hash: tx.hash,
-                  from: tx.from,
-                  to: tx.to,
-                  value: value,
-                  timestamp: parseInt(tx.timeStamp),
-                  date: txDate,
-                  chain: chain.name,
-                  gasUsed: tx.gasUsed,
-                  gasPrice: tx.gasPrice,
-                  status: tx.isError === '0' ? 'success' : 'failed',
-                  methodId: tx.input?.slice(0, 10) || '0x',
-                  blockNumber: tx.blockNumber,
-                  explorerUrl: chain.explorerUrl
-                });
+              // Get transaction type based on input data
+              let txType = 'Transfer';
+              let methodName = 'Transfer';
+              
+              if (tx.input && tx.input !== '0x') {
+                const methodId = tx.input.slice(0, 10);
+                switch (methodId) {
+                  case '0xa9059cbb': methodName = 'transfer'; txType = 'Token Transfer'; break;
+                  case '0x23b872dd': methodName = 'transferFrom'; txType = 'Token Transfer'; break;
+                  case '0x095ea7b3': methodName = 'approve'; txType = 'Token Approval'; break;
+                  case '0x38ed1739': methodName = 'swapExactTokensForTokens'; txType = 'DEX Swap'; break;
+                  case '0x7ff36ab5': methodName = 'swapExactETHForTokens'; txType = 'DEX Swap'; break;
+                  case '0x18cbafe5': methodName = 'swapExactTokensForETH'; txType = 'DEX Swap'; break;
+                  case '0xa0712d68': methodName = 'mint'; txType = 'NFT Mint'; break;
+                  case '0x42842e0e': methodName = 'safeTransferFrom'; txType = 'NFT Transfer'; break;
+                  default: 
+                    methodName = 'Contract Interaction';
+                    txType = 'Contract Interaction';
+                }
               }
+
+              const txDetails = {
+                hash: tx.hash,
+                from: tx.from,
+                to: tx.to,
+                value: value,
+                timestamp: parseInt(tx.timeStamp),
+                date: txDate,
+                chain: chain.name,
+                gasUsed: gasUsed,
+                gasPrice: gasPrice,
+                gasFee: gasFee,
+                status: tx.isError === '0' ? 'success' : 'failed',
+                methodId: tx.input?.slice(0, 10) || '0x',
+                methodName: methodName,
+                txType: txType,
+                blockNumber: parseInt(tx.blockNumber),
+                explorerUrl: chain.explorerUrl,
+                input: tx.input,
+                nonce: parseInt(tx.nonce || 0),
+                transactionIndex: parseInt(tx.transactionIndex || 0),
+                confirmations: tx.confirmations ? parseInt(tx.confirmations) : 0
+              };
+
+              activity.push(txDetails);
 
               // Update stats with ALL transactions
-              stats.totalTransactions++;
-              stats.totalValue += value;
-              
-              // Track unique contracts interacted with
-              if (tx.to && tx.to !== address.toLowerCase() && tx.to !== '0x') {
-                stats.dappsUsed.add(tx.to.toLowerCase());
-              }
+              if (isFirstPage) {
+                stats.totalTransactions++;
+                stats.totalValue += value;
+                
+                // Track unique contracts interacted with
+                if (tx.to && tx.to !== address.toLowerCase() && tx.to !== '0x') {
+                  stats.dappsUsed.add(tx.to.toLowerCase());
+                }
 
-              // Track first and last transaction dates
-              if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
-                stats.firstTransaction = txDate.toISOString();
+                // Track first and last transaction dates
+                if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
+                  stats.firstTransaction = txDate.toISOString();
+                }
+                
+                if (!stats.lastTransaction || txDate > new Date(stats.lastTransaction)) {
+                  stats.lastTransaction = txDate.toISOString();
+                }
               }
-              
-              if (!stats.lastTransaction || txDate > new Date(stats.lastTransaction)) {
-                stats.lastTransaction = txDate.toISOString();
-              }
-            });
+            }
             
           } else {
             console.log(`⚠️ ${chain.name}: ${data.message || 'No transactions found'}`);
@@ -1758,25 +1828,36 @@ Secure yours too: https://fgrevoke.vercel.app`;
       // Sort by timestamp (newest first)
       activity.sort((a, b) => b.timestamp - a.timestamp);
 
+      setHasMoreTxs(hasMoreTransactions);
+
       console.log('📈 Final wallet stats:', {
-        totalTransactions: stats.totalTransactions,
-        totalValue: stats.totalValue.toFixed(4) + ' ETH',
-        uniqueDapps: stats.dappsUsed.size,
-        activityRecords: activity.length
+        totalTransactions: isFirstPage ? stats.totalTransactions : results.stats.totalTransactions,
+        totalValue: isFirstPage ? stats.totalValue.toFixed(4) + ' ETH' : results.stats.totalValue.toFixed(4) + ' ETH',
+        uniqueDapps: isFirstPage ? stats.dappsUsed.size : results.stats.dappsUsed,
+        activityRecords: activity.length,
+        hasMore: hasMoreTransactions
       });
 
       results.walletActivity = activity;
-      results.stats = {
-        totalTransactions: stats.totalTransactions,
-        totalValue: stats.totalValue,
-        dappsUsed: stats.dappsUsed.size,
-        firstTransaction: stats.firstTransaction,
-        lastTransaction: stats.lastTransaction
-      };
+      
+      if (isFirstPage) {
+        results.stats = {
+          totalTransactions: stats.totalTransactions,
+          totalValue: stats.totalValue,
+          dappsUsed: stats.dappsUsed.size,
+          firstTransaction: stats.firstTransaction,
+          lastTransaction: stats.lastTransaction
+        };
+      }
 
     } catch (error) {
       console.error('❌ Wallet activity fetch failed:', error.message);
     }
+  };
+
+  // Keep the old function for backward compatibility with existing wallet activity
+  const fetchWalletActivity = async (address, results) => {
+    return fetchWalletActivityPaginated(address, results, 1);
   };
 
   return (
@@ -1890,15 +1971,15 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 Revoke
               </button>
               <button
-                onClick={() => setCurrentPage('spy')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
-                  currentPage === 'spy'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-purple-300 hover:text-white hover:bg-purple-700'
-                }`}
+                onClick={() => setCurrentPage('scanner')}
+                                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                    currentPage === 'scanner'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-purple-300 hover:text-white hover:bg-purple-700'
+                  }`}
               >
                 <Activity className="w-4 h-4" />
-                Spy
+                Scanner
               </button>
             </div>
           )}
@@ -1995,8 +2076,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 <h2 className="text-2xl font-bold text-purple-200">
                   {currentPage === 'approvals' 
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
-                    : currentPage === 'spy'
-                    ? 'Wallet Spy - Comprehensive Analysis'
+                    : currentPage === 'scanner'
+                    ? 'Wallet Scanner - Comprehensive Analysis'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
@@ -2004,7 +2085,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  {currentPage !== 'spy' && (
+                  {currentPage !== 'scanner' && (
                     <button
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -2068,24 +2149,24 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
                   </div>
                 </div>
-              ) : currentPage === 'spy' && spyData ? (
+              ) : currentPage === 'scanner' && scannerData ? (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-white">{spyData.stats.totalTransactions}</p>
-                    <p className="text-sm text-purple-200">Total Transactions</p>
-                  </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-400">{spyData.tokenHoldings.length}</p>
-                    <p className="text-sm text-purple-200">Tokens Held</p>
-                  </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-green-400">{spyData.profitLoss.total > 0 ? '+' : ''}{spyData.profitLoss.total.toFixed(3)}</p>
-                    <p className="text-sm text-purple-200">ETH P&L</p>
-                  </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-orange-400">{spyData.stats.dappsUsed}</p>
-                    <p className="text-sm text-purple-200">dApps Used</p>
-                  </div>
+                                          <p className="text-2xl font-bold text-white">{scannerData.stats.totalTransactions}</p>
+                      <p className="text-sm text-purple-200">Total Transactions</p>
+                    </div>
+                    <div className="bg-purple-700 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-blue-400">{scannerData.tokenHoldings.length}</p>
+                      <p className="text-sm text-purple-200">Tokens Held</p>
+                    </div>
+                    <div className="bg-purple-700 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-green-400">{scannerData.profitLoss.total > 0 ? '+' : ''}{scannerData.profitLoss.total.toFixed(3)}</p>
+                      <p className="text-sm text-purple-200">ETH P&L</p>
+                    </div>
+                    <div className="bg-purple-700 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-orange-400">{scannerData.stats.dappsUsed}</p>
+                      <p className="text-sm text-purple-200">dApps Used</p>
+                    </div>
                 </div>
               ) : null}
 
@@ -2154,8 +2235,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
               )}
 
               {/* Content */}
-              {currentPage === 'spy' ? (
-                // Spy Interface
+              {currentPage === 'scanner' ? (
+                // Scanner Interface
                 <div className="space-y-6">
                   {/* Address Input Section */}
                   <div className="bg-purple-700 rounded-lg p-6">
@@ -2169,30 +2250,30 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     <div className="flex gap-3">
                       <input
                         type="text"
-                        value={spyAddress}
-                        onChange={(e) => setSpyAddress(e.target.value)}
+                        value={scannerAddress}
+                        onChange={(e) => setScannerAddress(e.target.value)}
                         placeholder="0x1234567890abcdef1234567890abcdef12345678"
                         className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                       <button
-                        onClick={searchSpyAddress}
-                        disabled={loadingSpy || !spyAddress}
+                                                  onClick={() => searchScannerAddress(1)}
+                          disabled={loadingScanner || !scannerAddress}
                         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Search className={`w-4 h-4 ${loadingSpy ? 'animate-spin' : ''}`} />
-                        {loadingSpy ? 'Analyzing...' : 'Search'}
+                                                  <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
+                          {loadingScanner ? 'Analyzing...' : 'Search'}
                       </button>
                     </div>
-                    {spyError && (
-                      <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-red-400" />
-                        <p className="text-red-200 text-sm">{spyError}</p>
-                      </div>
-                    )}
+                                          {scannerError && (
+                        <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-400" />
+                          <p className="text-red-200 text-sm">{scannerError}</p>
+                        </div>
+                      )}
                   </div>
 
                   {/* Loading State */}
-                  {loadingSpy && (
+                  {loadingScanner && (
                     <div className="space-y-4">
                       <div className="bg-purple-700 rounded-lg p-6">
                         <div className="flex items-center gap-3 mb-4">
@@ -2207,11 +2288,11 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     </div>
                   )}
 
-                  {/* Spy Results */}
-                  {spyData && !loadingSpy && (
+                  {/* Scanner Results */}
+                  {scannerData && !loadingScanner && (
                     <div className="space-y-6">
                       {/* Profile Section */}
-                      {spyData.farcasterProfile && (
+                                              {scannerData.farcasterProfile && (
                         <div className="bg-purple-700 rounded-lg p-6">
                           <div className="flex items-center gap-3 mb-4">
                             <User className="w-6 h-6 text-purple-300" />
@@ -2219,20 +2300,20 @@ Secure yours too: https://fgrevoke.vercel.app`;
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <p className="text-white font-semibold">@{spyData.farcasterProfile.username}</p>
-                              <p className="text-purple-300">{spyData.farcasterProfile.displayName}</p>
-                              <p className="text-purple-400 text-sm mt-2">FID: {spyData.farcasterProfile.fid}</p>
-                              {spyData.farcasterProfile.bio && (
-                                <p className="text-purple-200 text-sm mt-2">{spyData.farcasterProfile.bio}</p>
+                              <p className="text-white font-semibold">@{scannerData.farcasterProfile.username}</p>
+                              <p className="text-purple-300">{scannerData.farcasterProfile.displayName}</p>
+                              <p className="text-purple-400 text-sm mt-2">FID: {scannerData.farcasterProfile.fid}</p>
+                              {scannerData.farcasterProfile.bio && (
+                                <p className="text-purple-200 text-sm mt-2">{scannerData.farcasterProfile.bio}</p>
                               )}
                             </div>
                             <div className="text-right">
                               <p className="text-purple-300 text-sm">
-                                {spyData.farcasterProfile.followerCount} followers • {spyData.farcasterProfile.followingCount} following
+                                {scannerData.farcasterProfile.followerCount} followers • {scannerData.farcasterProfile.followingCount} following
                               </p>
-                              {spyData.farcasterProfile.verifiedAddresses.length > 0 && (
+                              {scannerData.farcasterProfile.verifiedAddresses.length > 0 && (
                                 <p className="text-green-400 text-sm mt-2">
-                                  ✅ {spyData.farcasterProfile.verifiedAddresses.length} verified address{spyData.farcasterProfile.verifiedAddresses.length > 1 ? 'es' : ''}
+                                  ✅ {scannerData.farcasterProfile.verifiedAddresses.length} verified address{scannerData.farcasterProfile.verifiedAddresses.length > 1 ? 'es' : ''}
                                 </p>
                               )}
                             </div>
@@ -2241,27 +2322,27 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       )}
 
                       {/* Social Profiles */}
-                      {(spyData.socialProfiles.ens || spyData.socialProfiles.lens) && (
+                      {(scannerData.socialProfiles.ens || scannerData.socialProfiles.lens) && (
                         <div className="bg-purple-700 rounded-lg p-6">
                           <div className="flex items-center gap-3 mb-4">
                             <ExternalLink className="w-6 h-6 text-purple-300" />
                             <h3 className="text-xl font-bold text-white">Social Profiles</h3>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {spyData.socialProfiles.ens && (
+                            {scannerData.socialProfiles.ens && (
                               <div className="bg-purple-800 rounded-lg p-4">
                                 <h4 className="text-white font-semibold mb-2">ENS</h4>
-                                <p className="text-purple-200">{spyData.socialProfiles.ens.name}</p>
-                                {spyData.socialProfiles.ens.description && (
-                                  <p className="text-purple-400 text-sm mt-1">{spyData.socialProfiles.ens.description}</p>
+                                <p className="text-purple-200">{scannerData.socialProfiles.ens.name}</p>
+                                {scannerData.socialProfiles.ens.description && (
+                                  <p className="text-purple-400 text-sm mt-1">{scannerData.socialProfiles.ens.description}</p>
                                 )}
                               </div>
                             )}
-                            {spyData.socialProfiles.lens && (
+                            {scannerData.socialProfiles.lens && (
                               <div className="bg-purple-800 rounded-lg p-4">
                                 <h4 className="text-white font-semibold mb-2">Lens Protocol</h4>
-                                <p className="text-purple-200">{spyData.socialProfiles.lens.handle}</p>
-                                <p className="text-purple-400 text-sm">{spyData.socialProfiles.lens.followers} followers</p>
+                                <p className="text-purple-200">{scannerData.socialProfiles.lens.handle}</p>
+                                <p className="text-purple-400 text-sm">{scannerData.socialProfiles.lens.followers} followers</p>
                               </div>
                             )}
                           </div>
@@ -2269,14 +2350,14 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       )}
 
                       {/* Token Holdings */}
-                      {spyData.tokenHoldings.length > 0 && (
+                      {scannerData.tokenHoldings.length > 0 && (
                         <div className="bg-purple-700 rounded-lg p-6">
                           <div className="flex items-center gap-3 mb-4">
                             <TrendingUp className="w-6 h-6 text-purple-300" />
                             <h3 className="text-xl font-bold text-white">Token Holdings</h3>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {spyData.tokenHoldings.slice(0, 12).map((token, index) => (
+                            {scannerData.tokenHoldings.slice(0, 12).map((token, index) => (
                               <div key={index} className="bg-purple-800 rounded-lg p-3">
                                 <div className="flex items-center justify-between">
                                   <div>
@@ -2290,23 +2371,23 @@ Secure yours too: https://fgrevoke.vercel.app`;
                               </div>
                             ))}
                           </div>
-                          {spyData.tokenHoldings.length > 12 && (
+                          {scannerData.tokenHoldings.length > 12 && (
                             <p className="text-purple-400 text-sm mt-3 text-center">
-                              +{spyData.tokenHoldings.length - 12} more tokens
+                              +{scannerData.tokenHoldings.length - 12} more tokens
                             </p>
                           )}
                         </div>
                       )}
 
                       {/* Profit/Loss Heatmap */}
-                      {spyData.profitLoss.heatmapData.length > 0 && (
+                      {scannerData.profitLoss.heatmapData.length > 0 && (
                         <div className="bg-purple-700 rounded-lg p-6">
                           <div className="flex items-center gap-3 mb-4">
                             <BarChart3 className="w-6 h-6 text-purple-300" />
                             <h3 className="text-xl font-bold text-white">Activity Heatmap (Last 12 Months)</h3>
                           </div>
                           <div className="grid grid-cols-12 gap-1">
-                            {spyData.profitLoss.heatmapData.slice(-365).map((day, index) => {
+                            {scannerData.profitLoss.heatmapData.slice(-365).map((day, index) => {
                               const intensity = day.activity;
                               const colors = [
                                 'bg-purple-900', // 0 activity
@@ -2325,7 +2406,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                             })}
                           </div>
                           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {Object.entries(spyData.profitLoss.monthly).slice(0, 4).map(([month, data]) => (
+                            {Object.entries(scannerData.profitLoss.monthly).slice(0, 4).map(([month, data]) => (
                               <div key={month} className="bg-purple-800 rounded-lg p-3 text-center">
                                 <p className="text-white font-semibold text-sm">{month}</p>
                                 <p className={`text-xs ${data.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -2339,59 +2420,123 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       )}
 
                       {/* Wallet Activity */}
-                      {spyData.walletActivity.length > 0 && (
+                      {scannerData.walletActivity.length > 0 && (
                         <div className="bg-purple-700 rounded-lg p-6">
-                          <div className="flex items-center gap-3 mb-4">
-                            <Activity className="w-6 h-6 text-purple-300" />
-                            <h3 className="text-xl font-bold text-white">Recent Transactions</h3>
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <Activity className="w-6 h-6 text-purple-300" />
+                              <h3 className="text-xl font-bold text-white">Transaction History</h3>
+                            </div>
+                            <span className="bg-purple-600 px-3 py-1 rounded-lg text-sm text-purple-200">
+                              {scannerData.walletActivity.length} loaded
+                            </span>
                           </div>
                           <div className="space-y-3">
-                            {spyData.walletActivity.slice(0, 10).map((tx, index) => (
-                              <div key={index} className="bg-purple-800 rounded-lg p-3">
+                            {scannerData.walletActivity.map((tx, index) => (
+                              <div key={`${tx.hash}-${index}`} className="bg-purple-800 rounded-lg p-4 hover:bg-purple-750 transition-colors">
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-2 h-2 rounded-full ${tx.status === 'success' ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                                      <p className="text-white text-sm font-medium">
-                                        {tx.value > 0 ? `${tx.value.toFixed(4)} ETH` : 'Contract Interaction'}
-                                      </p>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className={`w-3 h-3 rounded-full ${tx.status === 'success' ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                        tx.txType === 'DEX Swap' ? 'bg-blue-600 text-white' :
+                                        tx.txType === 'Token Transfer' ? 'bg-green-600 text-white' :
+                                        tx.txType === 'Token Approval' ? 'bg-yellow-600 text-white' :
+                                        tx.txType === 'NFT Mint' ? 'bg-purple-600 text-white' :
+                                        tx.txType === 'NFT Transfer' ? 'bg-pink-600 text-white' :
+                                        'bg-gray-600 text-white'
+                                      }`}>
+                                        {tx.txType}
+                                      </span>
                                       <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
                                         {tx.chain}
                                       </span>
+                                      {tx.value > 0 && (
+                                        <span className="text-green-400 text-sm font-medium">
+                                          {tx.value.toFixed(4)} ETH
+                                        </span>
+                                      )}
                                     </div>
-                                    <p className="text-purple-400 text-xs mt-1">
-                                      From: {formatAddress(tx.from)} → To: {formatAddress(tx.to)}
-                                    </p>
-                                    <p className="text-purple-400 text-xs">
-                                      {new Date(tx.date).toLocaleDateString()} at {new Date(tx.date).toLocaleTimeString()}
-                                    </p>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                                      <div>
+                                        <p className="text-purple-400">
+                                          <span className="text-purple-300">From:</span> {formatAddress(tx.from)}
+                                        </p>
+                                        <p className="text-purple-400">
+                                          <span className="text-purple-300">To:</span> {formatAddress(tx.to)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-purple-400">
+                                          <span className="text-purple-300">Gas:</span> {tx.gasFee.toFixed(6)} ETH
+                                        </p>
+                                        <p className="text-purple-400">
+                                          <span className="text-purple-300">Block:</span> #{tx.blockNumber.toLocaleString()}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="mt-2 flex items-center justify-between">
+                                      <div className="text-xs">
+                                        <p className="text-purple-400">
+                                          {new Date(tx.date).toLocaleDateString()} at {new Date(tx.date).toLocaleTimeString()}
+                                        </p>
+                                        {tx.methodName !== 'Transfer' && (
+                                          <p className="text-purple-500">
+                                            Method: {tx.methodName}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-purple-400">
+                                          {tx.confirmations > 0 ? `${tx.confirmations} confirmations` : 'Unconfirmed'}
+                                        </span>
+                                        <a
+                                          href={`${tx.explorerUrl}/tx/${tx.hash}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-purple-300 hover:text-white transition-colors"
+                                        >
+                                          <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <a
-                                    href={`${tx.chain === 'Ethereum' ? 'https://etherscan.io' : 'https://basescan.org'}/tx/${tx.hash}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-purple-300 hover:text-white transition-colors"
-                                  >
-                                    <ExternalLink className="w-4 h-4" />
-                                  </a>
                                 </div>
                               </div>
                             ))}
                           </div>
-                          {spyData.walletActivity.length > 10 && (
-                            <p className="text-purple-400 text-sm mt-3 text-center">
-                              +{spyData.walletActivity.length - 10} more transactions
-                            </p>
-                          )}
+                          
+                          {/* Pagination Controls */}
+                          <div className="mt-6 flex items-center justify-between">
+                            <div className="text-sm text-purple-400">
+                              Showing {scannerData.walletActivity.length} transactions • Page {scannerTxPage}
+                            </div>
+                            {hasMoreTxs && (
+                              <button
+                                onClick={loadMoreTransactions}
+                                disabled={loadingScanner}
+                                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {loadingScanner ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Activity className="w-4 h-4" />
+                                )}
+                                {loadingScanner ? 'Loading...' : 'Load More Transactions'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
 
                       {/* No Data Found */}
-                      {!spyData.farcasterProfile && 
-                       !spyData.socialProfiles.ens && 
-                       !spyData.socialProfiles.lens && 
-                       spyData.tokenHoldings.length === 0 && 
-                       spyData.walletActivity.length === 0 && (
+                      {!scannerData.farcasterProfile && 
+                       !scannerData.socialProfiles.ens && 
+                       !scannerData.socialProfiles.lens && 
+                       scannerData.tokenHoldings.length === 0 && 
+                       scannerData.walletActivity.length === 0 && (
                         <div className="text-center py-8">
                           <Eye className="w-12 h-12 text-purple-400 mx-auto mb-3" />
                           <p className="text-purple-300 text-lg font-semibold">No data found</p>
