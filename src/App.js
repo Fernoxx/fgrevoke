@@ -1591,15 +1591,27 @@ Secure yours too: https://fgrevoke.vercel.app`;
       const last30DaysPnL = { profit: 0, loss: 0, net: 0, transactions: 0 };
       const dailyActivity = new Map(); // Track daily transaction counts for heatmap
       
-      // Fetch transactions from multiple chains with proper APIs
+      // Fetch transactions from multiple chains using Etherscan V2 API
       const chains = [
         { 
-          name: 'Ethereum', 
-          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
+          name: 'Ethereum',
+          chainId: 1,
+          url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
         },
         { 
-          name: 'Base', 
-          url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${BASESCAN_KEY}` 
+          name: 'Base',
+          chainId: 8453,
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
+        },
+        { 
+          name: 'Arbitrum',
+          chainId: 42161,
+          url: `https://api.etherscan.io/v2/api?chainid=42161&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
+        },
+        { 
+          name: 'Optimism',
+          chainId: 10,
+          url: `https://api.etherscan.io/v2/api?chainid=10&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
         }
       ];
 
@@ -1720,16 +1732,18 @@ Secure yours too: https://fgrevoke.vercel.app`;
         lastTransaction: null
       };
 
-      // Fetch from multiple chains with pagination using proper APIs
+      // Fetch from multiple chains with pagination using Etherscan V2 API
       const chains = [
         { 
-          name: 'Ethereum', 
-          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          name: 'Ethereum',
+          chainId: 1,
+          url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://etherscan.io'
         },
         { 
-          name: 'Base', 
-          url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${BASESCAN_KEY}`,
+          name: 'Base',
+          chainId: 8453,
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://basescan.org'
         }
       ];
@@ -1757,11 +1771,34 @@ Secure yours too: https://fgrevoke.vercel.app`;
               const gasPrice = parseInt(tx.gasPrice || 0);
               const gasFee = (gasUsed * gasPrice) / 1e18;
               
-              // Get transaction type based on input data
+              // Get transaction type using functionName (V2 API) or fallback to input analysis
               let txType = 'Transfer';
               let methodName = 'Transfer';
               
-              if (tx.input && tx.input !== '0x') {
+              // Use functionName from Etherscan V2 API if available
+              if (tx.functionName && tx.functionName !== '') {
+                methodName = tx.functionName;
+                
+                // Categorize based on function name
+                if (methodName.includes('swap') || methodName.includes('Swap')) {
+                  txType = 'DEX Swap';
+                } else if (methodName.includes('transfer') || methodName.includes('Transfer')) {
+                  txType = 'Token Transfer';
+                } else if (methodName.includes('approve') || methodName.includes('Approve')) {
+                  txType = 'Token Approval';
+                } else if (methodName.includes('stake') || methodName.includes('Stake')) {
+                  txType = 'Staking';
+                } else if (methodName.includes('withdraw') || methodName.includes('Withdraw')) {
+                  txType = 'Withdrawal';
+                } else if (methodName.includes('mint') || methodName.includes('Mint')) {
+                  txType = 'Mint';
+                } else if (methodName.includes('burn') || methodName.includes('Burn')) {
+                  txType = 'Burn';
+                } else {
+                  txType = 'Contract Interaction';
+                }
+              } else if (tx.input && tx.input !== '0x') {
+                // Fallback to method ID analysis for older data
                 const methodId = tx.input.slice(0, 10);
                 switch (methodId) {
                   case '0xa9059cbb': methodName = 'transfer'; txType = 'Token Transfer'; break;
@@ -1965,10 +2002,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
         }
       }
 
-      // Check contract verification status via Etherscan (multi-chain)
+      // Check contract verification status via Etherscan V2 API (multi-chain)
       const verificationAPIs = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.basescan.org/api?module=contract&action=getsourcecode&address=${address}&apikey=${BASESCAN_KEY}` }
+        { name: 'Ethereum', chainId: 1, url: `https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', chainId: 8453, url: `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}` }
       ];
 
       for (const api of verificationAPIs) {
@@ -2008,15 +2045,17 @@ Secure yours too: https://fgrevoke.vercel.app`;
     try {
       console.log('👤 Fetching contract creator for:', address);
 
-      // Use the proper contract creation API with correct environment variables
+      // Use Etherscan V2 API for contract creation detection
       const creationAPIs = [
         { 
-          name: 'Ethereum', 
-          url: `https://api.etherscan.io/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` 
+          name: 'Ethereum',
+          chainId: 1,
+          url: `https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` 
         },
         { 
-          name: 'Base', 
-          url: `https://api.basescan.org/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${BASESCAN_KEY}` 
+          name: 'Base',
+          chainId: 8453,
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` 
         }
       ];
 
@@ -2095,16 +2134,18 @@ Secure yours too: https://fgrevoke.vercel.app`;
         }
       }
 
-      // Fallback: Try to get creator from first transaction (old method)
+      // Fallback: Try to get creator from first transaction using V2 API
       console.log('🔄 Falling back to transaction history method...');
       const fallbackAPIs = [
         { 
-          name: 'Ethereum', 
-          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` 
+          name: 'Ethereum',
+          chainId: 1,
+          url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` 
         },
         { 
-          name: 'Base', 
-          url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${BASESCAN_KEY}` 
+          name: 'Base',
+          chainId: 8453,
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` 
         }
       ];
 
@@ -2255,10 +2296,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
         }
       }
 
-      // Get transaction history for analysis
+      // Get transaction history for analysis using Etherscan V2 API
       const txAPIs = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${BASESCAN_KEY}` }
+        { name: 'Ethereum', chainId: 1, url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', chainId: 8453, url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
       ];
 
       for (const api of txAPIs) {
@@ -2356,10 +2397,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
       const activity = [];
       
-      // Fetch recent transactions using proper APIs based on detected network
+      // Fetch recent transactions using Etherscan V2 API
       const activityAPIs = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${BASESCAN_KEY}` }
+        { name: 'Ethereum', chainId: 1, url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', chainId: 8453, url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
       ];
 
       for (const api of activityAPIs) {
