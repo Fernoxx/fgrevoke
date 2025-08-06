@@ -1575,35 +1575,31 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
-  // Fetch profit/loss data and create heatmap for CURRENT MONTH only
+  // Fetch profit/loss data and create heatmap for LAST 30 DAYS only
   const fetchProfitLossData = async (address, results) => {
     try {
-      console.log('📈 Calculating REAL profit/loss data for:', address);
+      console.log('📈 Calculating REAL profit/loss data for last 30 days:', address);
       
       const currentDate = new Date();
-      const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      const thirtyDaysAgo = new Date(currentDate);
+      thirtyDaysAgo.setDate(currentDate.getDate() - 30);
+      const startTimestamp = Math.floor(thirtyDaysAgo.getTime() / 1000);
       
-      // Get current month start timestamp
-      const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const startTimestamp = Math.floor(monthStart.getTime() / 1000);
+      console.log(`🗓️ Analyzing last 30 days: ${thirtyDaysAgo.toISOString()} to ${currentDate.toISOString()}`);
       
-      console.log(`🗓️ Analyzing current month: ${currentMonth} (from ${monthStart.toISOString()})`);
-      
-      // Initialize current month data
-      const monthlyPnL = {};
-      monthlyPnL[currentMonth] = { profit: 0, loss: 0, net: 0, transactions: 0 };
-      
+      // Initialize 30-day data
+      const last30DaysPnL = { profit: 0, loss: 0, net: 0, transactions: 0 };
       const dailyActivity = new Map(); // Track daily transaction counts for heatmap
       
-      // Fetch transactions from multiple chains
+      // Fetch transactions from multiple chains with proper APIs
       const chains = [
         { 
           name: 'Ethereum', 
-          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
+          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
         },
         { 
           name: 'Base', 
-          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
+          url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${BASESCAN_KEY}` 
         }
       ];
 
@@ -1616,15 +1612,15 @@ Secure yours too: https://fgrevoke.vercel.app`;
           if (data.status === '1' && data.result && Array.isArray(data.result)) {
             console.log(`📊 ${chain.name}: Found ${data.result.length} total transactions`);
             
-            // Filter transactions for current month only
-            const currentMonthTxs = data.result.filter(tx => {
+            // Filter transactions for last 30 days only
+            const last30DaysTxs = data.result.filter(tx => {
               const txTimestamp = parseInt(tx.timeStamp);
               return txTimestamp >= startTimestamp;
             });
             
-            console.log(`📅 ${chain.name}: ${currentMonthTxs.length} transactions in current month`);
+            console.log(`📅 ${chain.name}: ${last30DaysTxs.length} transactions in last 30 days`);
             
-            currentMonthTxs.forEach(tx => {
+            last30DaysTxs.forEach(tx => {
               const txDate = new Date(parseInt(tx.timeStamp) * 1000);
               const dayKey = txDate.toISOString().split('T')[0];
               
@@ -1636,13 +1632,13 @@ Secure yours too: https://fgrevoke.vercel.app`;
               
               if (tx.from.toLowerCase() === address.toLowerCase()) {
                 // Outgoing transaction
-                monthlyPnL[currentMonth].loss += value + gasUsed;
+                last30DaysPnL.loss += value + gasUsed;
               } else {
                 // Incoming transaction  
-                monthlyPnL[currentMonth].profit += value;
+                last30DaysPnL.profit += value;
               }
               
-              monthlyPnL[currentMonth].transactions++;
+              last30DaysPnL.transactions++;
             });
             
           } else {
@@ -1657,12 +1653,12 @@ Secure yours too: https://fgrevoke.vercel.app`;
         }
       }
       
-      // Calculate net P&L
-      monthlyPnL[currentMonth].net = monthlyPnL[currentMonth].profit - monthlyPnL[currentMonth].loss;
+      // Calculate net P&L for last 30 days
+      last30DaysPnL.net = last30DaysPnL.profit - last30DaysPnL.loss;
       
-      console.log('💰 Current month P&L:', monthlyPnL[currentMonth]);
+      console.log('💰 Last 30 days P&L:', last30DaysPnL);
 
-      // Create heatmap data for current month only (last 30 days)
+      // Create heatmap data for last 30 days
       const heatmapData = [];
       const today = new Date();
       
@@ -1685,10 +1681,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
       }
 
       results.profitLoss = {
-        monthly: monthlyPnL,
-        total: monthlyPnL[currentMonth].net,
+        last30Days: last30DaysPnL,
+        total: last30DaysPnL.net,
         heatmapData: heatmapData,
-        currentMonth: currentMonth
+        period: 'Last 30 Days'
       };
 
     } catch (error) {
@@ -1724,16 +1720,16 @@ Secure yours too: https://fgrevoke.vercel.app`;
         lastTransaction: null
       };
 
-      // Fetch from multiple chains with pagination
+      // Fetch from multiple chains with pagination using proper APIs
       const chains = [
         { 
           name: 'Ethereum', 
-          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://etherscan.io'
         },
         { 
           name: 'Base', 
-          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${BASESCAN_KEY}`,
           explorerUrl: 'https://basescan.org'
         }
       ];
@@ -3186,10 +3182,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
                         <div className="bg-purple-700 rounded-lg p-6">
                           <div className="flex items-center gap-3 mb-4">
                             <BarChart3 className="w-6 h-6 text-purple-300" />
-                            <h3 className="text-xl font-bold text-white">Activity Heatmap (Last 12 Months)</h3>
+                            <h3 className="text-xl font-bold text-white">Activity Heatmap (Last 30 Days)</h3>
                           </div>
-                          <div className="grid grid-cols-12 gap-1">
-                            {scannerData.profitLoss.heatmapData.slice(-365).map((day, index) => {
+                                                      <div className="grid grid-cols-10 gap-1">
+                              {scannerData.profitLoss.heatmapData.map((day, index) => {
                               const intensity = day.activity;
                               const colors = [
                                 'bg-purple-900', // 0 activity
@@ -3207,16 +3203,27 @@ Secure yours too: https://fgrevoke.vercel.app`;
                               );
                             })}
                           </div>
-                          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {Object.entries(scannerData.profitLoss.monthly).slice(0, 4).map(([month, data]) => (
-                              <div key={month} className="bg-purple-800 rounded-lg p-3 text-center">
-                                <p className="text-white font-semibold text-sm">{month}</p>
-                                <p className={`text-xs ${data.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {data.net >= 0 ? '+' : ''}{data.net.toFixed(4)} ETH
-                                </p>
-                                <p className="text-purple-400 text-xs">{data.transactions} txns</p>
+                          <div className="mt-4">
+                            <div className="bg-purple-800 rounded-lg p-4 text-center">
+                              <p className="text-white font-semibold text-lg">Last 30 Days Summary</p>
+                              <p className={`text-xl font-bold ${scannerData.profitLoss.last30Days.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {scannerData.profitLoss.last30Days.net >= 0 ? '+' : ''}{scannerData.profitLoss.last30Days.net.toFixed(4)} ETH
+                              </p>
+                              <div className="grid grid-cols-3 gap-4 mt-3 text-center">
+                                <div>
+                                  <p className="text-green-400 text-sm font-medium">Profit</p>
+                                  <p className="text-white text-xs">+{scannerData.profitLoss.last30Days.profit.toFixed(4)} ETH</p>
+                                </div>
+                                <div>
+                                  <p className="text-red-400 text-sm font-medium">Loss</p>
+                                  <p className="text-white text-xs">-{scannerData.profitLoss.last30Days.loss.toFixed(4)} ETH</p>
+                                </div>
+                                <div>
+                                  <p className="text-purple-400 text-sm font-medium">Transactions</p>
+                                  <p className="text-white text-xs">{scannerData.profitLoss.last30Days.transactions} txns</p>
+                                </div>
                               </div>
-                            ))}
+                            </div>
                           </div>
                         </div>
                       )}
