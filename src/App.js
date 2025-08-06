@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -23,6 +23,15 @@ function App() {
   const [scannerError, setScannerError] = useState(null);
   const [scannerTxPage, setScannerTxPage] = useState(1);
   const [hasMoreTxs, setHasMoreTxs] = useState(false);
+
+  // DegenTools functionality states
+  const [contractAddress, setContractAddress] = useState('');
+  const [contractData, setContractData] = useState(null);
+  const [loadingContract, setLoadingContract] = useState(false);
+  const [contractError, setContractError] = useState(null);
+  const [showActivityRadar, setShowActivityRadar] = useState(false);
+  const [liveActivity, setLiveActivity] = useState([]);
+  const [loadingActivityRadar, setLoadingActivityRadar] = useState(false);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -1860,6 +1869,259 @@ Secure yours too: https://fgrevoke.vercel.app`;
     return fetchWalletActivityPaginated(address, results, 1);
   };
 
+  // DegenTools - Contract Analysis Functions
+  const analyzeContract = async () => {
+    if (!contractAddress || contractAddress.length !== 42) {
+      setContractError('Please enter a valid contract address (42 characters starting with 0x)');
+      return;
+    }
+
+    setLoadingContract(true);
+    setContractError(null);
+    setContractData(null);
+    setShowActivityRadar(false);
+
+    try {
+      console.log('🔍 Starting contract analysis for:', contractAddress);
+      
+      const contractResults = {
+        address: contractAddress,
+        contractType: 'Unknown Contract',
+        name: null,
+        symbol: null,
+        creator: null,
+        creatorFarcaster: null,
+        deploymentBlock: null,
+        verified: false,
+        totalSupply: null,
+        decimals: null,
+        isToken: false,
+        isNFT: false
+      };
+
+      // Parallel data fetching
+      await Promise.allSettled([
+        fetchContractInfo(contractAddress, contractResults),
+        fetchContractCreator(contractAddress, contractResults)
+      ]);
+
+      setContractData(contractResults);
+      console.log('✅ Contract analysis complete:', contractResults);
+
+    } catch (error) {
+      console.error('❌ Contract analysis failed:', error);
+      setContractError('Failed to analyze contract. Please try again.');
+    } finally {
+      setLoadingContract(false);
+    }
+  };
+
+  // Fetch contract information (token/NFT detection)
+  const fetchContractInfo = async (address, results) => {
+    try {
+      console.log('📋 Fetching contract info for:', address);
+
+      // Check if it's a token (ERC-20)
+      try {
+        const tokenResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: 1,
+            jsonrpc: '2.0',
+            method: 'alchemy_getTokenMetadata',
+            params: [address]
+          })
+        });
+
+        if (tokenResponse.ok) {
+          const tokenData = await tokenResponse.json();
+          if (tokenData.result && tokenData.result.symbol) {
+            results.isToken = true;
+            results.contractType = 'ERC-20 Token';
+            results.name = tokenData.result.name;
+            results.symbol = tokenData.result.symbol;
+            results.decimals = tokenData.result.decimals;
+            results.totalSupply = tokenData.result.totalSupply;
+            console.log('✅ Detected ERC-20 token:', results);
+            return;
+          }
+        }
+      } catch (tokenError) {
+        console.warn('⚠️ Token check failed:', tokenError.message);
+      }
+
+      // Check if it's an NFT (ERC-721/ERC-1155)
+      try {
+        const nftResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getNFTMetadata?contractAddress=${address}&tokenId=1`);
+        
+        if (nftResponse.ok) {
+          const nftData = await nftResponse.json();
+          if (nftData.contract) {
+            results.isNFT = true;
+            results.contractType = nftData.contract.tokenType || 'NFT Contract';
+            results.name = nftData.contract.name || 'Unknown NFT';
+            results.symbol = nftData.contract.symbol;
+            console.log('✅ Detected NFT contract:', results);
+            return;
+          }
+        }
+      } catch (nftError) {
+        console.warn('⚠️ NFT check failed:', nftError.message);
+      }
+
+      // Check contract verification status via Etherscan
+      try {
+        const verificationResponse = await fetch(`https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}`);
+        
+        if (verificationResponse.ok) {
+          const verificationData = await verificationResponse.json();
+          if (verificationData.status === '1' && verificationData.result[0]) {
+            const contractInfo = verificationData.result[0];
+            results.verified = contractInfo.SourceCode !== '';
+            if (contractInfo.ContractName) {
+              results.name = contractInfo.ContractName;
+              results.contractType = `${contractInfo.ContractName} Contract`;
+            }
+          }
+        }
+      } catch (verificationError) {
+        console.warn('⚠️ Verification check failed:', verificationError.message);
+      }
+
+    } catch (error) {
+      console.error('❌ Contract info fetch failed:', error.message);
+    }
+  };
+
+  // Fetch contract creator and check Farcaster
+  const fetchContractCreator = async (address, results) => {
+    try {
+      console.log('👤 Fetching contract creator for:', address);
+
+      // Get contract creation transaction
+      const response = await fetch(`https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === '1' && data.result && data.result.length > 0) {
+          const creationTx = data.result[0];
+          results.creator = creationTx.from;
+          results.deploymentBlock = parseInt(creationTx.blockNumber);
+          
+          console.log('📝 Contract creator found:', results.creator);
+
+          // Check if creator has Farcaster profile
+          try {
+            const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${results.creator}`, {
+              headers: {
+                'Api-Key': 'NEYNAR_API_DOCS'
+              }
+            });
+
+            if (neynarResponse.ok) {
+              const neynarData = await neynarResponse.json();
+              if (neynarData && Object.keys(neynarData).length > 0) {
+                const userProfile = Object.values(neynarData)[0];
+                if (userProfile && userProfile.length > 0) {
+                  const profile = userProfile[0];
+                  results.creatorFarcaster = {
+                    username: profile.username,
+                    displayName: profile.display_name,
+                    fid: profile.fid
+                  };
+                  console.log('✅ Found creator Farcaster profile:', results.creatorFarcaster);
+                }
+              }
+            }
+          } catch (farcasterError) {
+            console.warn('⚠️ Farcaster creator lookup failed:', farcasterError.message);
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Contract creator fetch failed:', error.message);
+    }
+  };
+
+  // Fetch live activity radar data
+  const fetchLiveActivity = async () => {
+    if (!contractData) return;
+
+    setLoadingActivityRadar(true);
+    try {
+      console.log('📡 Fetching live activity for contract:', contractData.address);
+
+      const activity = [];
+      
+      // Fetch recent transactions to the contract
+      const chains = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+      ];
+
+      for (const chain of chains) {
+        try {
+          const response = await fetch(chain.url);
+          const data = await response.json();
+          
+          if (data.status === '1' && data.result) {
+            // Get only recent transactions (last 24 hours)
+            const now = Date.now();
+            const oneDayAgo = now - (24 * 60 * 60 * 1000);
+            
+            data.result.forEach(tx => {
+              const txTime = parseInt(tx.timeStamp) * 1000;
+              if (txTime > oneDayAgo) {
+                const value = parseFloat(tx.value) / 1e18;
+                
+                // Determine if it's a buy or sell based on direction and value
+                let activityType = 'interaction';
+                if (contractData.isToken && value > 0) {
+                  // If ETH is being sent to the contract, it's likely a buy
+                  activityType = tx.to.toLowerCase() === contractData.address.toLowerCase() ? 'buy' : 'sell';
+                } else if (contractData.isToken) {
+                  // For token contracts, analyze method calls
+                  const methodId = tx.input?.slice(0, 10);
+                  if (methodId === '0xa9059cbb' || methodId === '0x23b872dd') {
+                    activityType = 'sell'; // transfer methods often indicate selling
+                  } else if (methodId === '0x38ed1739' || methodId === '0x7ff36ab5') {
+                    activityType = 'buy'; // swap methods often indicate buying
+                  }
+                }
+
+                activity.push({
+                  hash: tx.hash,
+                  from: tx.from,
+                  to: tx.to,
+                  value: value,
+                  timestamp: txTime,
+                  chain: chain.name,
+                  activityType: activityType,
+                  methodId: tx.input?.slice(0, 10) || '0x'
+                });
+              }
+            });
+          }
+        } catch (chainError) {
+          console.warn(`⚠️ ${chain.name} activity fetch failed:`, chainError.message);
+        }
+      }
+
+      // Sort by timestamp (newest first) and limit to 50
+      activity.sort((a, b) => b.timestamp - a.timestamp);
+      setLiveActivity(activity.slice(0, 50));
+      
+      console.log('📊 Live activity loaded:', activity.length, 'transactions');
+
+    } catch (error) {
+      console.error('❌ Live activity fetch failed:', error);
+    } finally {
+      setLoadingActivityRadar(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
@@ -1972,7 +2234,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
               </button>
               <button
                 onClick={() => setCurrentPage('scanner')}
-                                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
                     currentPage === 'scanner'
                       ? 'bg-purple-600 text-white'
                       : 'text-purple-300 hover:text-white hover:bg-purple-700'
@@ -1980,6 +2242,17 @@ Secure yours too: https://fgrevoke.vercel.app`;
               >
                 <Activity className="w-4 h-4" />
                 Scanner
+              </button>
+              <button
+                onClick={() => setCurrentPage('degentools')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                    currentPage === 'degentools'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-purple-300 hover:text-white hover:bg-purple-700'
+                  }`}
+              >
+                <Zap className="w-4 h-4" />
+                DegenTools
               </button>
             </div>
           )}
@@ -2078,6 +2351,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
                     : currentPage === 'scanner'
                     ? 'Wallet Scanner - Comprehensive Analysis'
+                    : currentPage === 'degentools'
+                    ? 'DegenTools - Contract Analysis & Live Activity'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
@@ -2085,7 +2360,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  {currentPage !== 'scanner' && (
+                  {currentPage !== 'scanner' && currentPage !== 'degentools' && (
                     <button
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -2543,6 +2818,280 @@ Secure yours too: https://fgrevoke.vercel.app`;
                           <p className="text-purple-400 text-sm mt-2">
                             This address has no visible activity or associated profiles
                           </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : currentPage === 'degentools' ? (
+                // DegenTools Interface
+                <div className="space-y-6">
+                  {/* Contract Checker Button */}
+                  {!contractData && (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <div className="bg-purple-700 rounded-xl p-8 text-center max-w-md">
+                        <Zap className="w-16 h-16 text-purple-300 mx-auto mb-4" />
+                        <h3 className="text-2xl font-bold text-white mb-2">DegenTools</h3>
+                        <p className="text-purple-300 mb-6">
+                          Analyze any smart contract and see live blockchain activity in real-time
+                        </p>
+                        <button
+                          onClick={() => setContractData({})} // Show search interface
+                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors mx-auto"
+                        >
+                          <FileText className="w-5 h-5" />
+                          Contract Checker
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contract Search Interface */}
+                  {contractData !== null && !contractData.address && (
+                    <div className="bg-purple-700 rounded-lg p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <FileText className="w-6 h-6 text-purple-300" />
+                        <h3 className="text-xl font-bold text-white">Contract Checker</h3>
+                      </div>
+                      <p className="text-purple-300 text-sm mb-4">
+                        Enter any smart contract address to analyze its type, creator, and see live activity feed with buy/sell radar.
+                      </p>
+                      <div className="flex gap-3">
+                        <input
+                          type="text"
+                          value={contractAddress}
+                          onChange={(e) => setContractAddress(e.target.value)}
+                          placeholder="0x1234567890abcdef1234567890abcdef12345678"
+                          className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        <button
+                          onClick={analyzeContract}
+                          disabled={loadingContract || !contractAddress}
+                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Search className={`w-4 h-4 ${loadingContract ? 'animate-spin' : ''}`} />
+                          {loadingContract ? 'Analyzing...' : 'Analyze Contract'}
+                        </button>
+                      </div>
+                      {contractError && (
+                        <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-400" />
+                          <p className="text-red-200 text-sm">{contractError}</p>
+                        </div>
+                      )}
+                      <div className="mt-4 flex justify-center">
+                        <button
+                          onClick={() => setContractData(null)}
+                          className="text-purple-400 hover:text-white text-sm transition-colors"
+                        >
+                          ← Back to DegenTools
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loading State */}
+                  {loadingContract && (
+                    <div className="space-y-4">
+                      <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-6 h-6 bg-purple-600 rounded animate-pulse"></div>
+                          <div className="h-6 bg-purple-600 rounded w-48 animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-purple-600 rounded w-3/4 animate-pulse"></div>
+                          <div className="h-4 bg-purple-600 rounded w-1/2 animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contract Analysis Results */}
+                  {contractData && contractData.address && (
+                    <div className="space-y-6">
+                      {/* Contract Info */}
+                      <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-6 h-6 text-purple-300" />
+                            <h3 className="text-xl font-bold text-white">Contract Analysis</h3>
+                          </div>
+                          <button
+                            onClick={() => setContractData({})}
+                            className="text-purple-400 hover:text-white text-sm transition-colors"
+                          >
+                            Search Another →
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Contract Details */}
+                          <div>
+                            <div className="mb-4">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                contractData.isToken ? 'bg-green-600 text-white' :
+                                contractData.isNFT ? 'bg-purple-600 text-white' :
+                                'bg-blue-600 text-white'
+                              }`}>
+                                {contractData.contractType}
+                              </span>
+                              {contractData.verified && (
+                                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-800 text-green-200">
+                                  ✅ Verified
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="text-purple-300">Contract:</span>
+                                <p className="text-white font-mono text-xs break-all">{contractData.address}</p>
+                              </div>
+                              
+                              {contractData.name && (
+                                <div>
+                                  <span className="text-purple-300">Name:</span>
+                                  <p className="text-white">{contractData.name} {contractData.symbol && `(${contractData.symbol})`}</p>
+                                </div>
+                              )}
+                              
+                              {contractData.totalSupply && (
+                                <div>
+                                  <span className="text-purple-300">Total Supply:</span>
+                                  <p className="text-white">{contractData.totalSupply}</p>
+                                </div>
+                              )}
+                              
+                              {contractData.deploymentBlock && (
+                                <div>
+                                  <span className="text-purple-300">Deployed at Block:</span>
+                                  <p className="text-white">#{contractData.deploymentBlock.toLocaleString()}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Creator Info */}
+                          <div>
+                            <h4 className="text-purple-300 text-sm mb-3">Contract Creator</h4>
+                            {contractData.creatorFarcaster ? (
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                  <User className="w-8 h-8 text-purple-300" />
+                                  <div>
+                                    <p className="text-white font-semibold">@{contractData.creatorFarcaster.username}</p>
+                                    <p className="text-purple-300 text-sm">{contractData.creatorFarcaster.displayName}</p>
+                                    <p className="text-purple-400 text-xs">FID: {contractData.creatorFarcaster.fid}</p>
+                                  </div>
+                                </div>
+                                <p className="text-purple-400 text-xs mt-2 font-mono">{formatAddress(contractData.creator)}</p>
+                              </div>
+                            ) : contractData.creator ? (
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                  <Wallet className="w-6 h-6 text-purple-300" />
+                                  <div>
+                                    <p className="text-purple-300 text-sm">Wallet Address</p>
+                                    <p className="text-white font-mono text-sm">{formatAddress(contractData.creator)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-purple-400 text-sm">Creator information not available</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Activity Button */}
+                        <div className="mt-6 text-center">
+                          <button
+                            onClick={() => {
+                              setShowActivityRadar(!showActivityRadar);
+                              if (!showActivityRadar) {
+                                fetchLiveActivity();
+                              }
+                            }}
+                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-green-600 hover:from-red-700 hover:to-green-700 text-white rounded-lg font-medium transition-colors mx-auto"
+                          >
+                            <Radar className="w-5 h-5" />
+                            {showActivityRadar ? 'Hide Activity Radar' : 'Show Live Activity Radar'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live Activity Radar */}
+                      {showActivityRadar && (
+                        <div className="bg-purple-700 rounded-lg p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <Radar className="w-6 h-6 text-purple-300" />
+                              <h3 className="text-xl font-bold text-white">Live Activity Feed</h3>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                                <span className="text-green-300">Buyers</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+                                <span className="text-red-300">Sellers</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                                <span className="text-blue-300">Interactions</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {loadingActivityRadar ? (
+                            <div className="text-center py-8">
+                              <Radar className="w-8 h-8 text-purple-400 mx-auto mb-2 animate-spin" />
+                              <p className="text-purple-300">Scanning blockchain activity...</p>
+                            </div>
+                          ) : liveActivity.length > 0 ? (
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                              {liveActivity.map((activity, index) => (
+                                <div key={`${activity.hash}-${index}`} className="bg-purple-800 rounded-lg p-3 hover:bg-purple-750 transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-3 h-3 rounded-full ${
+                                        activity.activityType === 'buy' ? 'bg-green-400' :
+                                        activity.activityType === 'sell' ? 'bg-red-400' :
+                                        'bg-blue-400'
+                                      }`}></div>
+                                      <div>
+                                        <p className="text-white text-sm font-medium">
+                                          {activity.activityType === 'buy' ? '🟢 BUY' :
+                                           activity.activityType === 'sell' ? '🔴 SELL' :
+                                           '🔵 INTERACTION'}
+                                        </p>
+                                        <p className="text-purple-400 text-xs">
+                                          {formatAddress(activity.from)} → {formatAddress(activity.to)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      {activity.value > 0 && (
+                                        <p className="text-purple-200 text-sm">{activity.value.toFixed(4)} ETH</p>
+                                      )}
+                                      <p className="text-purple-400 text-xs">
+                                        {new Date(activity.timestamp).toLocaleTimeString()}
+                                      </p>
+                                      <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
+                                        {activity.chain}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8">
+                              <Radar className="w-12 h-12 text-purple-400 mx-auto mb-3" />
+                              <p className="text-purple-300">No recent activity detected</p>
+                              <p className="text-purple-400 text-sm">Activity from the last 24 hours will appear here</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
