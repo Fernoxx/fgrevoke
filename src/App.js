@@ -1916,127 +1916,176 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
-  // Fetch contract information (token/NFT detection)
+  // Fetch contract information (token/NFT detection) - Fixed for Base support
   const fetchContractInfo = async (address, results) => {
     try {
       console.log('📋 Fetching contract info for:', address);
 
-      // Check if it's a token (ERC-20)
-      try {
-        const tokenResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: 1,
-            jsonrpc: '2.0',
-            method: 'alchemy_getTokenMetadata',
-            params: [address]
-          })
-        });
+      // Multi-network token detection (Ethereum and Base)
+      const networks = [
+        { name: 'Ethereum', url: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getTokenMetadata?contractAddress=${address}` },
+        { name: 'Base', url: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getTokenMetadata?contractAddress=${address}` }
+      ];
 
-        if (tokenResponse.ok) {
-          const tokenData = await tokenResponse.json();
-          if (tokenData.result && tokenData.result.symbol) {
-            results.isToken = true;
-            results.contractType = 'ERC-20 Token';
-            results.name = tokenData.result.name;
-            results.symbol = tokenData.result.symbol;
-            results.decimals = tokenData.result.decimals;
-            results.totalSupply = tokenData.result.totalSupply;
-            console.log('✅ Detected ERC-20 token:', results);
-            return;
-          }
-        }
-      } catch (tokenError) {
-        console.warn('⚠️ Token check failed:', tokenError.message);
-      }
+      for (const network of networks) {
+        try {
+          console.log(`🔍 Checking ${network.name} for contract:`, address);
+          const tokenResponse = await fetch(network.url);
 
-      // Check if it's an NFT (ERC-721/ERC-1155)
-      try {
-        const nftResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getNFTMetadata?contractAddress=${address}&tokenId=1`);
-        
-        if (nftResponse.ok) {
-          const nftData = await nftResponse.json();
-          if (nftData.contract) {
-            results.isNFT = true;
-            results.contractType = nftData.contract.tokenType || 'NFT Contract';
-            results.name = nftData.contract.name || 'Unknown NFT';
-            results.symbol = nftData.contract.symbol;
-            console.log('✅ Detected NFT contract:', results);
-            return;
-          }
-        }
-      } catch (nftError) {
-        console.warn('⚠️ NFT check failed:', nftError.message);
-      }
-
-      // Check contract verification status via Etherscan
-      try {
-        const verificationResponse = await fetch(`https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}`);
-        
-        if (verificationResponse.ok) {
-          const verificationData = await verificationResponse.json();
-          if (verificationData.status === '1' && verificationData.result[0]) {
-            const contractInfo = verificationData.result[0];
-            results.verified = contractInfo.SourceCode !== '';
-            if (contractInfo.ContractName) {
-              results.name = contractInfo.ContractName;
-              results.contractType = `${contractInfo.ContractName} Contract`;
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            console.log(`📊 ${network.name} response:`, tokenData);
+            
+            if (tokenData.decimals !== undefined && tokenData.decimals !== null) {
+              // Has decimals = ERC-20 Token
+              results.isToken = true;
+              results.contractType = 'ERC-20 Token';
+              results.name = tokenData.name || 'Unknown Token';
+              results.symbol = tokenData.symbol || 'UNKNOWN';
+              results.decimals = tokenData.decimals;
+              results.totalSupply = tokenData.totalSupply;
+              results.network = network.name;
+              console.log('✅ Detected ERC-20 token on', network.name, ':', results);
+              return;
+            } else if (tokenData.name || tokenData.symbol) {
+              // Has name/symbol but no decimals = likely NFT
+              results.isNFT = true;
+              results.contractType = 'NFT Contract';
+              results.name = tokenData.name || 'Unknown NFT';
+              results.symbol = tokenData.symbol;
+              results.network = network.name;
+              console.log('✅ Detected NFT contract on', network.name, ':', results);
+              return;
             }
           }
+        } catch (networkError) {
+          console.warn(`⚠️ ${network.name} token check failed:`, networkError.message);
         }
-      } catch (verificationError) {
-        console.warn('⚠️ Verification check failed:', verificationError.message);
       }
+
+      // Check contract verification status via Etherscan (multi-chain)
+      const verificationAPIs = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.basescan.org/api?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}` }
+      ];
+
+      for (const api of verificationAPIs) {
+        try {
+          const verificationResponse = await fetch(api.url);
+          
+          if (verificationResponse.ok) {
+            const verificationData = await verificationResponse.json();
+            if (verificationData.status === '1' && verificationData.result[0]) {
+              const contractInfo = verificationData.result[0];
+              results.verified = contractInfo.SourceCode !== '';
+              results.network = api.name;
+              if (contractInfo.ContractName) {
+                results.name = contractInfo.ContractName;
+                results.contractType = `${contractInfo.ContractName} Contract`;
+                console.log('✅ Found verified contract on', api.name, ':', results);
+                return;
+              }
+            }
+          }
+        } catch (verificationError) {
+          console.warn(`⚠️ ${api.name} verification check failed:`, verificationError.message);
+        }
+      }
+
+      // Default if nothing found
+      results.contractType = 'Unknown Contract';
+      console.log('⚠️ Could not determine contract type for:', address);
 
     } catch (error) {
       console.error('❌ Contract info fetch failed:', error.message);
     }
   };
 
-  // Fetch contract creator and check Farcaster
+  // Fetch contract creator and check Farcaster - Fixed for Base support
   const fetchContractCreator = async (address, results) => {
     try {
       console.log('👤 Fetching contract creator for:', address);
 
-      // Get contract creation transaction
-      const response = await fetch(`https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === '1' && data.result && data.result.length > 0) {
-          const creationTx = data.result[0];
-          results.creator = creationTx.from;
-          results.deploymentBlock = parseInt(creationTx.blockNumber);
+      // Use the proper contract creation API for multiple networks
+      const creationAPIs = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.basescan.org/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` }
+      ];
+
+      for (const api of creationAPIs) {
+        try {
+          console.log(`🔍 Checking ${api.name} for contract creator:`, address);
+          const response = await fetch(api.url);
           
-          console.log('📝 Contract creator found:', results.creator);
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`📊 ${api.name} creator response:`, data);
+            
+            if (data.status === '1' && data.result && data.result.length > 0) {
+              const contractInfo = data.result[0];
+              results.creator = contractInfo.contractCreator;
+              results.deploymentTxHash = contractInfo.txHash;
+              results.network = api.name;
+              
+              console.log('📝 Contract creator found on', api.name, ':', results.creator);
 
-          // Check if creator has Farcaster profile
-          try {
-            const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${results.creator}`, {
-              headers: {
-                'Api-Key': 'NEYNAR_API_DOCS'
-              }
-            });
+              // Check if creator has Farcaster profile
+              try {
+                const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${results.creator}`, {
+                  headers: {
+                    'Api-Key': 'NEYNAR_API_DOCS'
+                  }
+                });
 
-            if (neynarResponse.ok) {
-              const neynarData = await neynarResponse.json();
-              if (neynarData && Object.keys(neynarData).length > 0) {
-                const userProfile = Object.values(neynarData)[0];
-                if (userProfile && userProfile.length > 0) {
-                  const profile = userProfile[0];
-                  results.creatorFarcaster = {
-                    username: profile.username,
-                    displayName: profile.display_name,
-                    fid: profile.fid
-                  };
-                  console.log('✅ Found creator Farcaster profile:', results.creatorFarcaster);
+                if (neynarResponse.ok) {
+                  const neynarData = await neynarResponse.json();
+                  if (neynarData && Object.keys(neynarData).length > 0) {
+                    const userProfile = Object.values(neynarData)[0];
+                    if (userProfile && userProfile.length > 0) {
+                      const profile = userProfile[0];
+                      results.creatorFarcaster = {
+                        username: profile.username,
+                        displayName: profile.display_name,
+                        fid: profile.fid
+                      };
+                      console.log('✅ Found creator Farcaster profile:', results.creatorFarcaster);
+                    }
+                  }
                 }
+              } catch (farcasterError) {
+                console.warn('⚠️ Farcaster creator lookup failed:', farcasterError.message);
               }
+              
+              return; // Found creator, exit loop
             }
-          } catch (farcasterError) {
-            console.warn('⚠️ Farcaster creator lookup failed:', farcasterError.message);
           }
+        } catch (apiError) {
+          console.warn(`⚠️ ${api.name} creator API failed:`, apiError.message);
+        }
+      }
+
+      // Fallback: Try to get creator from first transaction (old method)
+      const fallbackAPIs = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` }
+      ];
+
+      for (const api of fallbackAPIs) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status === '1' && data.result && data.result.length > 0) {
+              const creationTx = data.result[0];
+              results.creator = creationTx.from;
+              results.deploymentBlock = parseInt(creationTx.blockNumber);
+              results.network = api.name;
+              console.log('📝 Contract creator found via fallback on', api.name, ':', results.creator);
+              return;
+            }
+          }
+        } catch (fallbackError) {
+          console.warn(`⚠️ ${api.name} fallback failed:`, fallbackError.message);
         }
       }
 
@@ -2045,7 +2094,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
-  // Fetch live activity radar data
+  // Fetch live activity radar data - Fixed with proper buy/sell detection
   const fetchLiveActivity = async () => {
     if (!contractData) return;
 
@@ -2055,18 +2104,21 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
       const activity = [];
       
-      // Fetch recent transactions to the contract
-      const chains = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+      // Fetch recent transactions using proper APIs based on detected network
+      const activityAPIs = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
       ];
 
-      for (const chain of chains) {
+      for (const api of activityAPIs) {
         try {
-          const response = await fetch(chain.url);
+          console.log(`🔍 Fetching ${api.name} activity for:`, contractData.address);
+          const response = await fetch(api.url);
           const data = await response.json();
           
           if (data.status === '1' && data.result) {
+            console.log(`📊 ${api.name}: Found ${data.result.length} transactions`);
+            
             // Get only recent transactions (last 24 hours)
             const now = Date.now();
             const oneDayAgo = now - (24 * 60 * 60 * 1000);
@@ -2076,18 +2128,33 @@ Secure yours too: https://fgrevoke.vercel.app`;
               if (txTime > oneDayAgo) {
                 const value = parseFloat(tx.value) / 1e18;
                 
-                // Determine if it's a buy or sell based on direction and value
+                // Fixed buy/sell detection logic
                 let activityType = 'interaction';
-                if (contractData.isToken && value > 0) {
-                  // If ETH is being sent to the contract, it's likely a buy
-                  activityType = tx.to.toLowerCase() === contractData.address.toLowerCase() ? 'buy' : 'sell';
-                } else if (contractData.isToken) {
-                  // For token contracts, analyze method calls
+                
+                // Green: to == contractAddress (someone is sending TO the contract = BUY)
+                if (tx.to && tx.to.toLowerCase() === contractData.address.toLowerCase()) {
+                  activityType = 'buy';
+                }
+                // Red: from == contractAddress (contract is sending FROM itself = SELL)
+                else if (tx.from && tx.from.toLowerCase() === contractData.address.toLowerCase()) {
+                  activityType = 'sell';
+                }
+                // Additional method-based detection for token contracts
+                else if (contractData.isToken) {
                   const methodId = tx.input?.slice(0, 10);
-                  if (methodId === '0xa9059cbb' || methodId === '0x23b872dd') {
-                    activityType = 'sell'; // transfer methods often indicate selling
-                  } else if (methodId === '0x38ed1739' || methodId === '0x7ff36ab5') {
-                    activityType = 'buy'; // swap methods often indicate buying
+                  switch (methodId) {
+                    case '0xa9059cbb': // transfer
+                    case '0x23b872dd': // transferFrom
+                      activityType = 'sell';
+                      break;
+                    case '0x38ed1739': // swapExactTokensForTokens
+                    case '0x7ff36ab5': // swapExactETHForTokens
+                    case '0x18cbafe5': // swapExactTokensForETH
+                      activityType = value > 0 ? 'buy' : 'sell';
+                      break;
+                    case '0x095ea7b3': // approve
+                      activityType = 'interaction';
+                      break;
                   }
                 }
 
@@ -2097,15 +2164,17 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   to: tx.to,
                   value: value,
                   timestamp: txTime,
-                  chain: chain.name,
+                  chain: api.name,
                   activityType: activityType,
-                  methodId: tx.input?.slice(0, 10) || '0x'
+                  methodId: tx.input?.slice(0, 10) || '0x',
+                  gasUsed: tx.gasUsed,
+                  gasPrice: tx.gasPrice
                 });
               }
             });
           }
         } catch (chainError) {
-          console.warn(`⚠️ ${chain.name} activity fetch failed:`, chainError.message);
+          console.warn(`⚠️ ${api.name} activity fetch failed:`, chainError.message);
         }
       }
 
@@ -2114,6 +2183,11 @@ Secure yours too: https://fgrevoke.vercel.app`;
       setLiveActivity(activity.slice(0, 50));
       
       console.log('📊 Live activity loaded:', activity.length, 'transactions');
+      console.log('🎯 Activity breakdown:', {
+        buys: activity.filter(a => a.activityType === 'buy').length,
+        sells: activity.filter(a => a.activityType === 'sell').length,
+        interactions: activity.filter(a => a.activityType === 'interaction').length
+      });
 
     } catch (error) {
       console.error('❌ Live activity fetch failed:', error);
@@ -2220,10 +2294,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
           {/* Navigation Tabs - Only show when connected */}
           {isConnected && (
-            <div className="flex space-x-1 bg-purple-900 p-1 rounded-lg">
+            <div className="flex bg-purple-900 p-1 rounded-lg overflow-x-auto">
               <button
                 onClick={() => setCurrentPage('approvals')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                className={`flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors whitespace-nowrap ${
                   currentPage === 'approvals'
                     ? 'bg-purple-600 text-white'
                     : 'text-purple-300 hover:text-white hover:bg-purple-700'
@@ -2234,7 +2308,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
               </button>
               <button
                 onClick={() => setCurrentPage('scanner')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                className={`flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors whitespace-nowrap ${
                     currentPage === 'scanner'
                       ? 'bg-purple-600 text-white'
                       : 'text-purple-300 hover:text-white hover:bg-purple-700'
@@ -2245,7 +2319,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
               </button>
               <button
                 onClick={() => setCurrentPage('degentools')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
+                className={`flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors whitespace-nowrap ${
                     currentPage === 'degentools'
                       ? 'bg-purple-600 text-white'
                       : 'text-purple-300 hover:text-white hover:bg-purple-700'
@@ -2498,14 +2572,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
 
 
-                  {totalClaims >= 50 && !hasClaimedLocally && (
-                    <div className="bg-gray-700 border border-gray-500 rounded-lg p-4 mb-4">
-                      <h3 className="text-gray-200 font-bold text-lg mb-2">🔒 Rewards Ended</h3>
-                      <p className="text-gray-300 text-sm">
-                        All 50 rewards have been claimed. Thanks for securing your wallet!
-                      </p>
-                    </div>
-                  )}
+
                 </div>
               )}
 
@@ -2959,6 +3026,13 @@ Secure yours too: https://fgrevoke.vercel.app`;
                                 <div>
                                   <span className="text-purple-300">Total Supply:</span>
                                   <p className="text-white">{contractData.totalSupply}</p>
+                                </div>
+                              )}
+                              
+                              {contractData.network && (
+                                <div>
+                                  <span className="text-purple-300">Network:</span>
+                                  <p className="text-white">{contractData.network}</p>
                                 </div>
                               )}
                               
