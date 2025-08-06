@@ -1431,30 +1431,38 @@ Secure yours too: https://fgrevoke.vercel.app`;
   // Fetch token holdings using Alchemy API
   const fetchTokenHoldings = async (address, results) => {
     try {
-      console.log('💰 Fetching token holdings for:', address);
+      console.log('💰 Fetching REAL token holdings for:', address);
       
-      const response = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getTokenBalances`, {
+      // Get token balances using Alchemy
+      const response = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: 1,
           jsonrpc: '2.0',
           method: 'alchemy_getTokenBalances',
-          params: [address]
+          params: [address, 'DEFAULT_TOKENS']
         })
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 Alchemy token response:', data);
+        
         if (data.result?.tokenBalances) {
           const validTokens = data.result.tokenBalances
-            .filter(token => token.tokenBalance !== '0x0' && token.tokenBalance !== '0x')
+            .filter(token => {
+              const balance = parseInt(token.tokenBalance || '0x0', 16);
+              return balance > 0;
+            })
             .slice(0, 20); // Limit to top 20 tokens
+
+          console.log(`📊 Found ${validTokens.length} tokens with balance`);
 
           // Get token metadata for each token
           for (const token of validTokens) {
             try {
-              const metadataResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getTokenMetadata`, {
+              const metadataResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1472,121 +1480,193 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   const decimals = metadata.result.decimals || 18;
                   const formattedBalance = balance / Math.pow(10, decimals);
 
-                  results.tokenHoldings.push({
-                    contractAddress: token.contractAddress,
-                    symbol: metadata.result.symbol || 'UNKNOWN',
-                    name: metadata.result.name || 'Unknown Token',
-                    balance: formattedBalance,
-                    rawBalance: token.tokenBalance,
-                    decimals: decimals,
-                    logo: metadata.result.logo
-                  });
+                  if (formattedBalance > 0) {
+                    results.tokenHoldings.push({
+                      contractAddress: token.contractAddress,
+                      symbol: metadata.result.symbol || 'UNKNOWN',
+                      name: metadata.result.name || 'Unknown Token',
+                      balance: formattedBalance,
+                      rawBalance: token.tokenBalance,
+                      decimals: decimals,
+                      logo: metadata.result.logo
+                    });
+                  }
                 }
               }
+              
+              // Small delay to avoid rate limits
+              await new Promise(resolve => setTimeout(resolve, 100));
             } catch (tokenError) {
-              console.warn('⚠️ Token metadata failed for:', token.contractAddress);
+              console.warn('⚠️ Token metadata failed for:', token.contractAddress, tokenError.message);
             }
           }
         }
       }
+
+      // Also check ETH balance
+      try {
+        const ethResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: 1,
+            jsonrpc: '2.0',
+            method: 'eth_getBalance',
+            params: [address, 'latest']
+          })
+        });
+
+        if (ethResponse.ok) {
+          const ethData = await ethResponse.json();
+          if (ethData.result) {
+            const ethBalance = parseInt(ethData.result, 16) / 1e18;
+            if (ethBalance > 0) {
+              results.tokenHoldings.unshift({
+                contractAddress: 'ETH',
+                symbol: 'ETH',
+                name: 'Ethereum',
+                balance: ethBalance,
+                rawBalance: ethData.result,
+                decimals: 18,
+                logo: null
+              });
+            }
+          }
+        }
+      } catch (ethError) {
+        console.warn('⚠️ ETH balance fetch failed:', ethError.message);
+      }
+
     } catch (error) {
-      console.warn('⚠️ Token holdings fetch failed:', error.message);
+      console.error('❌ Token holdings fetch failed:', error.message);
     }
   };
 
-  // Fetch profit/loss data and create heatmap
+  // Fetch profit/loss data and create heatmap for CURRENT MONTH only
   const fetchProfitLossData = async (address, results) => {
     try {
-      console.log('📈 Calculating profit/loss data for:', address);
+      console.log('📈 Calculating REAL profit/loss data for:', address);
       
-      // Fetch transaction history from multiple chains
       const currentDate = new Date();
-      const oneYearAgo = new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), currentDate.getDate());
+      const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
       
-      // Create monthly P&L tracking
+      // Get current month start timestamp
+      const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const startTimestamp = Math.floor(monthStart.getTime() / 1000);
+      
+      console.log(`🗓️ Analyzing current month: ${currentMonth} (from ${monthStart.toISOString()})`);
+      
+      // Initialize current month data
       const monthlyPnL = {};
-      const heatmapData = [];
+      monthlyPnL[currentMonth] = { profit: 0, loss: 0, net: 0, transactions: 0 };
       
-      // Initialize last 12 months
-      for (let i = 0; i < 12; i++) {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        monthlyPnL[monthKey] = { profit: 0, loss: 0, net: 0, transactions: 0 };
-      }
-
-      // Fetch transactions for profit calculation
+      const dailyActivity = new Map(); // Track daily transaction counts for heatmap
+      
+      // Fetch transactions from multiple chains
       const chains = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+        { 
+          name: 'Ethereum', 
+          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
+        },
+        { 
+          name: 'Base', 
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` 
+        }
       ];
 
       for (const chain of chains) {
         try {
+          console.log(`🔍 Fetching ${chain.name} transactions...`);
           const response = await fetch(chain.url);
           const data = await response.json();
           
-          if (data.status === '1' && data.result) {
-            data.result.slice(0, 100).forEach(tx => { // Analyze last 100 transactions
-              const txDate = new Date(parseInt(tx.timeStamp) * 1000);
-              const monthKey = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
-              
-              if (monthlyPnL[monthKey]) {
-                const value = parseFloat(tx.value) / 1e18; // Convert Wei to ETH
-                const gasUsed = (parseFloat(tx.gasUsed) * parseFloat(tx.gasPrice)) / 1e18;
-                
-                if (tx.from.toLowerCase() === address.toLowerCase()) {
-                  // Outgoing transaction (potential loss)
-                  monthlyPnL[monthKey].loss += value + gasUsed;
-                } else {
-                  // Incoming transaction (potential profit)
-                  monthlyPnL[monthKey].profit += value;
-                }
-                
-                monthlyPnL[monthKey].transactions++;
-                monthlyPnL[monthKey].net = monthlyPnL[monthKey].profit - monthlyPnL[monthKey].loss;
-              }
+          if (data.status === '1' && data.result && Array.isArray(data.result)) {
+            console.log(`📊 ${chain.name}: Found ${data.result.length} total transactions`);
+            
+            // Filter transactions for current month only
+            const currentMonthTxs = data.result.filter(tx => {
+              const txTimestamp = parseInt(tx.timeStamp);
+              return txTimestamp >= startTimestamp;
             });
+            
+            console.log(`📅 ${chain.name}: ${currentMonthTxs.length} transactions in current month`);
+            
+            currentMonthTxs.forEach(tx => {
+              const txDate = new Date(parseInt(tx.timeStamp) * 1000);
+              const dayKey = txDate.toISOString().split('T')[0];
+              
+              // Count daily activity for heatmap
+              dailyActivity.set(dayKey, (dailyActivity.get(dayKey) || 0) + 1);
+              
+              const value = parseFloat(tx.value) / 1e18; // Convert Wei to ETH
+              const gasUsed = (parseFloat(tx.gasUsed || 0) * parseFloat(tx.gasPrice || 0)) / 1e18;
+              
+              if (tx.from.toLowerCase() === address.toLowerCase()) {
+                // Outgoing transaction
+                monthlyPnL[currentMonth].loss += value + gasUsed;
+              } else {
+                // Incoming transaction  
+                monthlyPnL[currentMonth].profit += value;
+              }
+              
+              monthlyPnL[currentMonth].transactions++;
+            });
+            
+          } else {
+            console.log(`⚠️ ${chain.name}: ${data.message || 'No transactions found'}`);
           }
+          
+          // Small delay between API calls
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
         } catch (chainError) {
-          console.warn(`⚠️ ${chain.name} P&L calculation failed:`, chainError.message);
+          console.error(`❌ ${chain.name} transaction fetch failed:`, chainError.message);
         }
       }
+      
+      // Calculate net P&L
+      monthlyPnL[currentMonth].net = monthlyPnL[currentMonth].profit - monthlyPnL[currentMonth].loss;
+      
+      console.log('💰 Current month P&L:', monthlyPnL[currentMonth]);
 
-      // Create heatmap data (GitHub-style)
+      // Create heatmap data for current month only (last 30 days)
+      const heatmapData = [];
       const today = new Date();
-      for (let i = 365; i >= 0; i--) {
+      
+      for (let i = 29; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(today.getDate() - i);
         
         const dayKey = date.toISOString().split('T')[0];
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const dayActivity = dailyActivity.get(dayKey) || 0;
         
-        // Simple activity calculation based on monthly data
-        const monthData = monthlyPnL[monthKey] || { transactions: 0, net: 0 };
-        const activityLevel = Math.min(Math.floor(monthData.transactions / 5), 4); // 0-4 scale
+        // Activity levels: 0 = no activity, 1-4 = increasing activity
+        const activityLevel = dayActivity === 0 ? 0 : Math.min(Math.ceil(dayActivity / 2), 4);
         
         heatmapData.push({
           date: dayKey,
           activity: activityLevel,
-          value: monthData.net / 30 // Daily average
+          transactions: dayActivity,
+          value: 0 // We'll calculate this if needed
         });
       }
 
       results.profitLoss = {
         monthly: monthlyPnL,
-        total: Object.values(monthlyPnL).reduce((sum, month) => sum + month.net, 0),
-        heatmapData: heatmapData
+        total: monthlyPnL[currentMonth].net,
+        heatmapData: heatmapData,
+        currentMonth: currentMonth
       };
 
     } catch (error) {
-      console.warn('⚠️ Profit/loss calculation failed:', error.message);
+      console.error('❌ Profit/loss calculation failed:', error.message);
     }
   };
 
-  // Fetch comprehensive wallet activity (Basescanner-style)
+  // Fetch comprehensive wallet activity with REAL stats
   const fetchWalletActivity = async (address, results) => {
     try {
-      console.log('🔍 Fetching comprehensive wallet activity for:', address);
+      console.log('🔍 Fetching REAL comprehensive wallet activity for:', address);
       
       const activity = [];
       const stats = {
@@ -1599,42 +1679,61 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
       // Fetch from multiple chains
       const chains = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+        { 
+          name: 'Ethereum', 
+          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          explorerUrl: 'https://etherscan.io'
+        },
+        { 
+          name: 'Base', 
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          explorerUrl: 'https://basescan.org'
+        }
       ];
 
       for (const chain of chains) {
         try {
+          console.log(`🔍 Fetching ${chain.name} activity...`);
           const response = await fetch(chain.url);
           const data = await response.json();
           
-          if (data.status === '1' && data.result) {
-            data.result.slice(0, 50).forEach(tx => { // Get latest 50 transactions per chain
+          if (data.status === '1' && data.result && Array.isArray(data.result)) {
+            console.log(`📊 ${chain.name}: Found ${data.result.length} transactions`);
+            
+            // Process all transactions for accurate stats
+            data.result.forEach(tx => {
               const txDate = new Date(parseInt(tx.timeStamp) * 1000);
               const value = parseFloat(tx.value) / 1e18;
               
-              activity.push({
-                hash: tx.hash,
-                from: tx.from,
-                to: tx.to,
-                value: value,
-                timestamp: parseInt(tx.timeStamp),
-                date: txDate,
-                chain: chain.name,
-                gasUsed: tx.gasUsed,
-                gasPrice: tx.gasPrice,
-                status: tx.isError === '0' ? 'success' : 'failed',
-                methodId: tx.input?.slice(0, 10) || '0x',
-                blockNumber: tx.blockNumber
-              });
+              // Add to activity list (limit to recent 50 per chain for display)
+              if (activity.length < 100) {
+                activity.push({
+                  hash: tx.hash,
+                  from: tx.from,
+                  to: tx.to,
+                  value: value,
+                  timestamp: parseInt(tx.timeStamp),
+                  date: txDate,
+                  chain: chain.name,
+                  gasUsed: tx.gasUsed,
+                  gasPrice: tx.gasPrice,
+                  status: tx.isError === '0' ? 'success' : 'failed',
+                  methodId: tx.input?.slice(0, 10) || '0x',
+                  blockNumber: tx.blockNumber,
+                  explorerUrl: chain.explorerUrl
+                });
+              }
 
+              // Update stats with ALL transactions
               stats.totalTransactions++;
               stats.totalValue += value;
               
-              if (tx.to && tx.to !== address) {
-                stats.dappsUsed.add(tx.to);
+              // Track unique contracts interacted with
+              if (tx.to && tx.to !== address.toLowerCase() && tx.to !== '0x') {
+                stats.dappsUsed.add(tx.to.toLowerCase());
               }
 
+              // Track first and last transaction dates
               if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
                 stats.firstTransaction = txDate.toISOString();
               }
@@ -1643,23 +1742,40 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 stats.lastTransaction = txDate.toISOString();
               }
             });
+            
+          } else {
+            console.log(`⚠️ ${chain.name}: ${data.message || 'No transactions found'}`);
           }
+          
+          // Small delay between chain requests
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
         } catch (chainError) {
-          console.warn(`⚠️ ${chain.name} activity fetch failed:`, chainError.message);
+          console.error(`❌ ${chain.name} activity fetch failed:`, chainError.message);
         }
       }
 
       // Sort by timestamp (newest first)
       activity.sort((a, b) => b.timestamp - a.timestamp);
 
-      results.walletActivity = activity.slice(0, 100); // Keep top 100 transactions
+      console.log('📈 Final wallet stats:', {
+        totalTransactions: stats.totalTransactions,
+        totalValue: stats.totalValue.toFixed(4) + ' ETH',
+        uniqueDapps: stats.dappsUsed.size,
+        activityRecords: activity.length
+      });
+
+      results.walletActivity = activity;
       results.stats = {
-        ...stats,
-        dappsUsed: stats.dappsUsed.size
+        totalTransactions: stats.totalTransactions,
+        totalValue: stats.totalValue,
+        dappsUsed: stats.dappsUsed.size,
+        firstTransaction: stats.firstTransaction,
+        lastTransaction: stats.lastTransaction
       };
 
     } catch (error) {
-      console.warn('⚠️ Wallet activity fetch failed:', error.message);
+      console.error('❌ Wallet activity fetch failed:', error.message);
     }
   };
 
