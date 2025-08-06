@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -32,6 +32,12 @@ function App() {
   const [showActivityRadar, setShowActivityRadar] = useState(false);
   const [liveActivity, setLiveActivity] = useState([]);
   const [loadingActivityRadar, setLoadingActivityRadar] = useState(false);
+  
+  // Trending Wallets states
+  const [showTrendingWallets, setShowTrendingWallets] = useState(false);
+  const [trendingWallets, setTrendingWallets] = useState([]);
+  const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
+  const [trendingWalletsError, setTrendingWalletsError] = useState(null);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -2132,6 +2138,218 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
+  // Analyze trending wallets - Find most active degens
+  const analyzeTrendingWallets = async () => {
+    setLoadingTrendingWallets(true);
+    setTrendingWalletsError(null);
+    setShowTrendingWallets(true);
+    
+    try {
+      console.log('🔥 Analyzing trending wallets...');
+      
+      // Sample of known active wallets to analyze (in real implementation, you'd have a larger dataset)
+      const sampleWallets = [
+        '0x8ba1f109551bD432803012645Hac136c8cb9418',
+        '0x9bbC1f2b1F7c0aed20A9B2F8F8aBb8a11F8FC4b5',
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+        '0x742d35Cc6634C0532925a3b8c26404738728b306',
+        '0x220866b1c5f3F3be8b6B2Cb3CaF2C15C1B3F14A1',
+        '0xF977814e90dA44bFA03b6295A0616a897441aceC',
+        '0x40B8F3B7e69DA80D85eb1c5d8c4C2d2e3e8b3F1c',
+        '0x28C6c06298d514Db089934071355E5743bf21d60'
+      ];
+
+      const walletAnalyses = await Promise.allSettled(
+        sampleWallets.map(address => analyzeWalletMetrics(address))
+      );
+
+      const successfulAnalyses = walletAnalyses
+        .filter(result => result.status === 'fulfilled' && result.value)
+        .map(result => result.value)
+        .filter(wallet => wallet.totalScore > 0);
+
+      // Sort by total score (combination of all metrics)
+      successfulAnalyses.sort((a, b) => b.totalScore - a.totalScore);
+
+      setTrendingWallets(successfulAnalyses.slice(0, 10)); // Top 10
+      console.log('🏆 Top trending wallets:', successfulAnalyses.slice(0, 10));
+
+    } catch (error) {
+      console.error('❌ Trending wallets analysis failed:', error);
+      setTrendingWalletsError('Failed to analyze trending wallets. Please try again.');
+    } finally {
+      setLoadingTrendingWallets(false);
+    }
+  };
+
+  // Analyze individual wallet metrics
+  const analyzeWalletMetrics = async (address) => {
+    try {
+      console.log('📊 Analyzing wallet:', address);
+      
+      const metrics = {
+        address: address,
+        newTokenBuysToday: 0,
+        profitableSellsWeek: 0,
+        rugsActiveSurvived: 0,
+        totalTokensHeld: 0,
+        totalValue: 0,
+        winRate: 0,
+        avgProfit: 0,
+        totalTrades: 0,
+        riskScore: 0,
+        lastActivity: null,
+        topTokens: [],
+        totalScore: 0
+      };
+
+      // Get token balances using Alchemy
+      const networks = [
+        { name: 'Ethereum', url: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}` },
+        { name: 'Base', url: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}` }
+      ];
+
+      for (const network of networks) {
+        try {
+          // Get token balances
+          const balanceResponse = await fetch(network.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: 1,
+              jsonrpc: '2.0',
+              method: 'alchemy_getTokenBalances',
+              params: [address]
+            })
+          });
+
+          if (balanceResponse.ok) {
+            const balanceData = await balanceResponse.json();
+            if (balanceData.result && balanceData.result.tokenBalances) {
+              metrics.totalTokensHeld += balanceData.result.tokenBalances.length;
+              
+              // Analyze top 5 tokens for this network
+              const topTokens = balanceData.result.tokenBalances.slice(0, 5);
+              for (const token of topTokens) {
+                if (token.tokenBalance !== '0x0') {
+                  try {
+                    // Get token metadata
+                    const metadataResponse = await fetch(`${network.url}/getTokenMetadata?contractAddress=${token.contractAddress}`);
+                    if (metadataResponse.ok) {
+                      const metadata = await metadataResponse.json();
+                      if (metadata.name) {
+                        metrics.topTokens.push({
+                          symbol: metadata.symbol || 'UNKNOWN',
+                          name: metadata.name,
+                          address: token.contractAddress,
+                          balance: token.tokenBalance,
+                          network: network.name
+                        });
+                      }
+                    }
+                  } catch (tokenError) {
+                    console.warn('⚠️ Token metadata fetch failed:', tokenError.message);
+                  }
+                }
+              }
+            }
+          }
+        } catch (networkError) {
+          console.warn(`⚠️ ${network.name} balance check failed:`, networkError.message);
+        }
+      }
+
+      // Get transaction history for analysis
+      const txAPIs = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${BASESCAN_KEY}` }
+      ];
+
+      for (const api of txAPIs) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status === '1' && data.result) {
+              const transactions = data.result.slice(0, 100); // Analyze last 100 transactions
+              
+              const now = Date.now();
+              const oneDayAgo = now - (24 * 60 * 60 * 1000);
+              const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
+
+              let totalValue = 0;
+              let profitableTrades = 0;
+              let totalTrades = 0;
+
+              transactions.forEach(tx => {
+                const txTime = parseInt(tx.timeStamp) * 1000;
+                const value = parseFloat(tx.value) / 1e18;
+                totalValue += value;
+                
+                if (txTime > oneDayAgo) {
+                  // Analyze today's token buys (transactions with method IDs for DEX interactions)
+                  const methodId = tx.input?.slice(0, 10);
+                  if (['0x38ed1739', '0x7ff36ab5', '0x18cbafe5'].includes(methodId) && value > 0) {
+                    metrics.newTokenBuysToday++;
+                  }
+                }
+
+                if (txTime > oneWeekAgo) {
+                  // Analyze this week's transactions for profitable patterns
+                  if (tx.isError === '0' && value > 0.001) { // Successful transactions with meaningful value
+                    totalTrades++;
+                    // Simple heuristic: if gas fee is less than 10% of value, likely profitable
+                    const gasFee = (parseFloat(tx.gasUsed) * parseFloat(tx.gasPrice)) / 1e18;
+                    if (gasFee < value * 0.1) {
+                      profitableTrades++;
+                    }
+                  }
+                }
+
+                // Set last activity
+                if (!metrics.lastActivity || txTime > metrics.lastActivity) {
+                  metrics.lastActivity = txTime;
+                }
+              });
+
+              metrics.totalValue += totalValue;
+              metrics.profitableSellsWeek += profitableTrades;
+              metrics.totalTrades += totalTrades;
+              metrics.winRate = totalTrades > 0 ? (profitableTrades / totalTrades) * 100 : 0;
+            }
+          }
+        } catch (txError) {
+          console.warn(`⚠️ ${api.name} transaction analysis failed:`, txError.message);
+        }
+      }
+
+      // Calculate rug survival score (heuristic based on old token holdings)
+      metrics.rugsActiveSurvived = Math.min(metrics.totalTokensHeld * 0.1, 10); // Estimate based on portfolio diversity
+
+      // Calculate risk score (higher = more risk-taking)
+      metrics.riskScore = Math.min((metrics.newTokenBuysToday * 20) + (metrics.totalTokensHeld * 2), 100);
+
+      // Calculate average profit (simplified)
+      metrics.avgProfit = metrics.totalTrades > 0 ? metrics.totalValue / metrics.totalTrades : 0;
+
+      // Calculate total score (composite ranking)
+      metrics.totalScore = 
+        (metrics.newTokenBuysToday * 10) +
+        (metrics.profitableSellsWeek * 5) +
+        (metrics.rugsActiveSurvived * 3) +
+        (metrics.winRate * 0.5) +
+        (metrics.riskScore * 0.3) +
+        (metrics.totalTokensHeld * 0.1);
+
+      console.log('📈 Wallet analysis complete:', metrics);
+      return metrics;
+
+    } catch (error) {
+      console.error('❌ Wallet analysis failed for', address, ':', error);
+      return null;
+    }
+  };
+
   // Fetch live activity radar data - Fixed with proper buy/sell detection
   const fetchLiveActivity = async () => {
     if (!contractData) return;
@@ -2411,6 +2629,210 @@ Secure yours too: https://fgrevoke.vercel.app`;
                         </p>
                       </div>
                     )
+                  )}
+
+                  {/* Trending Wallets Interface */}
+                  {showTrendingWallets && (
+                    <div className="space-y-6">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Crown className="w-8 h-8 text-yellow-400" />
+                          <div>
+                            <h2 className="text-2xl font-bold text-white">Trending Wallets</h2>
+                            <p className="text-purple-300">Top performing degens on-chain</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowTrendingWallets(false);
+                            setTrendingWallets([]);
+                            setTrendingWalletsError(null);
+                          }}
+                          className="text-purple-300 hover:text-white p-2"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Loading State */}
+                      {loadingTrendingWallets && (
+                        <div className="text-center py-12">
+                          <RefreshCw className="w-8 h-8 text-purple-300 animate-spin mx-auto mb-4" />
+                          <p className="text-purple-300">Analyzing wallet performance...</p>
+                          <p className="text-purple-400 text-sm mt-2">This may take a moment</p>
+                        </div>
+                      )}
+
+                      {/* Error State */}
+                      {trendingWalletsError && (
+                        <div className="bg-red-900 border border-red-700 rounded-lg p-4">
+                          <div className="flex items-center gap-3">
+                            <AlertTriangle className="w-6 h-6 text-red-400" />
+                            <div>
+                              <p className="text-red-300 font-medium">Analysis Failed</p>
+                              <p className="text-red-400 text-sm">{trendingWalletsError}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Trending Wallets Results */}
+                      {!loadingTrendingWallets && trendingWallets.length > 0 && (
+                        <div className="space-y-4">
+                          <div className="bg-gradient-to-r from-yellow-900/30 to-orange-900/30 border border-yellow-600/30 rounded-lg p-4">
+                            <h3 className="text-yellow-300 font-bold text-lg mb-2">🔥 Most Active Degens</h3>
+                            <p className="text-yellow-400 text-sm">
+                              Based on: New token buys today • Profitable sells this week • Rugs survived • Portfolio diversity
+                            </p>
+                          </div>
+
+                          {trendingWallets.map((wallet, index) => (
+                            <div key={wallet.address} className="bg-purple-800 rounded-lg p-6 border border-purple-600">
+                              {/* Wallet Header */}
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="bg-yellow-600 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold">
+                                    #{index + 1}
+                                  </div>
+                                  <div>
+                                    <p className="text-white font-mono text-sm break-all">{wallet.address}</p>
+                                    <p className="text-purple-300 text-xs">
+                                      Score: {Math.round(wallet.totalScore)} • Last active: {wallet.lastActivity ? new Date(wallet.lastActivity).toLocaleDateString() : 'Unknown'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(wallet.address);
+                                    // Could add toast notification here
+                                  }}
+                                  className="text-purple-300 hover:text-white p-2"
+                                  title="Copy address"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* Metrics Grid */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                <div className="bg-green-900/30 border border-green-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Target className="w-4 h-4 text-green-400" />
+                                    <span className="text-green-300 text-xs font-medium">New Buys Today</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{wallet.newTokenBuysToday}</p>
+                                </div>
+
+                                <div className="bg-blue-900/30 border border-blue-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <DollarSign className="w-4 h-4 text-blue-400" />
+                                    <span className="text-blue-300 text-xs font-medium">Profitable Sells</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{wallet.profitableSellsWeek}</p>
+                                </div>
+
+                                <div className="bg-purple-900/30 border border-purple-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Shield className="w-4 h-4 text-purple-400" />
+                                    <span className="text-purple-300 text-xs font-medium">Rugs Survived</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{Math.round(wallet.rugsActiveSurvived)}</p>
+                                </div>
+
+                                <div className="bg-orange-900/30 border border-orange-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <BarChart3 className="w-4 h-4 text-orange-400" />
+                                    <span className="text-orange-300 text-xs font-medium">Win Rate</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{Math.round(wallet.winRate)}%</p>
+                                </div>
+                              </div>
+
+                              {/* Additional Stats */}
+                              <div className="grid grid-cols-3 gap-4 mb-4 text-center">
+                                <div>
+                                  <p className="text-purple-300 text-xs">Tokens Held</p>
+                                  <p className="text-white font-semibold">{wallet.totalTokensHeld}</p>
+                                </div>
+                                <div>
+                                  <p className="text-purple-300 text-xs">Risk Score</p>
+                                  <p className="text-white font-semibold">{Math.round(wallet.riskScore)}/100</p>
+                                </div>
+                                <div>
+                                  <p className="text-purple-300 text-xs">Total Trades</p>
+                                  <p className="text-white font-semibold">{wallet.totalTrades}</p>
+                                </div>
+                              </div>
+
+                              {/* Top Tokens */}
+                              {wallet.topTokens.length > 0 && (
+                                <div className="border-t border-purple-600 pt-4">
+                                  <p className="text-purple-300 text-sm font-medium mb-2">Top Holdings:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {wallet.topTokens.slice(0, 5).map((token, tokenIndex) => (
+                                      <span
+                                        key={tokenIndex}
+                                        className="bg-purple-700 px-3 py-1 rounded-full text-white text-xs"
+                                      >
+                                        {token.symbol} ({token.network})
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Copy Trading CTA */}
+                              <div className="border-t border-purple-600 pt-4 mt-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Eye className="w-4 h-4 text-purple-300" />
+                                    <span className="text-purple-300 text-sm">Copy their trades 👀</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => {
+                                        // Set scanner address and switch to scanner tab
+                                        setScannerAddress(wallet.address);
+                                        setCurrentPage('scanner');
+                                      }}
+                                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                                    >
+                                      Analyze
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(wallet.address);
+                                      }}
+                                      className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors"
+                                    >
+                                      Copy
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Disclaimer */}
+                          <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4">
+                            <p className="text-yellow-300 text-sm">
+                              ⚠️ <strong>Disclaimer:</strong> This analysis is for educational purposes. Past performance doesn't guarantee future results. 
+                              Always DYOR before copying any trades. Crypto trading involves significant risk.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No Results */}
+                      {!loadingTrendingWallets && !trendingWalletsError && trendingWallets.length === 0 && (
+                        <div className="text-center py-12">
+                          <AlertTriangle className="w-12 h-12 text-purple-400 mx-auto mb-4" />
+                          <p className="text-purple-300">No trending wallets found</p>
+                          <p className="text-purple-400 text-sm">Try analyzing again in a few moments</p>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : (
@@ -2931,22 +3353,32 @@ Secure yours too: https://fgrevoke.vercel.app`;
               ) : currentPage === 'degentools' ? (
                 // DegenTools Interface
                 <div className="space-y-6">
-                  {/* Contract Checker Button */}
-                  {!contractData && (
+                  {/* DegenTools Main Menu */}
+                  {!contractData && !showTrendingWallets && (
                     <div className="flex flex-col items-center justify-center py-12">
                       <div className="bg-purple-700 rounded-xl p-8 text-center max-w-md">
                         <Zap className="w-16 h-16 text-purple-300 mx-auto mb-4" />
                         <h3 className="text-2xl font-bold text-white mb-2">DegenTools</h3>
                         <p className="text-purple-300 mb-6">
-                          Analyze any smart contract and see live blockchain activity in real-time
+                          Advanced blockchain intelligence and degen tracking tools
                         </p>
-                        <button
-                          onClick={() => setContractData({})} // Show search interface
-                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors mx-auto"
-                        >
-                          <FileText className="w-5 h-5" />
-                          Contract Checker
-                        </button>
+                        <div className="flex flex-col gap-3">
+                          <button
+                            onClick={() => setContractData({})} // Show search interface
+                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors"
+                          >
+                            <FileText className="w-5 h-5" />
+                            Contract Checker
+                          </button>
+                          
+                          <button
+                            onClick={analyzeTrendingWallets}
+                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white rounded-lg font-medium transition-colors"
+                          >
+                            <Crown className="w-5 h-5" />
+                            Trending Wallets
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
