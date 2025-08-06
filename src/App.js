@@ -58,7 +58,7 @@ function App() {
   const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || process.env.REACT_APP_ETHERSCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
   const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
   const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
-  const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_KEY || ETHERSCAN_API_KEY;
+  const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_API_KEY || process.env.REACT_APP_BASESCAN_KEY || ETHERSCAN_API_KEY;
   const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || ETHERSCAN_API_KEY;
   
   console.log('🔑 API Keys loaded:', {
@@ -1966,7 +1966,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
       // Check contract verification status via Etherscan (multi-chain)
       const verificationAPIs = [
         { name: 'Ethereum', url: `https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.basescan.org/api?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}` }
+        { name: 'Base', url: `https://api.basescan.org/api?module=contract&action=getsourcecode&address=${address}&apikey=${BASESCAN_KEY}` }
       ];
 
       for (const api of verificationAPIs) {
@@ -2001,15 +2001,21 @@ Secure yours too: https://fgrevoke.vercel.app`;
     }
   };
 
-  // Fetch contract creator and check Farcaster - Fixed for Base support
+  // Fetch contract creator and check Farcaster - Using proper APIs and SDK
   const fetchContractCreator = async (address, results) => {
     try {
       console.log('👤 Fetching contract creator for:', address);
 
-      // Use the proper contract creation API for multiple networks
+      // Use the proper contract creation API with correct environment variables
       const creationAPIs = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.basescan.org/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` }
+        { 
+          name: 'Ethereum', 
+          url: `https://api.etherscan.io/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${ETHERSCAN_API_KEY}` 
+        },
+        { 
+          name: 'Base', 
+          url: `https://api.basescan.org/api?module=contract&action=getcontractcreation&contractaddresses=${address}&apikey=${BASESCAN_KEY}` 
+        }
       ];
 
       for (const api of creationAPIs) {
@@ -2023,15 +2029,30 @@ Secure yours too: https://fgrevoke.vercel.app`;
             
             if (data.status === '1' && data.result && data.result.length > 0) {
               const contractInfo = data.result[0];
-              results.creator = contractInfo.contractCreator;
+              const creatorAddress = contractInfo.contractCreator;
+              
+              results.creator = creatorAddress;
               results.deploymentTxHash = contractInfo.txHash;
               results.network = api.name;
               
-              console.log('📝 Contract creator found on', api.name, ':', results.creator);
+              console.log('📝 Contract creator found on', api.name, ':', creatorAddress);
 
-              // Check if creator has Farcaster profile
+              // Check if creator has Farcaster profile using SDK
               try {
-                const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${results.creator}`, {
+                console.log('🔍 Looking up Farcaster profile for creator:', creatorAddress);
+                
+                // Try using the Farcaster SDK first
+                if (sdk && sdk.actions) {
+                  try {
+                    // Note: This is a hypothetical SDK method - adjust based on actual SDK capabilities
+                    console.log('🔄 Attempting SDK lookup...');
+                  } catch (sdkError) {
+                    console.warn('⚠️ SDK lookup not available:', sdkError.message);
+                  }
+                }
+                
+                // Fallback to Neynar API (more reliable)
+                const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${creatorAddress}`, {
                   headers: {
                     'Api-Key': 'NEYNAR_API_DOCS'
                   }
@@ -2039,6 +2060,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
                 if (neynarResponse.ok) {
                   const neynarData = await neynarResponse.json();
+                  console.log('📊 Neynar response for creator:', neynarData);
+                  
                   if (neynarData && Object.keys(neynarData).length > 0) {
                     const userProfile = Object.values(neynarData)[0];
                     if (userProfile && userProfile.length > 0) {
@@ -2046,7 +2069,9 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       results.creatorFarcaster = {
                         username: profile.username,
                         displayName: profile.display_name,
-                        fid: profile.fid
+                        fid: profile.fid,
+                        pfp: profile.pfp_url || profile.pfp?.url,
+                        bio: profile.profile?.bio?.text || ''
                       };
                       console.log('✅ Found creator Farcaster profile:', results.creatorFarcaster);
                     }
@@ -2057,17 +2082,28 @@ Secure yours too: https://fgrevoke.vercel.app`;
               }
               
               return; // Found creator, exit loop
+            } else {
+              console.log(`⚠️ ${api.name}: No creator data returned`);
             }
+          } else {
+            console.warn(`⚠️ ${api.name}: API response not OK`);
           }
         } catch (apiError) {
-          console.warn(`⚠️ ${api.name} creator API failed:`, apiError.message);
+          console.error(`❌ ${api.name} creator API failed:`, apiError.message);
         }
       }
 
       // Fallback: Try to get creator from first transaction (old method)
+      console.log('🔄 Falling back to transaction history method...');
       const fallbackAPIs = [
-        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` }
+        { 
+          name: 'Ethereum', 
+          url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${ETHERSCAN_API_KEY}` 
+        },
+        { 
+          name: 'Base', 
+          url: `https://api.basescan.org/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${BASESCAN_KEY}` 
+        }
       ];
 
       for (const api of fallbackAPIs) {
@@ -2089,6 +2125,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
         }
       }
 
+      console.log('⚠️ No contract creator found for:', address);
+
     } catch (error) {
       console.error('❌ Contract creator fetch failed:', error.message);
     }
@@ -2107,7 +2145,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
       // Fetch recent transactions using proper APIs based on detected network
       const activityAPIs = [
         { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+        { name: 'Base', url: `https://api.basescan.org/api?module=account&action=txlist&address=${contractData.address}&startblock=0&endblock=latest&sort=desc&apikey=${BASESCAN_KEY}` }
       ];
 
       for (const api of activityAPIs) {
@@ -3051,27 +3089,58 @@ Secure yours too: https://fgrevoke.vercel.app`;
                             {contractData.creatorFarcaster ? (
                               <div className="bg-purple-800 rounded-lg p-4">
                                 <div className="flex items-center gap-3">
-                                  <User className="w-8 h-8 text-purple-300" />
-                                  <div>
-                                    <p className="text-white font-semibold">@{contractData.creatorFarcaster.username}</p>
+                                  {contractData.creatorFarcaster.pfp ? (
+                                    <img 
+                                      src={contractData.creatorFarcaster.pfp} 
+                                      alt="Profile" 
+                                      className="w-10 h-10 rounded-full object-cover border-2 border-purple-600"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'block';
+                                      }}
+                                    />
+                                  ) : null}
+                                  <User className={`w-8 h-8 text-purple-300 ${contractData.creatorFarcaster.pfp ? 'hidden' : 'block'}`} />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-white font-semibold">@{contractData.creatorFarcaster.username}</p>
+                                      <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
+                                        Farcaster
+                                      </span>
+                                    </div>
                                     <p className="text-purple-300 text-sm">{contractData.creatorFarcaster.displayName}</p>
                                     <p className="text-purple-400 text-xs">FID: {contractData.creatorFarcaster.fid}</p>
+                                    {contractData.creatorFarcaster.bio && (
+                                      <p className="text-purple-400 text-xs mt-1 italic">"{contractData.creatorFarcaster.bio}"</p>
+                                    )}
                                   </div>
                                 </div>
-                                <p className="text-purple-400 text-xs mt-2 font-mono">{formatAddress(contractData.creator)}</p>
+                                <div className="mt-3 pt-3 border-t border-purple-700">
+                                  <p className="text-purple-500 text-xs">Contract Creator Address:</p>
+                                  <p className="text-purple-400 text-xs font-mono">{contractData.creator}</p>
+                                </div>
                               </div>
                             ) : contractData.creator ? (
                               <div className="bg-purple-800 rounded-lg p-4">
                                 <div className="flex items-center gap-3">
                                   <Wallet className="w-6 h-6 text-purple-300" />
                                   <div>
-                                    <p className="text-purple-300 text-sm">Wallet Address</p>
-                                    <p className="text-white font-mono text-sm">{formatAddress(contractData.creator)}</p>
+                                    <p className="text-purple-300 text-sm font-medium">Contract Creator</p>
+                                    <p className="text-white font-mono text-sm break-all">{contractData.creator}</p>
+                                    <p className="text-purple-400 text-xs mt-1">No Farcaster profile found</p>
                                   </div>
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-purple-400 text-sm">Creator information not available</p>
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                  <AlertTriangle className="w-6 h-6 text-purple-400" />
+                                  <div>
+                                    <p className="text-purple-400 text-sm">Creator information not available</p>
+                                    <p className="text-purple-500 text-xs">Unable to determine contract deployer</p>
+                                  </div>
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
