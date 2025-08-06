@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -12,9 +12,15 @@ function App() {
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals' or 'activity'
+  const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals', 'activity', or 'spy'
   const [activityPageNumber, setActivityPageNumber] = useState(1);
   const transactionsPerPage = 10;
+
+  // Spy functionality states
+  const [spyAddress, setSpyAddress] = useState('');
+  const [spyData, setSpyData] = useState(null);
+  const [loadingSpy, setLoadingSpy] = useState(false);
+  const [spyError, setSpyError] = useState(null);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -1246,6 +1252,417 @@ Secure yours too: https://fgrevoke.vercel.app`;
     console.log('🔌 Disconnected wallet but kept Farcaster user profile data');
   };
 
+  // Spy functionality - comprehensive wallet analysis
+  const searchSpyAddress = async () => {
+    if (!spyAddress || spyAddress.length !== 42) {
+      setSpyError('Please enter a valid Ethereum address (42 characters starting with 0x)');
+      return;
+    }
+
+    setLoadingSpy(true);
+    setSpyError(null);
+    setSpyData(null);
+
+    try {
+      console.log('🕵️ Starting comprehensive spy analysis for:', spyAddress);
+      
+      const spyResults = {
+        address: spyAddress,
+        farcasterProfile: null,
+        socialProfiles: {},
+        tokenHoldings: [],
+        profitLoss: {
+          monthly: {},
+          total: 0,
+          heatmapData: []
+        },
+        walletActivity: [],
+        stats: {
+          totalTransactions: 0,
+          totalValue: 0,
+          dappsUsed: 0,
+          firstTransaction: null,
+          lastTransaction: null
+        }
+      };
+
+      // Parallel data fetching for better performance
+      await Promise.allSettled([
+        fetchFarcasterProfile(spyAddress, spyResults),
+        fetchSocialProfiles(spyAddress, spyResults),
+        fetchTokenHoldings(spyAddress, spyResults),
+        fetchProfitLossData(spyAddress, spyResults),
+        fetchWalletActivity(spyAddress, spyResults)
+      ]);
+
+      setSpyData(spyResults);
+      console.log('✅ Spy analysis complete:', spyResults);
+
+    } catch (error) {
+      console.error('❌ Spy analysis failed:', error);
+      setSpyError('Failed to analyze address. Please try again.');
+    } finally {
+      setLoadingSpy(false);
+    }
+  };
+
+  // Fetch Farcaster profile using Neynar API or SDK
+  const fetchFarcasterProfile = async (address, results) => {
+    try {
+      console.log('🔍 Searching Farcaster profile for:', address);
+      
+      // Try using Neynar API (free tier)
+      const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${address}`, {
+        headers: {
+          'Api-Key': 'NEYNAR_API_DOCS' // Public demo key - replace with your own for production
+        }
+      });
+
+      if (neynarResponse.ok) {
+        const data = await neynarResponse.json();
+        if (data && Object.keys(data).length > 0) {
+          const userProfile = Object.values(data)[0];
+          if (userProfile && userProfile.length > 0) {
+            const profile = userProfile[0];
+            results.farcasterProfile = {
+              fid: profile.fid,
+              username: profile.username,
+              displayName: profile.display_name,
+              bio: profile.profile?.bio?.text || '',
+              followerCount: profile.follower_count,
+              followingCount: profile.following_count,
+              pfpUrl: profile.pfp_url,
+              verifiedAddresses: profile.verified_addresses?.eth_addresses || []
+            };
+            console.log('✅ Found Farcaster profile:', results.farcasterProfile);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Farcaster profile lookup failed:', error.message);
+    }
+  };
+
+  // Fetch social profiles (ENS, Lens, etc.)
+  const fetchSocialProfiles = async (address, results) => {
+    try {
+      // ENS Resolution
+      try {
+        const ensResponse = await fetch(`https://api.ensideas.com/ens/resolve/${address}`);
+        if (ensResponse.ok) {
+          const ensData = await ensResponse.json();
+          if (ensData.name) {
+            results.socialProfiles.ens = {
+              name: ensData.name,
+              avatar: ensData.avatar,
+              description: ensData.description
+            };
+          }
+        }
+      } catch (ensError) {
+        console.warn('⚠️ ENS lookup failed:', ensError.message);
+      }
+
+      // Lens Protocol (using public API)
+      try {
+        const lensResponse = await fetch('https://api.lens.dev/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `
+              query Profiles($request: ProfilesRequest!) {
+                profiles(request: $request) {
+                  items {
+                    id
+                    handle
+                    name
+                    bio
+                    stats {
+                      totalFollowers
+                      totalFollowing
+                    }
+                    picture {
+                      ... on NftImage {
+                        uri
+                      }
+                      ... on MediaSet {
+                        original {
+                          url
+                        }
+                      }
+                    }
+                    ownedBy
+                  }
+                }
+              }
+            `,
+            variables: {
+              request: {
+                ownedBy: [address],
+                limit: 10
+              }
+            }
+          })
+        });
+
+        if (lensResponse.ok) {
+          const lensData = await lensResponse.json();
+          if (lensData.data?.profiles?.items?.length > 0) {
+            const profile = lensData.data.profiles.items[0];
+            results.socialProfiles.lens = {
+              handle: profile.handle,
+              name: profile.name,
+              bio: profile.bio,
+              followers: profile.stats.totalFollowers,
+              following: profile.stats.totalFollowing,
+              picture: profile.picture?.original?.url || profile.picture?.uri
+            };
+          }
+        }
+      } catch (lensError) {
+        console.warn('⚠️ Lens lookup failed:', lensError.message);
+      }
+
+    } catch (error) {
+      console.warn('⚠️ Social profiles lookup failed:', error.message);
+    }
+  };
+
+  // Fetch token holdings using Alchemy API
+  const fetchTokenHoldings = async (address, results) => {
+    try {
+      console.log('💰 Fetching token holdings for:', address);
+      
+      const response = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getTokenBalances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: '2.0',
+          method: 'alchemy_getTokenBalances',
+          params: [address]
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.result?.tokenBalances) {
+          const validTokens = data.result.tokenBalances
+            .filter(token => token.tokenBalance !== '0x0' && token.tokenBalance !== '0x')
+            .slice(0, 20); // Limit to top 20 tokens
+
+          // Get token metadata for each token
+          for (const token of validTokens) {
+            try {
+              const metadataResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}/getTokenMetadata`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: 1,
+                  jsonrpc: '2.0',
+                  method: 'alchemy_getTokenMetadata',
+                  params: [token.contractAddress]
+                })
+              });
+
+              if (metadataResponse.ok) {
+                const metadata = await metadataResponse.json();
+                if (metadata.result) {
+                  const balance = parseInt(token.tokenBalance, 16);
+                  const decimals = metadata.result.decimals || 18;
+                  const formattedBalance = balance / Math.pow(10, decimals);
+
+                  results.tokenHoldings.push({
+                    contractAddress: token.contractAddress,
+                    symbol: metadata.result.symbol || 'UNKNOWN',
+                    name: metadata.result.name || 'Unknown Token',
+                    balance: formattedBalance,
+                    rawBalance: token.tokenBalance,
+                    decimals: decimals,
+                    logo: metadata.result.logo
+                  });
+                }
+              }
+            } catch (tokenError) {
+              console.warn('⚠️ Token metadata failed for:', token.contractAddress);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Token holdings fetch failed:', error.message);
+    }
+  };
+
+  // Fetch profit/loss data and create heatmap
+  const fetchProfitLossData = async (address, results) => {
+    try {
+      console.log('📈 Calculating profit/loss data for:', address);
+      
+      // Fetch transaction history from multiple chains
+      const currentDate = new Date();
+      const oneYearAgo = new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), currentDate.getDate());
+      
+      // Create monthly P&L tracking
+      const monthlyPnL = {};
+      const heatmapData = [];
+      
+      // Initialize last 12 months
+      for (let i = 0; i < 12; i++) {
+        const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        monthlyPnL[monthKey] = { profit: 0, loss: 0, net: 0, transactions: 0 };
+      }
+
+      // Fetch transactions for profit calculation
+      const chains = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+      ];
+
+      for (const chain of chains) {
+        try {
+          const response = await fetch(chain.url);
+          const data = await response.json();
+          
+          if (data.status === '1' && data.result) {
+            data.result.slice(0, 100).forEach(tx => { // Analyze last 100 transactions
+              const txDate = new Date(parseInt(tx.timeStamp) * 1000);
+              const monthKey = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+              
+              if (monthlyPnL[monthKey]) {
+                const value = parseFloat(tx.value) / 1e18; // Convert Wei to ETH
+                const gasUsed = (parseFloat(tx.gasUsed) * parseFloat(tx.gasPrice)) / 1e18;
+                
+                if (tx.from.toLowerCase() === address.toLowerCase()) {
+                  // Outgoing transaction (potential loss)
+                  monthlyPnL[monthKey].loss += value + gasUsed;
+                } else {
+                  // Incoming transaction (potential profit)
+                  monthlyPnL[monthKey].profit += value;
+                }
+                
+                monthlyPnL[monthKey].transactions++;
+                monthlyPnL[monthKey].net = monthlyPnL[monthKey].profit - monthlyPnL[monthKey].loss;
+              }
+            });
+          }
+        } catch (chainError) {
+          console.warn(`⚠️ ${chain.name} P&L calculation failed:`, chainError.message);
+        }
+      }
+
+      // Create heatmap data (GitHub-style)
+      const today = new Date();
+      for (let i = 365; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i);
+        
+        const dayKey = date.toISOString().split('T')[0];
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Simple activity calculation based on monthly data
+        const monthData = monthlyPnL[monthKey] || { transactions: 0, net: 0 };
+        const activityLevel = Math.min(Math.floor(monthData.transactions / 5), 4); // 0-4 scale
+        
+        heatmapData.push({
+          date: dayKey,
+          activity: activityLevel,
+          value: monthData.net / 30 // Daily average
+        });
+      }
+
+      results.profitLoss = {
+        monthly: monthlyPnL,
+        total: Object.values(monthlyPnL).reduce((sum, month) => sum + month.net, 0),
+        heatmapData: heatmapData
+      };
+
+    } catch (error) {
+      console.warn('⚠️ Profit/loss calculation failed:', error.message);
+    }
+  };
+
+  // Fetch comprehensive wallet activity (Basescanner-style)
+  const fetchWalletActivity = async (address, results) => {
+    try {
+      console.log('🔍 Fetching comprehensive wallet activity for:', address);
+      
+      const activity = [];
+      const stats = {
+        totalTransactions: 0,
+        totalValue: 0,
+        dappsUsed: new Set(),
+        firstTransaction: null,
+        lastTransaction: null
+      };
+
+      // Fetch from multiple chains
+      const chains = [
+        { name: 'Ethereum', url: `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+      ];
+
+      for (const chain of chains) {
+        try {
+          const response = await fetch(chain.url);
+          const data = await response.json();
+          
+          if (data.status === '1' && data.result) {
+            data.result.slice(0, 50).forEach(tx => { // Get latest 50 transactions per chain
+              const txDate = new Date(parseInt(tx.timeStamp) * 1000);
+              const value = parseFloat(tx.value) / 1e18;
+              
+              activity.push({
+                hash: tx.hash,
+                from: tx.from,
+                to: tx.to,
+                value: value,
+                timestamp: parseInt(tx.timeStamp),
+                date: txDate,
+                chain: chain.name,
+                gasUsed: tx.gasUsed,
+                gasPrice: tx.gasPrice,
+                status: tx.isError === '0' ? 'success' : 'failed',
+                methodId: tx.input?.slice(0, 10) || '0x',
+                blockNumber: tx.blockNumber
+              });
+
+              stats.totalTransactions++;
+              stats.totalValue += value;
+              
+              if (tx.to && tx.to !== address) {
+                stats.dappsUsed.add(tx.to);
+              }
+
+              if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
+                stats.firstTransaction = txDate.toISOString();
+              }
+              
+              if (!stats.lastTransaction || txDate > new Date(stats.lastTransaction)) {
+                stats.lastTransaction = txDate.toISOString();
+              }
+            });
+          }
+        } catch (chainError) {
+          console.warn(`⚠️ ${chain.name} activity fetch failed:`, chainError.message);
+        }
+      }
+
+      // Sort by timestamp (newest first)
+      activity.sort((a, b) => b.timestamp - a.timestamp);
+
+      results.walletActivity = activity.slice(0, 100); // Keep top 100 transactions
+      results.stats = {
+        ...stats,
+        dappsUsed: stats.dappsUsed.size
+      };
+
+    } catch (error) {
+      console.warn('⚠️ Wallet activity fetch failed:', error.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
@@ -1354,18 +1771,18 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 }`}
               >
                 <Shield className="w-4 h-4" />
-                Token Approvals
+                Revoke
               </button>
               <button
-                onClick={() => setCurrentPage('activity')}
+                onClick={() => setCurrentPage('spy')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors ${
-                  currentPage === 'activity'
+                  currentPage === 'spy'
                     ? 'bg-purple-600 text-white'
                     : 'text-purple-300 hover:text-white hover:bg-purple-700'
                 }`}
               >
                 <Activity className="w-4 h-4" />
-                Wallet Activity
+                Spy
               </button>
             </div>
           )}
@@ -1462,6 +1879,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 <h2 className="text-2xl font-bold text-purple-200">
                   {currentPage === 'approvals' 
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
+                    : currentPage === 'spy'
+                    ? 'Wallet Spy - Comprehensive Analysis'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
@@ -1469,13 +1888,15 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={handleShare}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share {currentPage === 'activity' ? 'Activity' : 'Success'}
-                  </button>
+                  {currentPage !== 'spy' && (
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share {currentPage === 'activity' ? 'Activity' : 'Success'}
+                    </button>
+                  )}
                   {currentPage === 'approvals' ? (
                     <button
                       onClick={() => fetchRealApprovals(address)}
@@ -1485,7 +1906,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                       Refresh
                     </button>
-                  ) : (
+                  ) : currentPage === 'activity' ? (
                     <button
                       onClick={() => fetchChainActivity(address)}
                       disabled={loadingActivity}
@@ -1494,7 +1915,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <RefreshCw className={`w-4 h-4 ${loadingActivity ? 'animate-spin' : ''}`} />
                       Refresh
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -1512,7 +1933,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     <p className="text-sm text-purple-200">High Risk</p>
                   </div>
                 </div>
-              ) : (
+              ) : currentPage === 'activity' ? (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div className="bg-purple-700 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-white">{activityStats.totalTransactions}</p>
@@ -1531,7 +1952,26 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
                   </div>
                 </div>
-              )}
+              ) : currentPage === 'spy' && spyData ? (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-white">{spyData.stats.totalTransactions}</p>
+                    <p className="text-sm text-purple-200">Total Transactions</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-blue-400">{spyData.tokenHoldings.length}</p>
+                    <p className="text-sm text-purple-200">Tokens Held</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-green-400">{spyData.profitLoss.total > 0 ? '+' : ''}{spyData.profitLoss.total.toFixed(3)}</p>
+                    <p className="text-sm text-purple-200">ETH P&L</p>
+                  </div>
+                  <div className="bg-purple-700 rounded-lg p-4 text-center">
+                    <p className="text-2xl font-bold text-orange-400">{spyData.stats.dappsUsed}</p>
+                    <p className="text-sm text-purple-200">dApps Used</p>
+                  </div>
+                </div>
+              ) : null}
 
 
 
@@ -1598,7 +2038,256 @@ Secure yours too: https://fgrevoke.vercel.app`;
               )}
 
               {/* Content */}
-              {currentPage === 'approvals' ? (
+              {currentPage === 'spy' ? (
+                // Spy Interface
+                <div className="space-y-6">
+                  {/* Address Input Section */}
+                  <div className="bg-purple-700 rounded-lg p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Eye className="w-6 h-6 text-purple-300" />
+                      <h3 className="text-xl font-bold text-white">Enter Address to Analyze</h3>
+                    </div>
+                    <p className="text-purple-300 text-sm mb-4">
+                      Paste any Ethereum address below to get comprehensive analysis including Farcaster profile, social links, token holdings, profit/loss tracking, and complete transaction history.
+                    </p>
+                    <div className="flex gap-3">
+                      <input
+                        type="text"
+                        value={spyAddress}
+                        onChange={(e) => setSpyAddress(e.target.value)}
+                        placeholder="0x1234567890abcdef1234567890abcdef12345678"
+                        className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                      <button
+                        onClick={searchSpyAddress}
+                        disabled={loadingSpy || !spyAddress}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Search className={`w-4 h-4 ${loadingSpy ? 'animate-spin' : ''}`} />
+                        {loadingSpy ? 'Analyzing...' : 'Search'}
+                      </button>
+                    </div>
+                    {spyError && (
+                      <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-400" />
+                        <p className="text-red-200 text-sm">{spyError}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Loading State */}
+                  {loadingSpy && (
+                    <div className="space-y-4">
+                      <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-6 h-6 bg-purple-600 rounded animate-pulse"></div>
+                          <div className="h-6 bg-purple-600 rounded w-48 animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-purple-600 rounded w-3/4 animate-pulse"></div>
+                          <div className="h-4 bg-purple-600 rounded w-1/2 animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Spy Results */}
+                  {spyData && !loadingSpy && (
+                    <div className="space-y-6">
+                      {/* Profile Section */}
+                      {spyData.farcasterProfile && (
+                        <div className="bg-purple-700 rounded-lg p-6">
+                          <div className="flex items-center gap-3 mb-4">
+                            <User className="w-6 h-6 text-purple-300" />
+                            <h3 className="text-xl font-bold text-white">Farcaster Profile</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-white font-semibold">@{spyData.farcasterProfile.username}</p>
+                              <p className="text-purple-300">{spyData.farcasterProfile.displayName}</p>
+                              <p className="text-purple-400 text-sm mt-2">FID: {spyData.farcasterProfile.fid}</p>
+                              {spyData.farcasterProfile.bio && (
+                                <p className="text-purple-200 text-sm mt-2">{spyData.farcasterProfile.bio}</p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-purple-300 text-sm">
+                                {spyData.farcasterProfile.followerCount} followers • {spyData.farcasterProfile.followingCount} following
+                              </p>
+                              {spyData.farcasterProfile.verifiedAddresses.length > 0 && (
+                                <p className="text-green-400 text-sm mt-2">
+                                  ✅ {spyData.farcasterProfile.verifiedAddresses.length} verified address{spyData.farcasterProfile.verifiedAddresses.length > 1 ? 'es' : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Social Profiles */}
+                      {(spyData.socialProfiles.ens || spyData.socialProfiles.lens) && (
+                        <div className="bg-purple-700 rounded-lg p-6">
+                          <div className="flex items-center gap-3 mb-4">
+                            <ExternalLink className="w-6 h-6 text-purple-300" />
+                            <h3 className="text-xl font-bold text-white">Social Profiles</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {spyData.socialProfiles.ens && (
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <h4 className="text-white font-semibold mb-2">ENS</h4>
+                                <p className="text-purple-200">{spyData.socialProfiles.ens.name}</p>
+                                {spyData.socialProfiles.ens.description && (
+                                  <p className="text-purple-400 text-sm mt-1">{spyData.socialProfiles.ens.description}</p>
+                                )}
+                              </div>
+                            )}
+                            {spyData.socialProfiles.lens && (
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <h4 className="text-white font-semibold mb-2">Lens Protocol</h4>
+                                <p className="text-purple-200">{spyData.socialProfiles.lens.handle}</p>
+                                <p className="text-purple-400 text-sm">{spyData.socialProfiles.lens.followers} followers</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Token Holdings */}
+                      {spyData.tokenHoldings.length > 0 && (
+                        <div className="bg-purple-700 rounded-lg p-6">
+                          <div className="flex items-center gap-3 mb-4">
+                            <TrendingUp className="w-6 h-6 text-purple-300" />
+                            <h3 className="text-xl font-bold text-white">Token Holdings</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {spyData.tokenHoldings.slice(0, 12).map((token, index) => (
+                              <div key={index} className="bg-purple-800 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-white font-semibold text-sm">{token.symbol}</p>
+                                    <p className="text-purple-400 text-xs">{token.name}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-purple-200 text-sm">{token.balance.toFixed(4)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {spyData.tokenHoldings.length > 12 && (
+                            <p className="text-purple-400 text-sm mt-3 text-center">
+                              +{spyData.tokenHoldings.length - 12} more tokens
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Profit/Loss Heatmap */}
+                      {spyData.profitLoss.heatmapData.length > 0 && (
+                        <div className="bg-purple-700 rounded-lg p-6">
+                          <div className="flex items-center gap-3 mb-4">
+                            <BarChart3 className="w-6 h-6 text-purple-300" />
+                            <h3 className="text-xl font-bold text-white">Activity Heatmap (Last 12 Months)</h3>
+                          </div>
+                          <div className="grid grid-cols-12 gap-1">
+                            {spyData.profitLoss.heatmapData.slice(-365).map((day, index) => {
+                              const intensity = day.activity;
+                              const colors = [
+                                'bg-purple-900', // 0 activity
+                                'bg-green-800', // 1 activity
+                                'bg-green-600', // 2 activity
+                                'bg-green-500', // 3 activity
+                                'bg-green-400'  // 4+ activity
+                              ];
+                              return (
+                                <div
+                                  key={index}
+                                  className={`w-3 h-3 rounded-sm ${colors[intensity] || colors[0]}`}
+                                  title={`${day.date}: ${day.activity} activity`}
+                                ></div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {Object.entries(spyData.profitLoss.monthly).slice(0, 4).map(([month, data]) => (
+                              <div key={month} className="bg-purple-800 rounded-lg p-3 text-center">
+                                <p className="text-white font-semibold text-sm">{month}</p>
+                                <p className={`text-xs ${data.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {data.net >= 0 ? '+' : ''}{data.net.toFixed(4)} ETH
+                                </p>
+                                <p className="text-purple-400 text-xs">{data.transactions} txns</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Wallet Activity */}
+                      {spyData.walletActivity.length > 0 && (
+                        <div className="bg-purple-700 rounded-lg p-6">
+                          <div className="flex items-center gap-3 mb-4">
+                            <Activity className="w-6 h-6 text-purple-300" />
+                            <h3 className="text-xl font-bold text-white">Recent Transactions</h3>
+                          </div>
+                          <div className="space-y-3">
+                            {spyData.walletActivity.slice(0, 10).map((tx, index) => (
+                              <div key={index} className="bg-purple-800 rounded-lg p-3">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-2 h-2 rounded-full ${tx.status === 'success' ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                                      <p className="text-white text-sm font-medium">
+                                        {tx.value > 0 ? `${tx.value.toFixed(4)} ETH` : 'Contract Interaction'}
+                                      </p>
+                                      <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
+                                        {tx.chain}
+                                      </span>
+                                    </div>
+                                    <p className="text-purple-400 text-xs mt-1">
+                                      From: {formatAddress(tx.from)} → To: {formatAddress(tx.to)}
+                                    </p>
+                                    <p className="text-purple-400 text-xs">
+                                      {new Date(tx.date).toLocaleDateString()} at {new Date(tx.date).toLocaleTimeString()}
+                                    </p>
+                                  </div>
+                                  <a
+                                    href={`${tx.chain === 'Ethereum' ? 'https://etherscan.io' : 'https://basescan.org'}/tx/${tx.hash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-purple-300 hover:text-white transition-colors"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </a>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {spyData.walletActivity.length > 10 && (
+                            <p className="text-purple-400 text-sm mt-3 text-center">
+                              +{spyData.walletActivity.length - 10} more transactions
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* No Data Found */}
+                      {!spyData.farcasterProfile && 
+                       !spyData.socialProfiles.ens && 
+                       !spyData.socialProfiles.lens && 
+                       spyData.tokenHoldings.length === 0 && 
+                       spyData.walletActivity.length === 0 && (
+                        <div className="text-center py-8">
+                          <Eye className="w-12 h-12 text-purple-400 mx-auto mb-3" />
+                          <p className="text-purple-300 text-lg font-semibold">No data found</p>
+                          <p className="text-purple-400 text-sm mt-2">
+                            This address has no visible activity or associated profiles
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : currentPage === 'approvals' ? (
                 loading ? (
                   <div className="space-y-4">
                     <p className="text-center text-purple-300">Loading your REAL token approvals...</p>
