@@ -123,7 +123,7 @@ function App() {
     { 
       name: 'Ethereum', 
       value: 'ethereum', 
-      apiUrl: 'https://api.etherscan.io/api', // Standard Etherscan API
+      apiUrl: 'https://api.etherscan.io/v2/api?chainid=1', // Etherscan V2 for Ethereum
       etherscanV2Url: 'https://api.etherscan.io/v2/api?chainid=1',
       rpcUrls: [
         `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
