@@ -66,18 +66,21 @@ function App() {
   const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
   const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_API_KEY || process.env.REACT_APP_BASESCAN_KEY || ETHERSCAN_API_KEY;
   const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || ETHERSCAN_API_KEY;
+  const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
   
   console.log('🔑 API Keys loaded for Etherscan V2:', {
     etherscan: ETHERSCAN_API_KEY ? `${ETHERSCAN_API_KEY.substring(0, 8)}...` : 'missing',
     alchemy: ALCHEMY_API_KEY ? `${ALCHEMY_API_KEY.substring(0, 8)}...` : 'missing',
     basescan: BASESCAN_KEY ? `${BASESCAN_KEY.substring(0, 8)}...` : 'missing',
-    arbiscan: ARBISCAN_KEY ? `${ARBISCAN_KEY.substring(0, 8)}...` : 'missing'
+    arbiscan: ARBISCAN_KEY ? `${ARBISCAN_KEY.substring(0, 8)}...` : 'missing',
+    neynar: NEYNAR_API_KEY ? `${NEYNAR_API_KEY.substring(0, 4)}***` : 'missing'
   });
   
   // Debug: Log the actual environment variables available
   console.log('🔍 Environment variables debug:', {
     REACT_APP_ETHERSCAN_API_KEY: process.env.REACT_APP_ETHERSCAN_API_KEY ? 'SET' : 'NOT SET',
-    REACT_APP_ALCHEMY_API_KEY: process.env.REACT_APP_ALCHEMY_API_KEY ? 'SET' : 'NOT SET'
+    REACT_APP_ALCHEMY_API_KEY: process.env.REACT_APP_ALCHEMY_API_KEY ? 'SET' : 'NOT SET',
+    REACT_APP_NEYNAR_API_KEY: process.env.REACT_APP_NEYNAR_API_KEY ? 'SET' : 'NOT SET'
   });
 
   // Test Etherscan V2 API connectivity
@@ -1388,7 +1391,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
       // Try using Neynar API (free tier)
       const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${address}`, {
         headers: {
-          'Api-Key': 'NEYNAR_API_DOCS' // Public demo key - replace with your own for production
+          'Api-Key': NEYNAR_API_KEY
         }
       });
 
@@ -2178,7 +2181,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 // Fallback to Neynar API (more reliable)
                 const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${creatorAddress}`, {
                   headers: {
-                    'Api-Key': 'NEYNAR_API_DOCS'
+                    'Api-Key': NEYNAR_API_KEY
                   }
                 });
 
