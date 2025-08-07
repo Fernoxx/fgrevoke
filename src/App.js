@@ -2769,10 +2769,16 @@ Secure yours too: https://fgrevoke.vercel.app`;
                             setTrendingWallets([]);
                             setTrendingWalletsError(null);
                           }}
-                          className="text-purple-300 hover:text-white p-2"
-                        >
-                          ✕
-                        </button>
+                                                     className="text-purple-300 hover:text-white p-2"
+                         >
+                           ✕
+                         </button>
+                         <button
+                           onClick={() => setShowTrendingWallets(false)}
+                           className="ml-2 text-purple-300 hover:text-white text-sm underline"
+                         >
+                           ← Back to DegenTools
+                         </button>
                       </div>
 
                       {/* Loading State */}
@@ -3161,7 +3167,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 // Scanner Interface
                 <div className="space-y-6">
                   {/* Address Input Section */}
-                  <div className="bg-purple-700 rounded-lg p-6">
+                                      <div className="bg-purple-700 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <Eye className="w-6 h-6 text-purple-300" />
                       <h3 className="text-xl font-bold text-white">Enter Address to Analyze</h3>
@@ -3169,18 +3175,18 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     <p className="text-purple-300 text-sm mb-4">
                       Paste any Ethereum address below to get comprehensive analysis.
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col gap-3">
                       <input
                         type="text"
                         value={scannerAddress}
                         onChange={(e) => setScannerAddress(e.target.value)}
                         placeholder="0x1234567890abcdef1234567890abcdef12345678"
-                        className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                       <button
-                                                  onClick={() => searchScannerAddress(1)}
-                          disabled={loadingScanner || !scannerAddress}
-                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => searchScannerAddress(1)}
+                        disabled={loadingScanner || !scannerAddress}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                                                   <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
                           {loadingScanner ? 'Analyzing...' : 'Search'}
@@ -3524,8 +3530,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <p className="text-purple-300 text-sm mb-4">
                         Enter any smart contract address to analyze its type, creator, and see live activity feed with buy/sell radar.
                       </p>
-                      <div className="flex gap-3">
-                        <input
+                                          <div className="flex flex-col gap-3">
+                      <input
                           type="text"
                           value={contractAddress}
                           onChange={(e) => setContractAddress(e.target.value)}
@@ -3535,7 +3541,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                         <button
                           onClick={analyzeContract}
                           disabled={loadingContract || !contractAddress}
-                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Search className={`w-4 h-4 ${loadingContract ? 'animate-spin' : ''}`} />
                           {loadingContract ? 'Analyzing...' : 'Analyze Contract'}
