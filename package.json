@@ -10,8 +10,6 @@
     "node-fetch": "^3.3.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
-    "viem": "^2.33.1",
-    "wagmi": "^2.16.0"
   },
   "overrides": {
     "typescript": "^4.9.5"
