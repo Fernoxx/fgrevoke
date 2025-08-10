@@ -4,7 +4,6 @@
   "private": true,
   "dependencies": {
     "@farcaster/miniapp-sdk": "^0.1.6",
-    "@farcaster/miniapp-wagmi-connector": "^1.0.0",
     "@privy-io/react-auth": "^2.21.0",
     "@privy-io/wagmi-connector": "^0.1.13",
     "@tanstack/react-query": "^5.83.0",
