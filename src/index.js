@@ -15,6 +15,5 @@ ReactDOM.render(
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>
-    </WagmiProvider>
   document.getElementById('root')
 )
