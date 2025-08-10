@@ -16,6 +16,5 @@ ReactDOM.render(
         <App />
       </QueryClientProvider>
     </WagmiProvider>
-  </React.StrictMode>,
   document.getElementById('root')
 )
