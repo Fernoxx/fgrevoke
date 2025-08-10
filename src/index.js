@@ -5,7 +5,5 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 console.log('🔧 Setting up wagmi for reward claimer contract');
 
-const queryClient = new QueryClient()
-
     <WagmiProvider config={wagmiConfig}>
 )
