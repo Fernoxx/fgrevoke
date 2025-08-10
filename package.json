@@ -26,11 +26,6 @@
     "eject": "react-scripts eject",
     "verify": "echo 'Testing manifest...' && curl -s https://fgrevoke.vercel.app/.well-known/farcaster.json | head -20",
     "dev": "craco start",
-    "preview": "npx serve -s build",
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ],
     "globals": {
     }
   },
