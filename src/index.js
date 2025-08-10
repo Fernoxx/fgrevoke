@@ -11,6 +11,5 @@ const queryClient = new QueryClient()
 ReactDOM.render
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <App />
   document.getElementById('root')
 )
