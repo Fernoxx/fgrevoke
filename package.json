@@ -18,10 +18,6 @@
     "typescript": "^4.9.5"
   },
   "scripts": {
-    "start": "craco start",
-    "build": "craco build",
-    "test": "craco test",
-    "globals": {
     }
   },
   "browserslist": {
