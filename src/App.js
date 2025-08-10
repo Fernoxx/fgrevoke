@@ -123,7 +123,7 @@ function App() {
     { 
       name: 'Ethereum', 
       value: 'ethereum', 
-      apiUrl: 'https://api.etherscan.io/api', // Standard Etherscan API
+      apiUrl: 'https://api.etherscan.io/v2/api?chainid=1', // Etherscan V2 for Ethereum
       etherscanV2Url: 'https://api.etherscan.io/v2/api?chainid=1',
       rpcUrls: [
         `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
@@ -2286,7 +2286,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
       const successfulAnalyses = walletAnalyses
         .filter(result => result.status === 'fulfilled' && result.value)
         .map(result => result.value)
-        .filter(wallet => wallet.totalScore > 0);
+        // Keep results even when score is 0 so the UI can show something
+        .filter(wallet => typeof wallet.totalScore === 'number');
 
       // Sort by total score (combination of all metrics)
       successfulAnalyses.sort((a, b) => b.totalScore - a.totalScore);
@@ -2381,8 +2382,8 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
       // Get transaction history for analysis using Etherscan V2 API
       const txAPIs = [
-        { name: 'Ethereum', chainId: 1, url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
-        { name: 'Base', chainId: 8453, url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
+        { name: 'Ethereum', chainId: 1, url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` },
+        { name: 'Base', chainId: 8453, url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}` }
       ];
 
       for (const api of txAPIs) {
