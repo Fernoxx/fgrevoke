@@ -8,8 +8,7 @@ console.log('🔧 Setting up wagmi for reward claimer contract');
 
 const queryClient = new QueryClient()
 
-ReactDOM.render(
-  <React.StrictMode>
+ReactDOM.render
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <App />
