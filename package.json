@@ -23,9 +23,6 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "eject": "react-scripts eject",
-    "verify": "echo 'Testing manifest...' && curl -s https://fgrevoke.vercel.app/.well-known/farcaster.json | head -20",
-    "dev": "craco start",
     "globals": {
     }
   },
