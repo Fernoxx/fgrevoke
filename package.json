@@ -4,7 +4,6 @@
   "private": true,
   "dependencies": {
     "@farcaster/miniapp-sdk": "^0.1.6",
-    "@privy-io/react-auth": "^2.21.0",
     "ajv": "^8.17.1",
     "ethers": "^5.8.0",
     "lucide-react": "^0.263.1",
