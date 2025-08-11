@@ -7,6 +7,18 @@ module.exports = {
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,
         "stream": require.resolve("stream-browserify"),
+        "crypto": require.resolve("crypto-browserify"),
+        "buffer": require.resolve("buffer"),
+        "process": false, // Disable process polyfill to avoid issues
+        "util": require.resolve("util/"),
+        "assert": require.resolve("assert/"),
+        "http": require.resolve("stream-http"),
+        "https": require.resolve("https-browserify"),
+        "os": require.resolve("os-browserify/browser"),
+        "url": require.resolve("url/"),
+        "fs": false,
+        "path": false,
+        "zlib": false
       };
 
       // Add plugins for polyfills
