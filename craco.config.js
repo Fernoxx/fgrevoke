@@ -16,8 +16,7 @@ module.exports = {
         "https": require.resolve("https-browserify"),
         "os": require.resolve("os-browserify/browser"),
         "url": require.resolve("url/"),
-        "fs": false,
-        "path": false,
+        "fs": false
       };
 
       // Add plugins for polyfills
