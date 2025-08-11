@@ -13,7 +13,6 @@ module.exports = {
         "util": require.resolve("util/"),
         "assert": require.resolve("assert/"),
         "http": require.resolve("stream-http"),
-        "https": require.resolve("https-browserify"),
       };
 
       // Add plugins for polyfills
