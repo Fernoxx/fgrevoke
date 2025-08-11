@@ -12,7 +12,6 @@ module.exports = {
         "process": false, // Disable process polyfill to avoid issues
         "util": require.resolve("util/"),
         "assert": require.resolve("assert/"),
-        "http": require.resolve("stream-http"),
       };
 
       // Add plugins for polyfills
