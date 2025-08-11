@@ -11,7 +11,6 @@ module.exports = {
         "buffer": require.resolve("buffer"),
         "process": false, // Disable process polyfill to avoid issues
         "util": require.resolve("util/"),
-        "assert": require.resolve("assert/"),
       };
 
       // Add plugins for polyfills
