@@ -18,7 +18,6 @@ module.exports = {
         "url": require.resolve("url/"),
         "fs": false,
         "path": false,
-        "zlib": false
       };
 
       // Add plugins for polyfills
