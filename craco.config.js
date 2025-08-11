@@ -9,7 +9,6 @@ module.exports = {
         "stream": require.resolve("stream-browserify"),
         "crypto": require.resolve("crypto-browserify"),
         "buffer": require.resolve("buffer"),
-        "process": false, // Disable process polyfill to avoid issues
       };
 
       // Add plugins for polyfills
