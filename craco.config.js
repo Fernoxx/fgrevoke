@@ -7,7 +7,6 @@ module.exports = {
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,
         "stream": require.resolve("stream-browserify"),
-        "crypto": require.resolve("crypto-browserify"),
       };
 
       // Add plugins for polyfills
