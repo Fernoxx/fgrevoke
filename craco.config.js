@@ -10,7 +10,6 @@ module.exports = {
         "crypto": require.resolve("crypto-browserify"),
         "buffer": require.resolve("buffer"),
         "process": false, // Disable process polyfill to avoid issues
-        "util": require.resolve("util/"),
       };
 
       // Add plugins for polyfills
