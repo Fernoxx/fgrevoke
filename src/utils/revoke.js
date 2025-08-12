@@ -4,22 +4,68 @@ import { Permit2Abi } from "../abis/Permit2";
 import { MultiRevokeHubAbi } from "../abis/MultiRevokeHub";
 import { ERC20NameAbi, ERC20NoncesAbi, ERC20ApproveAbi } from "../abis/Erc20Bits";
 
-async function resolveProviderAndSigner(requestAccounts = true) {
+async function requestAccountsSafe(eip1193) {
+  try {
+    return await eip1193.request?.({ method: "eth_requestAccounts" });
+  } catch (e) {
+    try {
+      return await eip1193.request?.({ method: "eth_accounts" });
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function ensureBaseChain(eip1193) {
+  try {
+    const hex = await eip1193.request?.({ method: "eth_chainId" });
+    const current = parseInt(hex, 16);
+    if (current === BASE_CHAIN_ID) return true;
+    try {
+      await eip1193.request?.({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: `0x${BASE_CHAIN_ID.toString(16)}` }],
+      });
+      const after = parseInt(await eip1193.request?.({ method: "eth_chainId" }), 16);
+      return after === BASE_CHAIN_ID;
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+async function resolveProviderAndSigner(requestAcc = true) {
   let eip1193 = null;
   try {
     const { sdk } = await import("@farcaster/miniapp-sdk");
     eip1193 = sdk?.wallet?.ethProvider || null;
   } catch {}
-  if (!eip1193 && typeof window !== "undefined") {
-    eip1193 = window.ethereum || null;
-  }
+  if (!eip1193 && typeof window !== "undefined") eip1193 = window.ethereum || null;
   if (!eip1193) throw new Error("No EIP-1193 provider available");
+
+  if (requestAcc) await requestAccountsSafe(eip1193);
   const provider = new ethers.providers.Web3Provider(eip1193, "any");
-  if (requestAccounts) {
-    try { await eip1193.request?.({ method: "eth_requestAccounts" }); } catch {}
-  }
   const signer = provider.getSigner();
   return { eip1193, provider, signer };
+}
+
+async function signTypedDataResilient({ eip1193, signer, owner, domain, types, message }) {
+  // Try ethers helper first
+  if (signer?._signTypedData) {
+    try {
+      return await signer._signTypedData(domain, types, message);
+    } catch {}
+  }
+  // Fallback to EIP-712 v4 via provider
+  const typed = JSON.stringify({ types, domain, primaryType: "Permit", message });
+  try {
+    return await eip1193.request?.({ method: "eth_signTypedData_v4", params: [owner, typed] });
+  } catch (e) {
+    // Last resort legacy method
+    return await eip1193.request?.({ method: "eth_signTypedData", params: [owner, typed] });
+  }
 }
 
 export async function isPermit2Allowance(owner, token, spender) {
@@ -48,17 +94,20 @@ export async function supportsEip2612(token, owner) {
 }
 
 export async function revokeViaPermit2Approve(token, spender) {
-  const { signer } = await resolveProviderAndSigner(true);
+  const { eip1193, signer } = await resolveProviderAndSigner(true);
+  const onBase = await ensureBaseChain(eip1193);
+  if (!onBase) throw new Error("Please switch to Base network to revoke");
   const hub = new ethers.Contract(MULTI_REVOKE_HUB, MultiRevokeHubAbi, signer);
   const tx = await hub.revokeWithPermit2Approve(token, spender);
   return tx.wait();
 }
 
 export async function revokeViaEip2612(token, owner, spender) {
-  const { provider, signer } = await resolveProviderAndSigner(true);
-  const chainId = (await provider.getNetwork()).chainId;
-  if (chainId !== BASE_CHAIN_ID) throw new Error("Wrong network");
+  const { eip1193, provider, signer } = await resolveProviderAndSigner(true);
+  const onBase = await ensureBaseChain(eip1193);
+  if (!onBase) throw new Error("Please switch to Base network to revoke");
 
+  const chainId = (await provider.getNetwork()).chainId;
   const tokenNameContract = new ethers.Contract(token, ERC20NameAbi, provider);
   let name = "Token";
   try { name = await tokenNameContract.name(); } catch {}
@@ -79,7 +128,7 @@ export async function revokeViaEip2612(token, owner, spender) {
   };
   const message = { owner, spender, value: "0", nonce: nonce.toString(), deadline };
 
-  const signature = await signer._signTypedData(domain, types, message);
+  const signature = await signTypedDataResilient({ eip1193, signer, owner, domain, types, message });
   const sig = ethers.utils.splitSignature(signature);
 
   const hub = new ethers.Contract(MULTI_REVOKE_HUB, MultiRevokeHubAbi, signer);
@@ -88,14 +137,18 @@ export async function revokeViaEip2612(token, owner, spender) {
 }
 
 export async function revokeFallback(token, spender) {
-  const { signer } = await resolveProviderAndSigner(true);
+  const { eip1193, signer } = await resolveProviderAndSigner(true);
+  const onBase = await ensureBaseChain(eip1193);
+  if (!onBase) throw new Error("Please switch to Base network to revoke");
   const erc = new ethers.Contract(token, ERC20ApproveAbi, signer);
   const tx = await erc.approve(spender, 0);
   return tx.wait();
 }
 
 export async function proveRevoked(token, spender) {
-  const { signer } = await resolveProviderAndSigner(true);
+  const { eip1193, signer } = await resolveProviderAndSigner(true);
+  const onBase = await ensureBaseChain(eip1193);
+  if (!onBase) throw new Error("Please switch to Base network to prove");
   const hub = new ethers.Contract(MULTI_REVOKE_HUB, MultiRevokeHubAbi, signer);
   const tx = await hub.proveRevoked(token, spender);
   return tx.wait();
@@ -103,14 +156,8 @@ export async function proveRevoked(token, spender) {
 
 export async function revokeAuto({ owner, token, spender, isPermit2Hint = false, wantProof = true }) {
   const p2 = isPermit2Hint || await isPermit2Allowance(owner, token, spender);
-  if (p2) {
-    return revokeViaPermit2Approve(token, spender);
-  }
-
-  if (await supportsEip2612(token, owner)) {
-    return revokeViaEip2612(token, owner, spender);
-  }
-
+  if (p2) return revokeViaPermit2Approve(token, spender);
+  if (await supportsEip2612(token, owner)) return revokeViaEip2612(token, owner, spender);
   const rc = await revokeFallback(token, spender);
   if (wantProof) await proveRevoked(token, spender);
   return rc;
