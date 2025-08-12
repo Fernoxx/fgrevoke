@@ -1095,7 +1095,14 @@ function App() {
     console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
     
     if (!provider || !isConnected) {
-      console.log('❌ Wallet not connected properly');
+      try {
+        const { useConnect } = await import('wagmi')
+        const { connect, connectors } = useConnect.getState ? useConnect.getState() : { connect: null }
+        if (connect) {
+          const mini = connectors?.find(c => c.id === 'farcaster') || connectors?.[0]
+          if (mini) await connect({ connector: mini })
+        }
+      } catch {}
       setError('Please connect your wallet first');
       return;
     }
