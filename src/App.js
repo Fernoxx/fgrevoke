@@ -61,11 +61,11 @@ function App() {
   });
 
   // API Configuration - Using your Vercel environment variables
-  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || process.env.REACT_APP_ETHERSCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
-  const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
-  const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
+  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || process.env.REACT_APP_ETHERSCAN_KEY || '';
+  const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || '';
+  const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || '';
   const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_API_KEY || process.env.REACT_APP_BASESCAN_KEY || ETHERSCAN_API_KEY;
-  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || ETHERSCAN_API_KEY;
+  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_API_KEY || process.env.REACT_APP_ARBISCAN_KEY || ETHERSCAN_API_KEY;
   
   console.log('🔑 API Keys loaded for Etherscan V2:', {
     etherscan: ETHERSCAN_API_KEY ? `${ETHERSCAN_API_KEY.substring(0, 8)}...` : 'missing',
@@ -108,10 +108,10 @@ function App() {
 
   // Run API test on component mount
   useEffect(() => {
-    if (ETHERSCAN_API_KEY && ETHERSCAN_API_KEY !== 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7') {
+    if (ETHERSCAN_API_KEY) {
       testEtherscanV2API();
     } else {
-      console.warn('⚠️ Using fallback API key - real data may not be available');
+      console.warn('⚠️ ETHERSCAN_API_KEY not set! Please set REACT_APP_ETHERSCAN_API_KEY in Vercel environment variables');
     }
   }, []);
 
@@ -1317,6 +1317,11 @@ Secure yours too: https://fgrevoke.vercel.app`;
       return;
     }
 
+    if (!ETHERSCAN_API_KEY) {
+      setScannerError('Etherscan API key not configured. Please set REACT_APP_ETHERSCAN_API_KEY in Vercel environment variables.');
+      return;
+    }
+
     setLoadingScanner(true);
     setScannerError(null);
     
@@ -1800,13 +1805,13 @@ Secure yours too: https://fgrevoke.vercel.app`;
         { 
           name: 'Ethereum',
           chainId: 1,
-          url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://etherscan.io'
         },
         { 
           name: 'Base',
           chainId: 8453,
-          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://basescan.org'
         }
       ];
@@ -1924,23 +1929,21 @@ Secure yours too: https://fgrevoke.vercel.app`;
               activity.push(txDetails);
 
               // Update stats with ALL transactions
-              if (isFirstPage) {
-                stats.totalTransactions++;
-                stats.totalValue += value;
-                
-                // Track unique contracts interacted with
-                if (tx.to && tx.to !== address.toLowerCase() && tx.to !== '0x') {
-                  stats.dappsUsed.add(tx.to.toLowerCase());
-                }
+              stats.totalTransactions++;
+              stats.totalValue += value;
+              
+              // Track unique contracts interacted with
+              if (tx.to && tx.to !== address.toLowerCase() && tx.to !== '0x') {
+                stats.dappsUsed.add(tx.to.toLowerCase());
+              }
 
-                // Track first and last transaction dates
-                if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
-                  stats.firstTransaction = txDate.toISOString();
-                }
-                
-                if (!stats.lastTransaction || txDate > new Date(stats.lastTransaction)) {
-                  stats.lastTransaction = txDate.toISOString();
-                }
+              // Track first and last transaction dates
+              if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
+                stats.firstTransaction = txDate.toISOString();
+              }
+              
+              if (!stats.lastTransaction || txDate > new Date(stats.lastTransaction)) {
+                stats.lastTransaction = txDate.toISOString();
               }
             }
             
@@ -1971,6 +1974,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
 
       results.walletActivity = activity;
       
+      // Update stats - accumulate across all pages
       if (isFirstPage) {
         results.stats = {
           totalTransactions: stats.totalTransactions,
@@ -1979,6 +1983,26 @@ Secure yours too: https://fgrevoke.vercel.app`;
           firstTransaction: stats.firstTransaction,
           lastTransaction: stats.lastTransaction
         };
+        // Store dapps set for accumulation across pages
+        results._dappsSet = stats.dappsUsed;
+      } else {
+        // Accumulate stats from subsequent pages
+        results.stats.totalTransactions += stats.totalTransactions;
+        results.stats.totalValue += stats.totalValue;
+        
+        // Merge unique dApps (need to track them properly)
+        const existingDapps = results._dappsSet || new Set();
+        stats.dappsUsed.forEach(dapp => existingDapps.add(dapp));
+        results._dappsSet = existingDapps;
+        results.stats.dappsUsed = existingDapps.size;
+        
+        // Update date ranges
+        if (stats.firstTransaction && (!results.stats.firstTransaction || new Date(stats.firstTransaction) < new Date(results.stats.firstTransaction))) {
+          results.stats.firstTransaction = stats.firstTransaction;
+        }
+        if (stats.lastTransaction && (!results.stats.lastTransaction || new Date(stats.lastTransaction) > new Date(results.stats.lastTransaction))) {
+          results.stats.lastTransaction = stats.lastTransaction;
+        }
       }
 
     } catch (error) {
@@ -3168,23 +3192,23 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <h3 className="text-xl font-bold text-white">Enter Address to Analyze</h3>
                     </div>
                     <p className="text-purple-300 text-sm mb-4">
-                      Paste any Ethereum address below to get comprehensive analysis including Farcaster profile, social links, token holdings, profit/loss tracking, and complete transaction history.
+                      Paste any Ethereum address below to get comprehensive analysis
                     </p>
-                    <div className="flex gap-3">
+                    <div className="space-y-3">
                       <input
                         type="text"
                         value={scannerAddress}
                         onChange={(e) => setScannerAddress(e.target.value)}
                         placeholder="0x1234567890abcdef1234567890abcdef12345678"
-                        className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                       <button
-                                                  onClick={() => searchScannerAddress(1)}
-                          disabled={loadingScanner || !scannerAddress}
-                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => searchScannerAddress(1)}
+                        disabled={loadingScanner || !scannerAddress}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                                                  <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
-                          {loadingScanner ? 'Analyzing...' : 'Search'}
+                        <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
+                        {loadingScanner ? 'Analyzing...' : 'Search'}
                       </button>
                     </div>
                                           {scannerError && (
