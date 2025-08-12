@@ -1772,7 +1772,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
     try {
       console.log('🔍 Fetching REAL comprehensive wallet activity for:', address, 'page:', page);
       
-      const itemsPerPage = 50;
+      const itemsPerPage = 10000; // Fetch full history by default (Etherscan V2 max per page)
       const isFirstPage = page === 1;
       
       if (isFirstPage) {
@@ -3168,31 +3168,31 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <h3 className="text-xl font-bold text-white">Enter Address to Analyze</h3>
                     </div>
                     <p className="text-purple-300 text-sm mb-4">
-                      Paste any Ethereum address below to get comprehensive analysis including Farcaster profile, social links, token holdings, profit/loss tracking, and complete transaction history.
+                      Paste any Ethereum address below to get comprehensive analysis
                     </p>
-                    <div className="flex gap-3">
+                    <div className="space-y-3">
                       <input
                         type="text"
                         value={scannerAddress}
                         onChange={(e) => setScannerAddress(e.target.value)}
                         placeholder="0x1234567890abcdef1234567890abcdef12345678"
-                        className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                       <button
-                                                  onClick={() => searchScannerAddress(1)}
-                          disabled={loadingScanner || !scannerAddress}
-                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => searchScannerAddress(1)}
+                        disabled={loadingScanner || !scannerAddress}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                                                  <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
-                          {loadingScanner ? 'Analyzing...' : 'Search'}
+                        <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
+                        {loadingScanner ? 'Analyzing...' : 'Search'}
                       </button>
                     </div>
-                                          {scannerError && (
-                        <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-red-400" />
-                          <p className="text-red-200 text-sm">{scannerError}</p>
-                        </div>
-                      )}
+                    {scannerError && (
+                      <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-400" />
+                        <p className="text-red-200 text-sm">{scannerError}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Loading State */}
