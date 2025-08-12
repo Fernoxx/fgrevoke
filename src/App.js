@@ -1128,14 +1128,14 @@ function App() {
       }
 
       // Use MultiRevokeHub paths (EIP-2612, Permit2 approve, or fallback approve+prove)
-      const { revokeAuto } = await import('./lib/revokeUtils');
+      const { revokeAuto } = await import('./utils/revoke');
       const owner = address;
       const token = approval.contract;
       const spender = approval.spender;
       const isPermit2Allowance = approval.isPermit2 === true;
       
       console.log('🛠 Using MultiRevokeHub at 0x160d...f879 with auto path');
-      await revokeAuto({ owner, token, spender, isPermit2Allowance });
+      await revokeAuto({ owner, token, spender, isPermit2Hint: isPermit2Allowance, wantProof: true });
 
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
