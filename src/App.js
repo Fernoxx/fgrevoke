@@ -1241,7 +1241,8 @@ function App() {
   };
 
   const shareCast = () => {
-    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app");
+    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app".trim();
+    const text = encodeURIComponent(raw);
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
@@ -1249,41 +1250,34 @@ function App() {
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
-    const shareText = currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!
-
-💰 ${activityStats.totalTransactions} transactions
-🏗️ ${activityStats.dappsUsed} dApps used
-⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
-
-Track your journey: https://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! 
-
-✅ Reviewed ${approvals.length} token approvals
-🔒 Protecting my assets from risky permissions
-
-Secure yours too: https://fgrevoke.vercel.app`;
+    const shareText = (currentPage === 'activity'
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey: https://fgrevoke.vercel.app`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! \n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too: https://fgrevoke.vercel.app`);
+    const finalShareText = shareText.trim();
 
     try {
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
-        await sdk.actions.composeCast({ text: shareText });
+        await sdk.actions.composeCast({ text: finalShareText });
         console.log('✅ Shared to Farcaster');
         return;
       }
       
       // Fallback to clipboard
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
+      try {
+        await navigator.clipboard.writeText(finalShareText);
         alert('✅ Share text copied to clipboard!');
+      } catch (clipboardError) {
+        const encoded = encodeURIComponent(finalShareText);
+        window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     } catch (error) {
       console.error('Share failed:', error);
       try {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(finalShareText);
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(shareText);
+        const encoded = encodeURIComponent(finalShareText);
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     }
@@ -2694,17 +2688,6 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 <Activity className="w-4 h-4" />
                 Scanner
               </button>
-              <button
-                onClick={() => setCurrentPage('degentools')}
-                className={`flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors whitespace-nowrap ${
-                    currentPage === 'degentools'
-                      ? 'bg-purple-600 text-white'
-                      : 'text-purple-300 hover:text-white hover:bg-purple-700'
-                  }`}
-              >
-                <Zap className="w-4 h-4" />
-                DegenTools
-              </button>
             </div>
           )}
         </header>
@@ -3006,8 +2989,6 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
                     : currentPage === 'scanner'
                     ? 'Wallet Scanner - Comprehensive Analysis'
-                    : currentPage === 'degentools'
-                    ? 'DegenTools - Contract Analysis & Live Activity'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
@@ -3015,7 +2996,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  {currentPage !== 'scanner' && currentPage !== 'degentools' && (
+                  {currentPage !== 'scanner' && (
                     <button
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
