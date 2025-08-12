@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target } from 'lucide-react';
+import { Wallet, ChevronDown, ChevronLeft, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -3238,6 +3238,22 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   {/* Scanner Results */}
                   {scannerData && !loadingScanner && (
                     <div className="space-y-6">
+                      {/* Back Button */}
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => {
+                            setScannerData(null);
+                            setScannerAddress('');
+                            setScannerTxPage(1);
+                            setHasMoreTxs(false);
+                          }}
+                          className="flex items-center gap-1 text-purple-400 hover:text-white text-sm transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          Back to Scanner
+                        </button>
+                      </div>
+                      
                       {/* Profile Section */}
                                               {scannerData.farcasterProfile && (
                         <div className="bg-purple-700 rounded-lg p-6">
@@ -3575,9 +3591,10 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <div className="mt-4 flex justify-center">
                         <button
                           onClick={() => setContractData(null)}
-                          className="text-purple-400 hover:text-white text-sm transition-colors"
+                          className="flex items-center gap-1 text-purple-400 hover:text-white text-sm transition-colors"
                         >
-                          ← Back to DegenTools
+                          <ChevronLeft className="w-4 h-4" />
+                          Back to DegenTools
                         </button>
                       </div>
                     </div>
