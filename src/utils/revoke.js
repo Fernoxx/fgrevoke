@@ -154,10 +154,26 @@ export async function proveRevoked(token, spender) {
   return tx.wait();
 }
 
+export async function tryEip2612OrFallback({ owner, token, spender }) {
+  try {
+    return await revokeViaEip2612(token, owner, spender);
+  } catch (e) {
+    const msg = String(e?.message || e);
+    if (msg.includes("does not support the requested method") || msg.includes("eth_signTypedData")) {
+      return revokeFallback(token, spender).then(() => proveRevoked(token, spender));
+    }
+    throw e;
+  }
+}
+
 export async function revokeAuto({ owner, token, spender, isPermit2Hint = false, wantProof = true }) {
   const p2 = isPermit2Hint || await isPermit2Allowance(owner, token, spender);
   if (p2) return revokeViaPermit2Approve(token, spender);
-  if (await supportsEip2612(token, owner)) return revokeViaEip2612(token, owner, spender);
+
+  if (await supportsEip2612(token, owner)) {
+    return tryEip2612OrFallback({ owner, token, spender });
+  }
+
   const rc = await revokeFallback(token, spender);
   if (wantProof) await proveRevoked(token, spender);
   return rc;
