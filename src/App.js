@@ -1102,14 +1102,11 @@ function App() {
 
     try {
       console.log('🔄 Starting individual revoke for:', approval.name);
-      
-      // Clear any previous errors
       setError(null);
       
       // Ensure we're on the right chain
       const chainConfig = chains.find(c => c.value === selectedChain);
       const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
-      
       try {
         const currentChainId = await provider.request({ method: 'eth_chainId' });
         if (currentChainId !== expectedChainId) {
@@ -1123,38 +1120,22 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // ERC20 approve(spender, 0) call data - This ACTUALLY revokes the approval on-chain
-      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
+      // Use MultiRevokeHub paths (EIP-2612, Permit2 approve, or fallback approve+prove)
+      const { revokeAuto } = await import('./lib/revokeUtils');
+      const owner = address;
+      const token = approval.contract;
+      const spender = approval.spender;
+      const isPermit2Allowance = approval.isPermit2 === true;
       
-      const txParams = {
-        to: approval.contract,
-        data: revokeData,
-        from: address,
-        value: '0x0'
-      };
+      console.log('🛠 Using MultiRevokeHub at 0x160d...f879 with auto path');
+      await revokeAuto({ owner, token, spender, isPermit2Allowance });
 
-      console.log('📝 Transaction params:', txParams);
-      console.log('📝 Submitting REAL revoke transaction - this will actually remove approval from wallet...');
-      
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
-      });
-
-      console.log('✅ Revoke transaction submitted successfully:', txHash);
-      console.log('🔗 Token approval ACTUALLY revoked on blockchain - spender can no longer access tokens');
-      
-      // Mark as revoked and update UI after successful blockchain transaction
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      
-      console.log('✅ Blockchain revoke complete + UI updated:', approval.name);
+      console.log('✅ Revoke complete via MultiRevokeHub:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
-      console.error('❌ Error details:', error);
-      
-      // Don't remove the approval from UI if transaction failed
       if (error.code === 4001) {
         setError('Transaction cancelled by user');
       } else {
