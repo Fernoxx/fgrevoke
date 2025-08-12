@@ -4,17 +4,27 @@ import { Permit2Abi } from "../abis/Permit2";
 import { MultiRevokeHubAbi } from "../abis/MultiRevokeHub";
 import { ERC20NameAbi, ERC20NoncesAbi, ERC20ApproveAbi } from "../abis/Erc20Bits";
 
-function getProvider() {
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  return provider;
-}
-function getSigner() {
-  return getProvider().getSigner();
+async function resolveProviderAndSigner(requestAccounts = true) {
+  let eip1193 = null;
+  try {
+    const { sdk } = await import("@farcaster/miniapp-sdk");
+    eip1193 = sdk?.wallet?.ethProvider || null;
+  } catch {}
+  if (!eip1193 && typeof window !== "undefined") {
+    eip1193 = window.ethereum || null;
+  }
+  if (!eip1193) throw new Error("No EIP-1193 provider available");
+  const provider = new ethers.providers.Web3Provider(eip1193, "any");
+  if (requestAccounts) {
+    try { await eip1193.request?.({ method: "eth_requestAccounts" }); } catch {}
+  }
+  const signer = provider.getSigner();
+  return { eip1193, provider, signer };
 }
 
 export async function isPermit2Allowance(owner, token, spender) {
   try {
-    const provider = getProvider();
+    const { provider } = await resolveProviderAndSigner(false);
     const p2 = new ethers.Contract(PERMIT2, Permit2Abi, provider);
     const res = await p2.allowance(owner, token, spender);
     const amount = res.amount ? ethers.BigNumber.from(res.amount) : ethers.constants.Zero;
@@ -28,7 +38,7 @@ export async function isPermit2Allowance(owner, token, spender) {
 
 export async function supportsEip2612(token, owner) {
   try {
-    const provider = getProvider();
+    const { provider } = await resolveProviderAndSigner(false);
     const erc = new ethers.Contract(token, ERC20NoncesAbi, provider);
     await erc.nonces(owner);
     return true;
@@ -38,15 +48,14 @@ export async function supportsEip2612(token, owner) {
 }
 
 export async function revokeViaPermit2Approve(token, spender) {
-  const signer = getSigner();
+  const { signer } = await resolveProviderAndSigner(true);
   const hub = new ethers.Contract(MULTI_REVOKE_HUB, MultiRevokeHubAbi, signer);
   const tx = await hub.revokeWithPermit2Approve(token, spender);
   return tx.wait();
 }
 
 export async function revokeViaEip2612(token, owner, spender) {
-  const provider = getProvider();
-  const signer = getSigner();
+  const { provider, signer } = await resolveProviderAndSigner(true);
   const chainId = (await provider.getNetwork()).chainId;
   if (chainId !== BASE_CHAIN_ID) throw new Error("Wrong network");
 
@@ -79,14 +88,14 @@ export async function revokeViaEip2612(token, owner, spender) {
 }
 
 export async function revokeFallback(token, spender) {
-  const signer = getSigner();
+  const { signer } = await resolveProviderAndSigner(true);
   const erc = new ethers.Contract(token, ERC20ApproveAbi, signer);
   const tx = await erc.approve(spender, 0);
   return tx.wait();
 }
 
 export async function proveRevoked(token, spender) {
-  const signer = getSigner();
+  const { signer } = await resolveProviderAndSigner(true);
   const hub = new ethers.Contract(MULTI_REVOKE_HUB, MultiRevokeHubAbi, signer);
   const tx = await hub.proveRevoked(token, spender);
   return tx.wait();

@@ -3776,7 +3776,7 @@ function App() {
               ) : currentPage === 'approvals' ? (
                 loading ? (
                   <div className="space-y-4">
-                    <p className="text-center text-purple-300">Loading your REAL token approvals...</p>
+                    <p className="text-center text-purple-300">Loading your approvals...</p>
                     {[...Array(3)].map((_, i) => (
                       <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
                         <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
