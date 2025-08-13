@@ -1095,21 +1095,25 @@ function App() {
     console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
     
     if (!provider || !isConnected) {
-      console.log('❌ Wallet not connected properly');
+      try {
+        const { useConnect } = await import('wagmi')
+        const { connect, connectors } = useConnect.getState ? useConnect.getState() : { connect: null }
+        if (connect) {
+          const mini = connectors?.find(c => c.id === 'farcaster') || connectors?.[0]
+          if (mini) await connect({ connector: mini })
+        }
+      } catch {}
       setError('Please connect your wallet first');
       return;
     }
 
     try {
       console.log('🔄 Starting individual revoke for:', approval.name);
-      
-      // Clear any previous errors
       setError(null);
       
       // Ensure we're on the right chain
       const chainConfig = chains.find(c => c.value === selectedChain);
       const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
-      
       try {
         const currentChainId = await provider.request({ method: 'eth_chainId' });
         if (currentChainId !== expectedChainId) {
@@ -1123,38 +1127,22 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // ERC20 approve(spender, 0) call data - This ACTUALLY revokes the approval on-chain
-      const revokeData = `0x095ea7b3${approval.spender.slice(2).padStart(64, '0')}${'0'.repeat(64)}`;
+      // Use MultiRevokeHub paths (EIP-2612, Permit2 approve, or fallback approve+prove)
+      const { revokeAuto } = await import('./utils/revoke');
+      const owner = address;
+      const token = approval.contract;
+      const spender = approval.spender;
+      const isPermit2Allowance = approval.isPermit2 === true;
       
-      const txParams = {
-        to: approval.contract,
-        data: revokeData,
-        from: address,
-        value: '0x0'
-      };
+      console.log('🛠 Using MultiRevokeHub at 0x160d...f879 with auto path');
+      await revokeAuto({ owner, token, spender, isPermit2Hint: isPermit2Allowance, wantProof: true });
 
-      console.log('📝 Transaction params:', txParams);
-      console.log('📝 Submitting REAL revoke transaction - this will actually remove approval from wallet...');
-      
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [txParams]
-      });
-
-      console.log('✅ Revoke transaction submitted successfully:', txHash);
-      console.log('🔗 Token approval ACTUALLY revoked on blockchain - spender can no longer access tokens');
-      
-      // Mark as revoked and update UI after successful blockchain transaction
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      
-      console.log('✅ Blockchain revoke complete + UI updated:', approval.name);
+      console.log('✅ Revoke complete via MultiRevokeHub:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
-      console.error('❌ Error details:', error);
-      
-      // Don't remove the approval from UI if transaction failed
       if (error.code === 4001) {
         setError('Transaction cancelled by user');
       } else {
@@ -1241,7 +1229,8 @@ function App() {
   };
 
   const shareCast = () => {
-    const text = encodeURIComponent("Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app");
+    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app".trim();
+    const text = encodeURIComponent(raw);
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
@@ -1249,41 +1238,34 @@ function App() {
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
-    const shareText = currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!
-
-💰 ${activityStats.totalTransactions} transactions
-🏗️ ${activityStats.dappsUsed} dApps used
-⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees
-
-Track your journey: https://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! 
-
-✅ Reviewed ${approvals.length} token approvals
-🔒 Protecting my assets from risky permissions
-
-Secure yours too: https://fgrevoke.vercel.app`;
+    const shareText = (currentPage === 'activity'
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey: https://fgrevoke.vercel.app`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! \n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too: https://fgrevoke.vercel.app`);
+    const finalShareText = shareText.trim();
 
     try {
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
-        await sdk.actions.composeCast({ text: shareText });
+        await sdk.actions.composeCast({ text: finalShareText });
         console.log('✅ Shared to Farcaster');
         return;
       }
       
       // Fallback to clipboard
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
+      try {
+        await navigator.clipboard.writeText(finalShareText);
         alert('✅ Share text copied to clipboard!');
+      } catch (clipboardError) {
+        const encoded = encodeURIComponent(finalShareText);
+        window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     } catch (error) {
       console.error('Share failed:', error);
       try {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(finalShareText);
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(shareText);
+        const encoded = encodeURIComponent(finalShareText);
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     }
@@ -1772,7 +1754,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
     try {
       console.log('🔍 Fetching REAL comprehensive wallet activity for:', address, 'page:', page);
       
-      const itemsPerPage = 50;
+      const itemsPerPage = 10000; // Fetch full history by default (Etherscan V2 max per page)
       const isFirstPage = page === 1;
       
       if (isFirstPage) {
@@ -2694,17 +2676,6 @@ Secure yours too: https://fgrevoke.vercel.app`;
                 <Activity className="w-4 h-4" />
                 Scanner
               </button>
-              <button
-                onClick={() => setCurrentPage('degentools')}
-                className={`flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors whitespace-nowrap ${
-                    currentPage === 'degentools'
-                      ? 'bg-purple-600 text-white'
-                      : 'text-purple-300 hover:text-white hover:bg-purple-700'
-                  }`}
-              >
-                <Zap className="w-4 h-4" />
-                DegenTools
-              </button>
             </div>
           )}
         </header>
@@ -3006,8 +2977,6 @@ Secure yours too: https://fgrevoke.vercel.app`;
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
                     : currentPage === 'scanner'
                     ? 'Wallet Scanner - Comprehensive Analysis'
-                    : currentPage === 'degentools'
-                    ? 'DegenTools - Contract Analysis & Live Activity'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
@@ -3015,7 +2984,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  {currentPage !== 'scanner' && currentPage !== 'degentools' && (
+                  {currentPage !== 'scanner' && (
                     <button
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -3168,31 +3137,31 @@ Secure yours too: https://fgrevoke.vercel.app`;
                       <h3 className="text-xl font-bold text-white">Enter Address to Analyze</h3>
                     </div>
                     <p className="text-purple-300 text-sm mb-4">
-                      Paste any Ethereum address below to get comprehensive analysis including Farcaster profile, social links, token holdings, profit/loss tracking, and complete transaction history.
+                      Paste any Ethereum address below to get comprehensive analysis
                     </p>
-                    <div className="flex gap-3">
+                    <div className="space-y-3">
                       <input
                         type="text"
                         value={scannerAddress}
                         onChange={(e) => setScannerAddress(e.target.value)}
                         placeholder="0x1234567890abcdef1234567890abcdef12345678"
-                        className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                       <button
-                                                  onClick={() => searchScannerAddress(1)}
-                          disabled={loadingScanner || !scannerAddress}
-                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => searchScannerAddress(1)}
+                        disabled={loadingScanner || !scannerAddress}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                                                  <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
-                          {loadingScanner ? 'Analyzing...' : 'Search'}
+                        <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
+                        {loadingScanner ? 'Analyzing...' : 'Search'}
                       </button>
                     </div>
-                                          {scannerError && (
-                        <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-red-400" />
-                          <p className="text-red-200 text-sm">{scannerError}</p>
-                        </div>
-                      )}
+                    {scannerError && (
+                      <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-400" />
+                        <p className="text-red-200 text-sm">{scannerError}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Loading State */}
@@ -3807,7 +3776,7 @@ Secure yours too: https://fgrevoke.vercel.app`;
               ) : currentPage === 'approvals' ? (
                 loading ? (
                   <div className="space-y-4">
-                    <p className="text-center text-purple-300">Loading your REAL token approvals...</p>
+                    <p className="text-center text-purple-300">Loading your approvals...</p>
                     {[...Array(3)].map((_, i) => (
                       <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
                         <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>

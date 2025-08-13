@@ -1,0 +1,4 @@
+export const ERC20NameAbi = [{"type":"function","name":"name","stateMutability":"view","inputs":[],"outputs":[{"type":"string"}]}];
+export const ERC20NoncesAbi = [{"type":"function","name":"nonces","stateMutability":"view","inputs":[{"type":"address","name":"owner"}],"outputs":[{"type":"uint256"}]}];
+export const ERC20ApproveAbi = [{"type":"function","name":"approve","stateMutability":"nonpayable","inputs":[{"type":"address","name":"spender"},{"type":"uint256","name":"value"}],"outputs":[{"type":"bool"}]}];
+export const ERC20AllowanceAbi = [{"type":"function","name":"allowance","stateMutability":"view","inputs":[{"type":"address","name":"owner"},{"type":"address","name":"spender"}],"outputs":[{"type":"uint256"}]}];

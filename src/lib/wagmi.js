@@ -1,12 +1,15 @@
 import { createConfig, http } from 'wagmi'
 import { base, mainnet, arbitrum } from 'wagmi/chains'
 import { injected, coinbaseWallet, walletConnect } from 'wagmi/connectors'
+import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector'
 
 // Get API keys from environment
 const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
 
 // Only include WalletConnect if we have a valid project ID
 const connectors = [
+  // Prioritize Farcaster/Base MiniApp connector when available
+  farcasterMiniApp(),
   injected(),
   coinbaseWallet({
     appName: 'Farcaster Token Revoke',
