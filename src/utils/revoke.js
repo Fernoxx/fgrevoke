@@ -167,15 +167,8 @@ async function signTypedDataResilient({ eip1193, signer, owner, domain, types, m
 }
 
 async function sendRawTx({ eip1193, owner, to, data }) {
-  // Estimate gas using public RPC, then send via embedded provider
-  let gasLimitHex;
-  try {
-    const gas = await publicProvider.estimateGas({ from: owner, to, data });
-    const padded = gas.mul(120).div(100); // +20%
-    gasLimitHex = ethers.utils.hexlify(padded);
-  } catch {
-    gasLimitHex = ethers.utils.hexlify(300000); // fallback
-  }
+  // Skip gas estimation to speed up wallet popup; use a conservative fixed limit
+  const gasLimitHex = ethers.utils.hexlify(300000);
   const tx = { from: owner, to, data, chainId: `0x${BASE_CHAIN_ID.toString(16)}`, gas: gasLimitHex, value: "0x0" };
   return await eip1193.request({ method: "eth_sendTransaction", params: [tx] });
 }

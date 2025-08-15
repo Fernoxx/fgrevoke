@@ -2555,6 +2555,24 @@ function App() {
     }
   };
 
+  // Preload revoke utils chunk early to avoid first-click delay
+  useEffect(() => {
+    import('./utils/revoke').catch(() => {});
+  }, []);
+
+  // Warm caches for visible approvals to speed up wallet popup
+  useEffect(() => {
+    if (!address || !approvals || approvals.length === 0) return;
+    import('./utils/revoke')
+      .then(({ preloadForItem }) => {
+        approvals.slice(0, 5).forEach((a) => {
+          if (!a?.contract || !a?.spender) return;
+          preloadForItem({ owner: address, token: a.contract, spender: a.spender }).catch(() => {});
+        });
+      })
+      .catch(() => {});
+  }, [address, approvals]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
