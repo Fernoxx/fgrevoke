@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target } from 'lucide-react';
+import { Wallet, ChevronDown, ChevronLeft, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -61,11 +61,11 @@ function App() {
   });
 
   // API Configuration - Using your Vercel environment variables
-  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || process.env.REACT_APP_ETHERSCAN_KEY || 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7';
-  const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-N8NePn9x51WqrgCw2r';
-  const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || 'e0dab6b6fd544048b38913529be65eeb';
+  const ETHERSCAN_API_KEY = process.env.REACT_APP_ETHERSCAN_API_KEY || process.env.REACT_APP_ETHERSCAN_KEY || '';
+  const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || '';
+  const INFURA_API_KEY = process.env.REACT_APP_INFURA_API_KEY || '';
   const BASESCAN_KEY = process.env.REACT_APP_BASESCAN_API_KEY || process.env.REACT_APP_BASESCAN_KEY || ETHERSCAN_API_KEY;
-  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_KEY || ETHERSCAN_API_KEY;
+  const ARBISCAN_KEY = process.env.REACT_APP_ARBISCAN_API_KEY || process.env.REACT_APP_ARBISCAN_KEY || ETHERSCAN_API_KEY;
   
   console.log('🔑 API Keys loaded for Etherscan V2:', {
     etherscan: ETHERSCAN_API_KEY ? `${ETHERSCAN_API_KEY.substring(0, 8)}...` : 'missing',
@@ -108,10 +108,10 @@ function App() {
 
   // Run API test on component mount
   useEffect(() => {
-    if (ETHERSCAN_API_KEY && ETHERSCAN_API_KEY !== 'KBBAH33N5GNCN2C177DVE5K1G3S7MRWIU7') {
+    if (ETHERSCAN_API_KEY) {
       testEtherscanV2API();
     } else {
-      console.warn('⚠️ Using fallback API key - real data may not be available');
+      console.warn('⚠️ ETHERSCAN_API_KEY not set! Please set REACT_APP_ETHERSCAN_API_KEY in Vercel environment variables');
     }
   }, []);
 
@@ -1299,6 +1299,11 @@ function App() {
       return;
     }
 
+    if (!ETHERSCAN_API_KEY) {
+      setScannerError('Etherscan API key not configured. Please set REACT_APP_ETHERSCAN_API_KEY in Vercel environment variables.');
+      return;
+    }
+
     setLoadingScanner(true);
     setScannerError(null);
     
@@ -1782,13 +1787,13 @@ function App() {
         { 
           name: 'Ethereum',
           chainId: 1,
-          url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://etherscan.io'
         },
         { 
           name: 'Base',
           chainId: 8453,
-          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://basescan.org'
         }
       ];
@@ -1906,23 +1911,21 @@ function App() {
               activity.push(txDetails);
 
               // Update stats with ALL transactions
-              if (isFirstPage) {
-                stats.totalTransactions++;
-                stats.totalValue += value;
-                
-                // Track unique contracts interacted with
-                if (tx.to && tx.to !== address.toLowerCase() && tx.to !== '0x') {
-                  stats.dappsUsed.add(tx.to.toLowerCase());
-                }
+              stats.totalTransactions++;
+              stats.totalValue += value;
+              
+              // Track unique contracts interacted with
+              if (tx.to && tx.to !== address.toLowerCase() && tx.to !== '0x') {
+                stats.dappsUsed.add(tx.to.toLowerCase());
+              }
 
-                // Track first and last transaction dates
-                if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
-                  stats.firstTransaction = txDate.toISOString();
-                }
-                
-                if (!stats.lastTransaction || txDate > new Date(stats.lastTransaction)) {
-                  stats.lastTransaction = txDate.toISOString();
-                }
+              // Track first and last transaction dates
+              if (!stats.firstTransaction || txDate < new Date(stats.firstTransaction)) {
+                stats.firstTransaction = txDate.toISOString();
+              }
+              
+              if (!stats.lastTransaction || txDate > new Date(stats.lastTransaction)) {
+                stats.lastTransaction = txDate.toISOString();
               }
             }
             
@@ -1953,6 +1956,7 @@ function App() {
 
       results.walletActivity = activity;
       
+      // Update stats - accumulate across all pages
       if (isFirstPage) {
         results.stats = {
           totalTransactions: stats.totalTransactions,
@@ -1961,6 +1965,26 @@ function App() {
           firstTransaction: stats.firstTransaction,
           lastTransaction: stats.lastTransaction
         };
+        // Store dapps set for accumulation across pages
+        results._dappsSet = stats.dappsUsed;
+      } else {
+        // Accumulate stats from subsequent pages
+        results.stats.totalTransactions += stats.totalTransactions;
+        results.stats.totalValue += stats.totalValue;
+        
+        // Merge unique dApps (need to track them properly)
+        const existingDapps = results._dappsSet || new Set();
+        stats.dappsUsed.forEach(dapp => existingDapps.add(dapp));
+        results._dappsSet = existingDapps;
+        results.stats.dappsUsed = existingDapps.size;
+        
+        // Update date ranges
+        if (stats.firstTransaction && (!results.stats.firstTransaction || new Date(stats.firstTransaction) < new Date(results.stats.firstTransaction))) {
+          results.stats.firstTransaction = stats.firstTransaction;
+        }
+        if (stats.lastTransaction && (!results.stats.lastTransaction || new Date(stats.lastTransaction) > new Date(results.stats.lastTransaction))) {
+          results.stats.lastTransaction = stats.lastTransaction;
+        }
       }
 
     } catch (error) {
@@ -3183,6 +3207,22 @@ function App() {
                   {/* Scanner Results */}
                   {scannerData && !loadingScanner && (
                     <div className="space-y-6">
+                      {/* Back Button */}
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => {
+                            setScannerData(null);
+                            setScannerAddress('');
+                            setScannerTxPage(1);
+                            setHasMoreTxs(false);
+                          }}
+                          className="flex items-center gap-1 text-purple-400 hover:text-white text-sm transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          Back to Scanner
+                        </button>
+                      </div>
+                      
                       {/* Profile Section */}
                                               {scannerData.farcasterProfile && (
                         <div className="bg-purple-700 rounded-lg p-6">
@@ -3520,9 +3560,10 @@ function App() {
                       <div className="mt-4 flex justify-center">
                         <button
                           onClick={() => setContractData(null)}
-                          className="text-purple-400 hover:text-white text-sm transition-colors"
+                          className="flex items-center gap-1 text-purple-400 hover:text-white text-sm transition-colors"
                         >
-                          ← Back to DegenTools
+                          <ChevronLeft className="w-4 h-4" />
+                          Back to DegenTools
                         </button>
                       </div>
                     </div>
