@@ -26,10 +26,9 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   }
   
   try {
-    const viem = await import("viem");
-    const { createWalletClient, http, createPublicClient } = viem;
-    const viemAccounts = await import("viem/accounts");
-    const { privateKeyToAccount } = viemAccounts;
+    const { createWalletClient, http, createPublicClient, defineChain } = await import("viem");
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const { celo } = await import("viem/chains");
     
     type ChainKey = "celo" | "mon";
     
@@ -78,8 +77,8 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const relayerAccount = privateKeyToAccount(relayerPk as `0x${string}`);
     
     const chainConfig = chain === "celo" 
-      ? viem.celo
-      : viem.defineChain({
+      ? celo
+      : defineChain({
           id: 10143,
           name: "Monad Testnet", 
           nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
@@ -112,7 +111,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     try {
       // Create a public client to check balance
-      const publicClient = viem.createPublicClient({
+      const publicClient = createPublicClient({
         chain: chainConfig,
         transport: http(RPCS[chain]),
       });
@@ -142,7 +141,8 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       }
       
       // Log amount being claimed (0.1 tokens)
-      const claimAmount = viem.parseEther("0.1");
+      const { parseEther } = await import("viem");
+      const claimAmount = parseEther("0.1");
       console.log(`[api/relay-metatx] Claim amount: ${claimAmount.toString()} wei (0.1 ${chain.toUpperCase()})`);
       console.log(`[api/relay-metatx] Contract has enough? ${contractBalance >= claimAmount}`);
       
@@ -152,7 +152,8 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       
       // Parse the function signature to get FID
       try {
-        const decodedData = viem.decodeFunctionData({
+        const { decodeFunctionData } = await import("viem");
+        const decodedData = decodeFunctionData({
           abi: [{
             name: "claim",
             type: "function",
@@ -215,14 +216,18 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.error(`[api/relay-metatx] Full error:`, JSON.stringify(estimateError, null, 2));
       
       // Check different error types
+      let errorMessage = "Transaction would fail";
       if (estimateError.message?.includes('insufficient balance')) {
         console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
         console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
+        errorMessage = `Contract has insufficient ${chain.toUpperCase()} balance to distribute`;
       } else if (estimateError.message?.includes('signature')) {
         console.error(`[api/relay-metatx] Signature verification failed`);
         console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
+        errorMessage = "Signature verification failed";
       } else if (estimateError.message?.includes('Already claimed')) {
         console.error(`[api/relay-metatx] User already claimed today`);
+        errorMessage = "Already claimed today";
       }
       
       // Extract revert reason if available
@@ -233,6 +238,16 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.error(`[api/relay-metatx] Function signature:`, functionSignature.slice(0, 10));
       console.error(`[api/relay-metatx] Contract address:`, CONTRACTS[chain]);
       console.error(`[api/relay-metatx] User address:`, userAddress);
+      
+      // Return error response and exit early
+      res.statusCode = 400;
+      res.end(JSON.stringify({ 
+        error: errorMessage,
+        details: revertReason,
+        contractBalance: contractBalance.toString(),
+        contractAddress: CONTRACTS[chain]
+      }));
+      return;
     }
     
     const txHash = await client.writeContract({

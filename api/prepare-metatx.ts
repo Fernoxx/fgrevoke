@@ -28,12 +28,11 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   try {
     // Import everything we need
     console.log("[api/prepare-metatx] Starting imports");
-    const viem = await import("viem");
+    const { parseEther, encodeFunctionData, createWalletClient, http, defineChain } = await import("viem");
+    const { celo } = await import("viem/chains");
     console.log("[api/prepare-metatx] Viem imported");
-    const { parseEther, encodeFunctionData, createWalletClient, http } = viem;
-    const viemAccounts = await import("viem/accounts");
+    const { privateKeyToAccount } = await import("viem/accounts");
     console.log("[api/prepare-metatx] Viem accounts imported");
-    const { privateKeyToAccount } = viemAccounts;
     
     type ChainKey = "celo" | "mon";
     
@@ -109,7 +108,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const client = createWalletClient({ 
       account: signerAccount,
-      chain: chain === "celo" ? viem.celo : viem.defineChain({
+      chain: chain === "celo" ? celo : defineChain({
         id: 10143,
         name: "Monad Testnet",
         nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
