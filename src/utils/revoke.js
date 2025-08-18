@@ -1,14 +1,10 @@
 import { ethers } from "ethers";
-import { PERMIT2, MULTI_REVOKE_HUB, BASE_CHAIN_ID } from "../consts";
+import { PERMIT2 } from "../consts";
 import { Permit2Abi } from "../abis/Permit2";
-import { MultiRevokeHubAbi } from "../abis/MultiRevokeHub";
 import { ERC20NameAbi, ERC20NoncesAbi, ERC20ApproveAbi } from "../abis/Erc20Bits";
 
-const ALCHEMY_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || "";
-const BASE_RPC = ALCHEMY_KEY
-  ? `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`
-  : "https://base-mainnet.public.blastapi.io";
-const publicProvider = new ethers.providers.JsonRpcProvider(BASE_RPC);
+// We now rely on the connected wallet's provider for reads and writes across chains
+// No hardcoded public RPC to a specific chain
 
 // simple in-memory caches
 export const cache = {
@@ -18,7 +14,7 @@ export const cache = {
 };
 
 // preload helper to warm caches; provider optional (defaults to public)
-export async function preloadForItem({ owner, token, spender, provider = publicProvider }) {
+export async function preloadForItem({ owner, token, spender, provider }) {
   try {
     const ercName = new ethers.Contract(token, ERC20NameAbi, provider);
     const ercNonce = new ethers.Contract(token, ERC20NoncesAbi, provider);
@@ -51,24 +47,19 @@ export async function preloadForItem({ owner, token, spender, provider = publicP
   } catch {}
 }
 
-// fast single-tx Permit2 path (skips estimation)
+// Permit2 path: set allowance to zero directly on Permit2
 export async function fastPermit2Revoke(token, spender) {
-  const { eip1193 } = await resolveProviderAndSigner(true);
-  const onBase = await ensureBaseChain(eip1193);
-  if (!onBase) throw new Error("Please switch to Base network to revoke");
+  const { eip1193, provider } = await resolveProviderAndSigner(true);
   const ownerArr = await requestAccountsSafe(eip1193);
   const owner = ownerArr?.[0];
-  const iface = new ethers.utils.Interface(MultiRevokeHubAbi);
-  const data = iface.encodeFunctionData("revokeWithPermit2Approve", [token, spender]);
-  // conservative gas limit to skip estimate
-  return sendRawTx({ eip1193, owner, to: MULTI_REVOKE_HUB, data });
+  const p2 = new ethers.Contract(PERMIT2, Permit2Abi, provider.getSigner());
+  // expiration 0 keeps it non-expiring; amount 0 fully revokes
+  return p2.approve(token, spender, 0, 0);
 }
 
 // fast EIP-2612 path using cached name/nonce; skips on-click reads
 export async function fastEip2612Revoke(token, owner, spender) {
   const { eip1193, provider } = await resolveProviderAndSigner(true);
-  const onBase = await ensureBaseChain(eip1193);
-  if (!onBase) throw new Error("Please switch to Base network to revoke");
 
   const name = cache.tokenName.get(token) || "Token";
   const nonceBN = cache.nonce.get(`${token}:${owner}`) || ethers.BigNumber.from(0);
@@ -88,21 +79,24 @@ export async function fastEip2612Revoke(token, owner, spender) {
   const signature = await signTypedDataResilient({ eip1193, signer: null, owner, domain, types, message });
   const sig = ethers.utils.splitSignature(signature);
 
-  const iface = new ethers.utils.Interface(MultiRevokeHubAbi);
-  const data = iface.encodeFunctionData("revokeWithPermit2612", [token, owner, spender, deadline, sig.v, sig.r, sig.s]);
-  return sendRawTx({ eip1193, owner, to: MULTI_REVOKE_HUB, data });
+  // Call token.permit(owner, spender, 0, deadline, v, r, s)
+  const signer = provider.getSigner();
+  const tokenWithPermit = new ethers.Contract(token, [
+    { "type":"function", "name":"permit", "stateMutability":"nonpayable", "inputs":[
+      {"name":"owner","type":"address"}, {"name":"spender","type":"address"},
+      {"name":"value","type":"uint256"}, {"name":"deadline","type":"uint256"},
+      {"name":"v","type":"uint8"}, {"name":"r","type":"bytes32"}, {"name":"s","type":"bytes32"}
+    ], "outputs":[] }
+  ], signer);
+  return tokenWithPermit.permit(owner, spender, 0, deadline, sig.v, sig.r, sig.s);
 }
 
 // direct approve zero with fixed gas to avoid estimate
 export async function directApproveZero(token, spender) {
-  const { eip1193 } = await resolveProviderAndSigner(true);
-  const onBase = await ensureBaseChain(eip1193);
-  if (!onBase) throw new Error("Please switch to Base network to revoke");
-  const ownerArr = await requestAccountsSafe(eip1193);
-  const owner = ownerArr?.[0];
-  const iface = new ethers.utils.Interface(ERC20ApproveAbi);
-  const data = iface.encodeFunctionData("approve", [spender, 0]);
-  return sendRawTx({ eip1193, owner, to: token, data });
+  const { provider } = await resolveProviderAndSigner(true);
+  const signer = provider.getSigner();
+  const tokenContract = new ethers.Contract(token, ERC20ApproveAbi, signer);
+  return tokenContract.approve(spender, 0);
 }
 
 async function requestAccountsSafe(eip1193) {
@@ -117,25 +111,8 @@ async function requestAccountsSafe(eip1193) {
   }
 }
 
-async function ensureBaseChain(eip1193) {
-  try {
-    const hex = await eip1193.request?.({ method: "eth_chainId" });
-    const current = parseInt(hex, 16);
-    if (current === BASE_CHAIN_ID) return true;
-    try {
-      await eip1193.request?.({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: `0x${BASE_CHAIN_ID.toString(16)}` }],
-      });
-      const after = parseInt(await eip1193.request?.({ method: "eth_chainId" }), 16);
-      return after === BASE_CHAIN_ID;
-    } catch {
-      return false;
-    }
-  } catch {
-    return false;
-  }
-}
+// No forced chain switching; allow revokes on current chain like revoke.cash
+async function ensureBaseChain() { return true; }
 
 async function resolveProviderAndSigner(requestAcc = true) {
   let eip1193 = null;
@@ -166,23 +143,13 @@ async function signTypedDataResilient({ eip1193, signer, owner, domain, types, m
   }
 }
 
-async function sendRawTx({ eip1193, owner, to, data }) {
-  // Estimate gas using public RPC, then send via embedded provider
-  let gasLimitHex;
-  try {
-    const gas = await publicProvider.estimateGas({ from: owner, to, data });
-    const padded = gas.mul(120).div(100); // +20%
-    gasLimitHex = ethers.utils.hexlify(padded);
-  } catch {
-    gasLimitHex = ethers.utils.hexlify(300000); // fallback
-  }
-  const tx = { from: owner, to, data, chainId: `0x${BASE_CHAIN_ID.toString(16)}`, gas: gasLimitHex, value: "0x0" };
-  return await eip1193.request({ method: "eth_sendTransaction", params: [tx] });
-}
+// We moved to signer-based contract calls; raw tx helper no longer needed
+async function sendRawTx() { throw new Error("sendRawTx not used"); }
 
 export async function isPermit2Allowance(owner, token, spender) {
   try {
-    const p2 = new ethers.Contract(PERMIT2, Permit2Abi, publicProvider);
+    const { provider } = await resolveProviderAndSigner(false);
+    const p2 = new ethers.Contract(PERMIT2, Permit2Abi, provider);
     const res = await p2.allowance(owner, token, spender);
     const amount = res.amount ? ethers.BigNumber.from(res.amount) : ethers.constants.Zero;
     const exp = res.expiration ? Number(res.expiration) : 0;
@@ -195,7 +162,8 @@ export async function isPermit2Allowance(owner, token, spender) {
 
 export async function supportsEip2612(token, owner) {
   try {
-    const erc = new ethers.Contract(token, ERC20NoncesAbi, publicProvider);
+    const { provider } = await resolveProviderAndSigner(false);
+    const erc = new ethers.Contract(token, ERC20NoncesAbi, provider);
     await erc.nonces(owner);
     return true;
   } catch {
@@ -204,27 +172,21 @@ export async function supportsEip2612(token, owner) {
 }
 
 export async function revokeViaPermit2Approve(token, spender) {
-  const { eip1193 } = await resolveProviderAndSigner(true);
-  const onBase = await ensureBaseChain(eip1193);
-  if (!onBase) throw new Error("Please switch to Base network to revoke");
-  const ownerArr = await requestAccountsSafe(eip1193);
-  const owner = ownerArr?.[0];
-  const iface = new ethers.utils.Interface(MultiRevokeHubAbi);
-  const data = iface.encodeFunctionData("revokeWithPermit2Approve", [token, spender]);
-  return sendRawTx({ eip1193, owner, to: MULTI_REVOKE_HUB, data });
+  const { provider } = await resolveProviderAndSigner(true);
+  const signer = provider.getSigner();
+  const p2 = new ethers.Contract(PERMIT2, Permit2Abi, signer);
+  return p2.approve(token, spender, 0, 0);
 }
 
 export async function revokeViaEip2612(token, owner, spender) {
   const { eip1193, provider } = await resolveProviderAndSigner(true);
-  const onBase = await ensureBaseChain(eip1193);
-  if (!onBase) throw new Error("Please switch to Base network to revoke");
 
   const chainId = (await provider.getNetwork()).chainId;
-  const tokenNameContract = new ethers.Contract(token, ERC20NameAbi, publicProvider);
+  const tokenNameContract = new ethers.Contract(token, ERC20NameAbi, provider);
   let name = "Token";
   try { name = await tokenNameContract.name(); } catch {}
 
-  const nonces = new ethers.Contract(token, ERC20NoncesAbi, publicProvider);
+  const nonces = new ethers.Contract(token, ERC20NoncesAbi, provider);
   const nonce = await nonces.nonces(owner);
   const deadline = Math.floor(Date.now() / 1000) + 900;
 
@@ -243,32 +205,22 @@ export async function revokeViaEip2612(token, owner, spender) {
   const signature = await signTypedDataResilient({ eip1193, signer: null, owner, domain, types, message });
   const sig = ethers.utils.splitSignature(signature);
 
-  const iface = new ethers.utils.Interface(MultiRevokeHubAbi);
-  const data = iface.encodeFunctionData("revokeWithPermit2612", [token, owner, spender, deadline, sig.v, sig.r, sig.s]);
-  return sendRawTx({ eip1193, owner, to: MULTI_REVOKE_HUB, data });
+  const signer = provider.getSigner();
+  const tokenWithPermit = new ethers.Contract(token, [
+    { "type":"function", "name":"permit", "stateMutability":"nonpayable", "inputs":[
+      {"name":"owner","type":"address"}, {"name":"spender","type":"address"},
+      {"name":"value","type":"uint256"}, {"name":"deadline","type":"uint256"},
+      {"name":"v","type":"uint8"}, {"name":"r","type":"bytes32"}, {"name":"s","type":"bytes32"}
+    ], "outputs":[] }
+  ], signer);
+  return tokenWithPermit.permit(owner, spender, 0, deadline, sig.v, sig.r, sig.s);
 }
 
 export async function revokeFallback(token, spender) {
-  const { eip1193 } = await resolveProviderAndSigner(true);
-  const onBase = await ensureBaseChain(eip1193);
-  if (!onBase) throw new Error("Please switch to Base network to revoke");
-  const ownerArr = await requestAccountsSafe(eip1193);
-  const owner = ownerArr?.[0];
-  const iface = new ethers.utils.Interface(ERC20ApproveAbi);
-  const data = iface.encodeFunctionData("approve", [spender, 0]);
-  return sendRawTx({ eip1193, owner, to: token, data });
+  return directApproveZero(token, spender);
 }
 
-export async function proveRevoked(token, spender) {
-  const { eip1193 } = await resolveProviderAndSigner(true);
-  const onBase = await ensureBaseChain(eip1193);
-  if (!onBase) throw new Error("Please switch to Base network to prove");
-  const ownerArr = await requestAccountsSafe(eip1193);
-  const owner = ownerArr?.[0];
-  const iface = new ethers.utils.Interface(MultiRevokeHubAbi);
-  const data = iface.encodeFunctionData("proveRevoked", [token, spender]);
-  return sendRawTx({ eip1193, owner, to: MULTI_REVOKE_HUB, data });
-}
+export async function proveRevoked() { return; }
 
 export async function tryEip2612OrFallback({ owner, token, spender }) {
   try {
@@ -276,7 +228,7 @@ export async function tryEip2612OrFallback({ owner, token, spender }) {
   } catch (e) {
     const msg = String(e?.message || e);
     if (msg.includes("does not support the requested method") || msg.includes("eth_signTypedData")) {
-      return revokeFallback(token, spender).then(() => proveRevoked(token, spender));
+      return revokeFallback(token, spender);
     }
     throw e;
   }
@@ -290,7 +242,5 @@ export async function revokeAuto({ owner, token, spender, isPermit2Hint = false,
     return tryEip2612OrFallback({ owner, token, spender });
   }
 
-  const rc = await revokeFallback(token, spender);
-  if (wantProof) await proveRevoked(token, spender);
-  return rc;
+  return revokeFallback(token, spender);
 }
