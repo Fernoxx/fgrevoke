@@ -32,6 +32,7 @@ function App() {
   const [showActivityRadar, setShowActivityRadar] = useState(false);
   const [liveActivity, setLiveActivity] = useState([]);
   const [loadingActivityRadar, setLoadingActivityRadar] = useState(false);
+  const [faucetBusy, setFaucetBusy] = useState(null);
   
   // Trending Wallets states
   const [showTrendingWallets, setShowTrendingWallets] = useState(false);
@@ -2555,6 +2556,28 @@ function App() {
       setLoadingActivityRadar(false);
     }
   };
+
+  async function claimFaucet(chain) {
+    if (!currentUser?.fid || !address) {
+      alert('Need fid + wallet');
+      return;
+    }
+    setFaucetBusy(chain);
+    try {
+      const res = await fetch('/api/claim', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chain, fid: currentUser.fid, address }),
+      });
+      const j = await res.json();
+      if (j.ok) alert(`Success: ${j.txHash}`);
+      else alert(j.error || 'failed');
+    } catch (e) {
+      alert(e?.message || 'failed');
+    } finally {
+      setFaucetBusy(null);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
