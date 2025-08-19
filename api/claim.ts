@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { encodeFunctionData, Hex, Address } from "viem";
-import { amountWeiForUsd, fixedPointOne, signerClient, CONTRACTS } from "../lib/viem";
+import { encodeFunctionData, parseEther } from "viem";
+import { signerClient } from "../lib/clients";
+import { CONTRACTS, type ChainKey } from "../lib/chains";
 import { signDailyVoucher } from "../lib/voucher";
+import { weiForUsd } from "../lib/price";
 
 // Replace with your real FID to wallet check
 async function assertWalletBelongsToFid(fid: number, address: `0x${string}`) {
@@ -42,7 +44,7 @@ export default async function handler(req: IncomingMessage & { method?: string }
     for await (const chunk of req) buffers.push(chunk as Buffer);
     const bodyRaw = Buffer.concat(buffers).toString("utf8");
     const { chain, fid, address } = JSON.parse(bodyRaw || "{}") as {
-      chain: "eth" | "base" | "celo" | "mon";
+      chain: ChainKey;
       fid: number;
       address: `0x${string}`;
     };
@@ -50,9 +52,9 @@ export default async function handler(req: IncomingMessage & { method?: string }
     await assertWalletBelongsToFid(fid, address);
 
     const amountWei =
-      chain === "celo" ? fixedPointOne() :
-      chain === "mon"  ? fixedPointOne() :
-      await amountWeiForUsd(0.10); // about 0.10 USD in ETH
+      chain === "celo" ? parseEther("0.1") :
+      chain === "mon"  ? parseEther("0.1") :
+      await weiForUsd(0.10);
 
     const { value, signature } = await signDailyVoucher({
       chain,
@@ -61,7 +63,7 @@ export default async function handler(req: IncomingMessage & { method?: string }
       amountWei,
     });
 
-    const client = signerClient(chain);
+    const client = signerClient(chain as ChainKey);
     const data = encodeFunctionData({
       abi: ABI,
       functionName: "claimFor",
@@ -69,7 +71,7 @@ export default async function handler(req: IncomingMessage & { method?: string }
     });
 
     const txHash = await client.sendTransaction({
-      to: CONTRACTS[chain],
+      to: CONTRACTS[chain as ChainKey],
       data,
       account: client.account,
     });

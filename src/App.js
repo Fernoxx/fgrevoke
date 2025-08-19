@@ -2564,22 +2564,18 @@ function App() {
     }
     setFaucetBusy(chain);
     try {
-      const contracts = {
-        eth: '0x02df9800bfe18bfb77fbdfd6ea91780749fd222f',
-        mon: '0x346fd08b5243d5721d1a644a7b4abbe08f25fe4f',
-        celo: '0xc2ebe83bbb328e070d80093f9fde5fc9c5b0a140',
-      };
-      const to = contracts[chain];
-      if (!to) throw new Error('bad chain');
-
-      const claimSelector = '0xb88a802f'; // claimReward()
-      const data = claimSelector;
-      const txParams = { to, from: address, data };
-
-      const ethProvider = provider || (window.ethereum && await sdk.wallet.getEthereumProvider());
-      const txHash = await ethProvider.request({ method: 'eth_sendTransaction', params: [txParams] });
-      alert(`Success: ${txHash}`);
-      setHasClaimedFaucet(true);
+      const res = await fetch('/api/claim', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chain, fid: currentUser.fid, address }),
+      });
+      const j = await res.json();
+      if (j.ok) {
+        alert(`Success: ${j.txHash}`);
+        setHasClaimedFaucet(true);
+      } else {
+        throw new Error(j.error || 'failed');
+      }
     } catch (e) {
       if (e && e.code === 4001 && currentPage !== 'approvals') {
         // ignore global error message outside revoke tab
@@ -3904,7 +3900,7 @@ function App() {
                     <div className="space-y-2">
                       <button
                         disabled={!!faucetBusy}
-                        onClick={() => claimFaucet('eth')}
+                        onClick={() => claimFaucet('base')}
                         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
                       >
                         {faucetBusy === 'eth' ? 'Claiming ETH...' : 'Claim ETH'}
