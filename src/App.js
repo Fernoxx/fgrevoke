@@ -48,6 +48,8 @@ function App() {
   const [, setContext] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
+  const [showFaucet, setShowFaucet] = useState(false);
+  const [faucetBusy, setFaucetBusy] = useState(null);
 
   // Activity states for all chains
   const [chainActivity, setChainActivity] = useState([]);
@@ -2604,6 +2606,14 @@ function App() {
                             </span>
                           )}
                         </span>
+                        {currentUser?.fid && (
+                          <button
+                            onClick={() => setShowFaucet(v => !v)}
+                            className="mt-1 text-xs bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded self-start"
+                          >
+                            Faucet
+                          </button>
+                        )}
                         {currentUser?.displayName && currentUser?.username && (
                           <span className="text-xs text-purple-300">{currentUser.displayName}</span>
                         )}
