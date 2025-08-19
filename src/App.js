@@ -48,6 +48,7 @@ function App() {
   const [, setContext] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
+  const [faucetBusy, setFaucetBusy] = useState(null);
 
   // Activity states for all chains
   const [chainActivity, setChainActivity] = useState([]);
