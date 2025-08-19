@@ -1145,7 +1145,7 @@ function App() {
     } catch (error) {
       console.error('❌ Revoke failed:', error);
       if (error.code === 4001) {
-        setError('Transaction cancelled by user');
+        if (currentPage === 'approvals') setError('Transaction cancelled by user');
       } else {
         setError(`Failed to revoke approval: ${error.message}`);
       }
@@ -1222,7 +1222,7 @@ function App() {
       console.error('❌ Claim failed:', error);
       
       if (error.code === 4001) {
-        setError('Transaction cancelled by user');
+        if (currentPage === 'approvals') setError('Transaction cancelled by user');
       } else {
         setError(`Claim failed: ${error.message}`);
       }
@@ -3011,6 +3011,8 @@ function App() {
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
                     : currentPage === 'scanner'
                     ? 'Wallet Scanner - Comprehensive Analysis'
+                    : currentPage === 'faucet'
+                    ? 'No fees for transactions'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
