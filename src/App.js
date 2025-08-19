@@ -32,7 +32,6 @@ function App() {
   const [showActivityRadar, setShowActivityRadar] = useState(false);
   const [liveActivity, setLiveActivity] = useState([]);
   const [loadingActivityRadar, setLoadingActivityRadar] = useState(false);
-  const [faucetBusy, setFaucetBusy] = useState(null);
   
   // Trending Wallets states
   const [showTrendingWallets, setShowTrendingWallets] = useState(false);
