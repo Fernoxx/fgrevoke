@@ -3882,6 +3882,36 @@ function App() {
                     ))}
                   </div>
                 )
+              ) : currentPage === 'faucet' ? (
+                <div className="space-y-3">
+                  <div className="bg-purple-700 rounded-lg p-4">
+                    <p className="text-purple-200 text-sm mb-2">No fees for transactions</p>
+                    <div className="space-y-2">
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('eth')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'eth' ? 'Claiming ETH...' : 'Claim ETH'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('mon')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('celo')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
+                      </button>
+                    </div>
+                    <p className="text-purple-300 text-xs mt-3 text-center">One claim per FID per day per chain</p>
+                  </div>
+                </div>
               ) : (
                 // Activity View
                 loadingActivity ? (
