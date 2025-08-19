@@ -38,6 +38,7 @@ function App() {
   const [trendingWallets, setTrendingWallets] = useState([]);
   const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
+  const [hasClaimedFaucet, setHasClaimedFaucet] = useState(false);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -2563,16 +2564,28 @@ function App() {
     }
     setFaucetBusy(chain);
     try {
-      const res = await fetch('/api/claim', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ chain, fid: currentUser.fid, address }),
-      });
-      const j = await res.json();
-      if (j.ok) alert(`Success: ${j.txHash}`);
-      else alert(j.error || 'failed');
+      const contracts = {
+        eth: '0x02df9800bfe18bfb77fbdfd6ea91780749fd222f',
+        mon: '0x346fd08b5243d5721d1a644a7b4abbe08f25fe4f',
+        celo: '0xc2ebe83bbb328e070d80093f9fde5fc9c5b0a140',
+      };
+      const to = contracts[chain];
+      if (!to) throw new Error('bad chain');
+
+      const claimSelector = '0xb88a802f'; // claimReward()
+      const data = claimSelector;
+      const txParams = { to, from: address, data };
+
+      const ethProvider = provider || (window.ethereum && await sdk.wallet.getEthereumProvider());
+      const txHash = await ethProvider.request({ method: 'eth_sendTransaction', params: [txParams] });
+      alert(`Success: ${txHash}`);
+      setHasClaimedFaucet(true);
     } catch (e) {
-      alert(e?.message || 'failed');
+      if (e && e.code === 4001 && currentPage !== 'approvals') {
+        // ignore global error message outside revoke tab
+      } else {
+        alert(e?.message || 'failed');
+      }
     } finally {
       setFaucetBusy(null);
     }
@@ -3020,7 +3033,7 @@ function App() {
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  {currentPage !== 'scanner' && (
+                  {currentPage !== 'scanner' && currentPage !== 'faucet' && (
                     <button
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -3911,7 +3924,20 @@ function App() {
                         {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
                       </button>
                     </div>
-                    
+                    {hasClaimedFaucet && (
+                      <div className="mt-3 text-center">
+                        <button
+                          onClick={() => {
+                            const text = `Claimed todays free faucets from Farguard - https://fgrevoke.vercel.app`;
+                            const encoded = encodeURIComponent(text.trim());
+                            window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" /> Share
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
