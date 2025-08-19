@@ -3012,7 +3012,7 @@ function App() {
                     : currentPage === 'scanner'
                     ? 'Wallet Scanner - Comprehensive Analysis'
                     : currentPage === 'faucet'
-                    ? 'No fees for transactions'
+                    ? 'No gas fee for transactions ?'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
@@ -3887,7 +3887,7 @@ function App() {
               ) : currentPage === 'faucet' ? (
                 <div className="space-y-3">
                   <div className="bg-purple-700 rounded-lg p-4">
-                    <p className="text-purple-200 text-sm mb-2">No fees for transactions</p>
+                    <p className="text-purple-200 text-sm mb-2">No gas fee for transactions ?</p>
                     <div className="space-y-2">
                       <button
                         disabled={!!faucetBusy}
@@ -3911,7 +3911,7 @@ function App() {
                         {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
                       </button>
                     </div>
-                    <p className="text-purple-300 text-xs mt-3 text-center">One claim per FID per day per chain</p>
+                    
                   </div>
                 </div>
               ) : (
