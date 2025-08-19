@@ -38,6 +38,7 @@ function App() {
   const [trendingWallets, setTrendingWallets] = useState([]);
   const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
+  const [hasClaimedFaucet, setHasClaimedFaucet] = useState(false);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -48,6 +49,7 @@ function App() {
   const [, setContext] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [provider, setProvider] = useState(null);
+  const [faucetBusy, setFaucetBusy] = useState(null);
 
   // Activity states for all chains
   const [chainActivity, setChainActivity] = useState([]);
@@ -1144,7 +1146,7 @@ function App() {
     } catch (error) {
       console.error('❌ Revoke failed:', error);
       if (error.code === 4001) {
-        setError('Transaction cancelled by user');
+        if (currentPage === 'approvals') setError('Transaction cancelled by user');
       } else {
         setError(`Failed to revoke approval: ${error.message}`);
       }
@@ -1221,7 +1223,7 @@ function App() {
       console.error('❌ Claim failed:', error);
       
       if (error.code === 4001) {
-        setError('Transaction cancelled by user');
+        if (currentPage === 'approvals') setError('Transaction cancelled by user');
       } else {
         setError(`Claim failed: ${error.message}`);
       }
@@ -2555,6 +2557,36 @@ function App() {
     }
   };
 
+  async function claimFaucet(chain) {
+    if (!currentUser?.fid || !address) {
+      alert('Need fid + wallet');
+      return;
+    }
+    setFaucetBusy(chain);
+    try {
+      const res = await fetch('/api/claim', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chain, fid: currentUser.fid, address }),
+      });
+      const j = await res.json();
+      if (j.ok) {
+        alert(`Success: ${j.txHash}`);
+        setHasClaimedFaucet(true);
+      } else {
+        throw new Error(j.error || 'failed');
+      }
+    } catch (e) {
+      if (e && e.code === 4001 && currentPage !== 'approvals') {
+        // ignore global error message outside revoke tab
+      } else {
+        alert(e?.message || 'failed');
+      }
+    } finally {
+      setFaucetBusy(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
@@ -2675,6 +2707,17 @@ function App() {
               >
                 <Activity className="w-4 h-4" />
                 Scanner
+              </button>
+              <button
+                onClick={() => setCurrentPage('faucet')}
+                className={`flex items-center justify-center gap-2 py-2 px-4 rounded-md font-medium transition-colors whitespace-nowrap ${
+                    currentPage === 'faucet'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-purple-300 hover:text-white hover:bg-purple-700'
+                  }`}
+              >
+                <Zap className="w-4 h-4" />
+                Faucet
               </button>
             </div>
           )}
@@ -2977,6 +3020,8 @@ function App() {
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
                     : currentPage === 'scanner'
                     ? 'Wallet Scanner - Comprehensive Analysis'
+                    : currentPage === 'faucet'
+                    ? 'No gas fee for transactions ?'
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
@@ -2984,7 +3029,7 @@ function App() {
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  {currentPage !== 'scanner' && (
+                  {currentPage !== 'scanner' && currentPage !== 'faucet' && (
                     <button
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -3848,6 +3893,49 @@ function App() {
                     ))}
                   </div>
                 )
+              ) : currentPage === 'faucet' ? (
+                <div className="space-y-3">
+                  <div className="bg-purple-700 rounded-lg p-4">
+                    <p className="text-purple-200 text-sm mb-2">No gas fee for transactions ?</p>
+                    <div className="space-y-2">
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('base')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'eth' ? 'Claiming ETH...' : 'Claim ETH'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('mon')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('celo')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
+                      </button>
+                    </div>
+                    {hasClaimedFaucet && (
+                      <div className="mt-3 text-center">
+                        <button
+                          onClick={() => {
+                            const text = `Claimed todays free faucets from Farguard - https://fgrevoke.vercel.app`;
+                            const encoded = encodeURIComponent(text.trim());
+                            window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" /> Share
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : (
                 // Activity View
                 loadingActivity ? (
