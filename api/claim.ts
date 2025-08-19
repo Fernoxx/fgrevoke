@@ -6,13 +6,13 @@ import { weiForUsd } from "../lib/price";
 
 // Minimal Monad testnet chain config (adjust RPC via env if needed)
 const monadTestnet = {
-  id: 10143,
+  id: 20143,
   name: "Monad Testnet",
   network: "monad-testnet",
   nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
   rpcUrls: {
-    default: { http: [process.env.RPC_MON ?? "https://testnet-rpc.monad.xyz"] },
-    public: { http: [process.env.RPC_MON ?? "https://testnet-rpc.monad.xyz"] },
+    default: { http: [process.env.MON_RPC ?? "https://testnet-rpc.monad.xyz"] },
+    public: { http: [process.env.MON_RPC ?? "https://testnet-rpc.monad.xyz"] },
   },
 } as const;
 
@@ -25,17 +25,17 @@ const CHAIN_CONFIG: Record<ChainKey, {
 }> = {
   eth: {
     chain: base,
-    rpcUrl: process.env.RPC_ETH ?? "https://base-rpc.publicnode.com",
+    rpcUrl: process.env.BASE_RPC ?? "https://base-rpc.publicnode.com",
     contractEnvKey: "CONTRACT_ETH",
   },
   celo: {
     chain: celo,
-    rpcUrl: process.env.RPC_CELO ?? "https://forno.celo.org",
+    rpcUrl: process.env.CELO_RPC ?? "https://forno.celo.org",
     contractEnvKey: "CONTRACT_CELO",
   },
   mon: {
     chain: monadTestnet,
-    rpcUrl: process.env.RPC_MON ?? "https://testnet-rpc.monad.xyz",
+    rpcUrl: process.env.MON_RPC ?? "https://testnet-rpc.monad.xyz",
     contractEnvKey: "CONTRACT_MON",
   },
 };
@@ -78,7 +78,7 @@ export default async function handler(req: IncomingMessage & { method?: string }
     if (!Number.isFinite(fid) || fid <= 0) throw new Error("invalid fid");
     if (!/^0x[a-fA-F0-9]{40}$/.test(address)) throw new Error("invalid address");
 
-    const gasKey = process.env.GAS_SIGNER_PRIVATE_KEY as string | undefined;
+    const gasKey = (process.env.SIGNER_PK || process.env.GAS_SIGNER_PRIVATE_KEY) as string | undefined;
     if (!gasKey) throw new Error("missing GAS_SIGNER_PRIVATE_KEY env");
 
     const { chain, rpcUrl, contractEnvKey } = CHAIN_CONFIG[chainKey];
