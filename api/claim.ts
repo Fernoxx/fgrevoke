@@ -1,8 +1,4 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { encodeFunctionData, parseEther } from "viem";
-import { signerClient, CONTRACTS, RPCS } from "../lib/viem";
-import { signDailyVoucher, type ChainKey } from "../lib/voucher";
-import { weiForUsd } from "../lib/price";
 
 // Replace with your real FID to wallet check
 async function assertWalletBelongsToFid(fid: number, address: `0x${string}`) {
@@ -33,6 +29,13 @@ const ABI = [
 export default async function handler(req: IncomingMessage & { method?: string }, res: ServerResponse) {
   console.log("[api/claim] Handler started");
   try {
+    // Dynamic imports to avoid Vercel bundling issues
+    const { encodeFunctionData, parseEther } = await import("viem");
+    const { signerClient, CONTRACTS, RPCS } = await import("../lib/viem");
+    const { signDailyVoucher } = await import("../lib/voucher");
+    const { weiForUsd } = await import("../lib/price");
+    
+    type ChainKey = "base" | "celo" | "mon";
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.setHeader("content-type", "application/json");
