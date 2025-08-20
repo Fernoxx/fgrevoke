@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { encodeFunctionData, parseEther } from "viem";
 import { signerClient } from "../lib/clients";
-import { CONTRACTS, type ChainKey } from "../lib/chains";
+import { CONTRACTS, RPCS, type ChainKey } from "../lib/chains";
 import { signDailyVoucher } from "../lib/voucher";
 import { weiForUsd } from "../lib/price";
 
@@ -65,6 +65,29 @@ export default async function handler(req: IncomingMessage & { method?: string }
       return;
     }
 
+    // Basic diagnostics (no secrets)
+    const signerPk = (process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK) as string | undefined;
+    const rpcUrl = RPCS[chain];
+    const contractAddr = CONTRACTS[chain];
+    const missing: string[] = [];
+    if (!signerPk) missing.push("GAS_SIGNER_PRIVATE_KEY");
+    if (!rpcUrl) missing.push(`${chain.toUpperCase()}_RPC`);
+    if (!contractAddr) missing.push(`CONTRACT_${chain.toUpperCase()}`);
+    if (missing.length) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: `Server misconfigured: missing ${missing.join(", ")}` }));
+      return;
+    }
+    if (!(signerPk as string).startsWith("0x") || (signerPk as string).length !== 66) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "Server misconfigured: GAS_SIGNER_PRIVATE_KEY must be 0x + 64 hex" }));
+      return;
+    }
+
+    console.log(`[api/claim] request`, { chain, fid, address, rpcSet: !!rpcUrl, contractSet: !!contractAddr, node: process.version });
+
     await assertWalletBelongsToFid(fid, address);
 
     const amountWei =
@@ -86,11 +109,22 @@ export default async function handler(req: IncomingMessage & { method?: string }
       args: [value as any, signature as `0x${string}`],
     });
 
-    const txHash = await client.sendTransaction({
-      to: CONTRACTS[chain as ChainKey],
-      data,
-      account: client.account,
-    });
+    let txHash: `0x${string}`;
+    try {
+      txHash = await client.sendTransaction({
+        to: CONTRACTS[chain as ChainKey],
+        data,
+        account: client.account,
+      });
+    } catch (err: any) {
+      const msg = err?.shortMessage || err?.message || "transaction failed";
+      const code = err?.code || err?.name;
+      console.error(`[api/claim] sendTransaction error`, { code, msg });
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: msg, code }));
+      return;
+    }
 
     res.statusCode = 200;
     res.setHeader("content-type", "application/json");
