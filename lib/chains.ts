@@ -14,13 +14,13 @@ export const CHAINS = {
 } as const;
 
 export const RPCS: Record<ChainKey, string> = {
-  base: process.env.BASE_RPC!,
+  base: (process.env.BASE_RPC || process.env.ETH_RPC)!,
   celo: process.env.CELO_RPC!,
   mon: process.env.MON_RPC!,
 };
 
 export const CONTRACTS: Record<ChainKey, `0x${string}`> = {
-  base: process.env.CONTRACT_ETH as `0x${string}`,
+  base: (process.env.CONTRACT_BASE || process.env.CONTRACT_ETH) as `0x${string}`,
   celo: process.env.CONTRACT_CELO as `0x${string}`,
   mon:  process.env.CONTRACT_MON as `0x${string}`,
 };
