@@ -1250,7 +1250,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here:\nhttps://fgrevoke.vercel.app";
+    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here:\nhttps://fgrevoke.vercel.app.";
     const text = encodeURIComponent(raw);
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
@@ -1260,8 +1260,8 @@ function App() {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
     const shareText = (currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app`);
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app.`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app.`);
     const finalShareText = shareText.trim();
 
     try {
@@ -2581,13 +2581,51 @@ function App() {
       alert('Please connect your Farcaster wallet first');
       return;
     }
-    if (!provider) {
-      alert('Please connect your wallet first');
-      return;
-    }
     
     setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
+      // For Monad, use gasless transaction via backend
+      if (chain === 'mon') {
+        console.log('🚀 Using gasless transaction for Monad...');
+        const res = await fetch('/api/claim', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ chain, fid: currentUser.fid, address }),
+        });
+        let j;
+        const text = await res.text();
+        try {
+          j = JSON.parse(text);
+        } catch (_) {
+          console.error('Failed to parse response:', text);
+          throw new Error(text || `Server error (${res.status})`);
+        }
+        if (j.ok) {
+          console.log('✅ Transaction sent:', j.txHash);
+          const chainName = 'MON';
+          
+          // Store claimed token info for share button
+          setClaimedTokenInfo({
+            chain: chainName,
+            amount: '0.1',
+            displayAmount: `0.1 ${chainName}`
+          });
+          
+          alert(`Success! Claimed ${chainName}\nTransaction: ${j.txHash}`);
+          setHasClaimedFaucet(true);
+        } else {
+          console.error('Faucet error:', j);
+          throw new Error(j.error || 'Failed to claim');
+        }
+        return;
+      }
+      
+      // For Base and Celo, use user wallet
+      if (!provider) {
+        alert('Please connect your wallet first');
+        return;
+      }
+      
       // Step 1: Get voucher from backend
       console.log('🎫 Getting voucher from backend...');
       const res = await fetch('/api/voucher', {
@@ -2624,22 +2662,7 @@ function App() {
         }
       } catch (switchError) {
         console.error('Chain switch error:', switchError);
-        // If chain doesn't exist, we might need to add it
-        if (switchError.code === 4902 && chain === 'mon') {
-          // Add Monad testnet
-          await provider.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: chainIdHex,
-              chainName: 'Monad Testnet',
-              nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
-              rpcUrls: ['https://testnet.monad.xyz'],
-              blockExplorerUrls: ['https://explorer.testnet.monad.xyz'],
-            }],
-          });
-        } else {
-          throw switchError;
-        }
+        throw switchError;
       }
       
       // Step 3: Import FaucetAbi and encode the transaction
@@ -2664,12 +2687,6 @@ function App() {
       
       // Step 4: Send transaction using user's wallet
       console.log('📝 Sending transaction...');
-      
-      // For Monad, we need to handle it differently since Farcaster doesn't recognize chainId 20143
-      if (chain === 'mon') {
-        alert('Monad testnet is not yet supported in Farcaster wallet. Please use a desktop wallet like MetaMask to claim MON tokens.');
-        throw new Error('Monad not supported in mobile wallet');
-      }
       
       // Estimate gas first for better compatibility
       let gasEstimate;
@@ -4049,9 +4066,8 @@ function App() {
                         disabled={!!faucetBusy}
                         onClick={() => claimFaucet('mon')}
                         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
-                        title="Monad testnet requires desktop wallet"
                       >
-                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON (Desktop only)'}
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
                       </button>
                       <button
                         disabled={!!faucetBusy}
@@ -4068,7 +4084,7 @@ function App() {
                         </div>
                         <button
                           onClick={() => {
-                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:\nhttps://fgrevoke.vercel.app`;
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:\nhttps://fgrevoke.vercel.app.`;
                             const encoded = encodeURIComponent(text);
                             window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
                           }}
