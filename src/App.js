@@ -2558,8 +2558,8 @@ function App() {
   };
 
   async function claimFaucet(chain) {
-    if (!currentUser?.fid || !address) {
-      alert('Need fid + wallet');
+    if (!address) {
+      alert('Please connect your wallet first');
       return;
     }
     setFaucetBusy(chain);
@@ -2567,7 +2567,7 @@ function App() {
       const res = await fetch('/api/claim', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ chain, fid: currentUser.fid, address }),
+        body: JSON.stringify({ chain, fid: currentUser?.fid || 0, address }),
       });
       const j = await res.json();
       if (j.ok) {
@@ -3896,14 +3896,13 @@ function App() {
               ) : currentPage === 'faucet' ? (
                 <div className="space-y-3">
                   <div className="bg-purple-700 rounded-lg p-4">
-                    <p className="text-purple-200 text-sm mb-2">No gas fee for transactions ?</p>
                     <div className="space-y-2">
                       <button
                         disabled={!!faucetBusy}
                         onClick={() => claimFaucet('base')}
                         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
                       >
-                        {faucetBusy === 'eth' ? 'Claiming ETH...' : 'Claim ETH'}
+                        {faucetBusy === 'base' ? 'Claiming ETH...' : 'Claim ETH'}
                       </button>
                       <button
                         disabled={!!faucetBusy}
