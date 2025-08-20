@@ -39,6 +39,7 @@ function App() {
   const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
   const [hasClaimedFaucet, setHasClaimedFaucet] = useState(false);
+  const [claimedTokenInfo, setClaimedTokenInfo] = useState(null);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -1260,7 +1261,7 @@ function App() {
     
     const shareText = (currentPage === 'activity'
       ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey: https://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! \n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too: https://fgrevoke.vercel.app`);
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too: https://fgrevoke.vercel.app`);
     const finalShareText = shareText.trim();
 
     try {
@@ -2675,6 +2676,15 @@ function App() {
       
       console.log('✅ Transaction sent:', txHash);
       const chainName = chain === 'base' ? 'ETH' : chain.toUpperCase();
+      const amount = chain === 'base' ? '~$0.10 worth of ETH' : '0.1';
+      
+      // Store claimed token info for share button
+      setClaimedTokenInfo({
+        chain: chainName,
+        amount: amount,
+        displayAmount: chain === 'base' ? '~$0.10 worth of ETH' : `0.1 ${chainName}`
+      });
+      
       alert(`Success! Claiming ${chainName}\nTransaction: ${txHash}\n\nPlease wait for confirmation.`);
       setHasClaimedFaucet(true);
       
@@ -4026,12 +4036,15 @@ function App() {
                         {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
                       </button>
                     </div>
-                    {hasClaimedFaucet && (
+                    {hasClaimedFaucet && claimedTokenInfo && (
                       <div className="mt-3 text-center">
+                        <div className="text-green-400 text-sm mb-2">
+                          ✅ {claimedTokenInfo.displayAmount} claimed!
+                        </div>
                         <button
                           onClick={() => {
-                            const text = `Claimed todays free faucets from Farguard - https://fgrevoke.vercel.app`;
-                            const encoded = encodeURIComponent(text.trim());
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily: https://fgrevoke.vercel.app`;
+                            const encoded = encodeURIComponent(text);
                             window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
                           }}
                           className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
