@@ -2559,29 +2559,67 @@ function App() {
 
   async function claimFaucet(chain) {
     if (!address) {
-      alert('Please connect your wallet first');
+      setError('Please connect your wallet first');
       return;
     }
     setFaucetBusy(chain);
     try {
+      // Ensure we have a provider (Farcaster/Base miniapp or browser wallet)
+      let ethProvider = provider;
+      if (!ethProvider) {
+        try {
+          ethProvider = await sdk.wallet.getEthereumProvider();
+        } catch (sdkErr) {
+          if (typeof window !== 'undefined' && window.ethereum) {
+            ethProvider = window.ethereum;
+          }
+        }
+        if (!ethProvider) throw new Error('No wallet provider available');
+        setProvider(ethProvider);
+      }
+      // Step 1: Ask server to prepare tx & provide chain params
       const res = await fetch('/api/claim', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ chain, fid: currentUser?.fid || 0, address }),
+        body: JSON.stringify({ chain, fid: currentUser?.fid || 0, address, mode: 'prepare' }),
       });
       const j = await res.json();
-      if (j.ok) {
-        alert(`Success: ${j.txHash}`);
-        setHasClaimedFaucet(true);
-      } else {
-        throw new Error(j.error || 'failed');
-      }
+      if (!j.ok) throw new Error(j.error || 'prepare failed');
+
+      const { prepared } = j;
+      const expectedChainIdHex = prepared.chainIdHex;
+
+      // Ensure wallet is on correct chain; add chain with correct RPC if needed
+      try {
+        const currentChainId = await ethProvider.request({ method: 'eth_chainId' });
+        if (currentChainId !== expectedChainIdHex) {
+          try {
+            await ethProvider.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: expectedChainIdHex }],
+            });
+          } catch (switchError) {
+            // Add chain if not present
+            await ethProvider.request({
+              method: 'wallet_addEthereumChain',
+              params: [prepared.chainParams],
+            });
+          }
+        }
+      } catch {}
+
+      // Step 2: Trigger wallet popup to send transaction
+      const txHash = await ethProvider.request({
+        method: 'eth_sendTransaction',
+        params: [{ to: prepared.to, data: prepared.data, from: address, value: '0x0' }]
+      });
+
+      setHasClaimedFaucet(true);
+      console.log('Faucet tx sent:', txHash);
     } catch (e) {
-      if (e && e.code === 4001 && currentPage !== 'approvals') {
-        // ignore global error message outside revoke tab
-      } else {
-        alert(e?.message || 'failed');
-      }
+      const msg = e?.message || 'Faucet claim failed';
+      console.error('Faucet error:', e);
+      setError(msg);
     } finally {
       setFaucetBusy(null);
     }
