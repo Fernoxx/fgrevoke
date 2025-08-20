@@ -412,6 +412,9 @@ function App() {
       if (error.message && error.message.includes('400')) {
         console.log('🔄 Retrying with smaller block range due to 400 error...');
         try {
+          const retryApprovalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+          const retryPaddedAddress = '0x' + userAddress.slice(2).toLowerCase().padStart(64, '0');
+          
           const latestBlock = await makeAlchemyCall('eth_blockNumber', [], 'Latest Block');
           const latestBlockNum = parseInt(latestBlock, 16);
           const fromBlock = Math.max(0, latestBlockNum - 1000); // Only last 1k blocks
@@ -419,7 +422,7 @@ function App() {
           const logs = await makeAlchemyCall('eth_getLogs', [{
             fromBlock: `0x${fromBlock.toString(16)}`,
             toBlock: 'latest',
-            topics: [approvalTopic, paddedAddress]
+            topics: [retryApprovalTopic, retryPaddedAddress]
           }], 'Approval Logs (Retry)');
           
           console.log(`✅ Retry successful: ${logs.length} approval logs`);
