@@ -2664,13 +2664,37 @@ function App() {
       
       // Step 4: Send transaction using user's wallet
       console.log('📝 Sending transaction...');
+      
+      // For Monad, we need to handle it differently since Farcaster doesn't recognize chainId 20143
+      if (chain === 'mon') {
+        alert('Monad testnet is not yet supported in Farcaster wallet. Please use a desktop wallet like MetaMask to claim MON tokens.');
+        throw new Error('Monad not supported in mobile wallet');
+      }
+      
+      // Estimate gas first for better compatibility
+      let gasEstimate;
+      try {
+        gasEstimate = await provider.request({
+          method: 'eth_estimateGas',
+          params: [{
+            from: address,
+            to: contract,
+            data: data,
+          }],
+        });
+        console.log('Gas estimate:', gasEstimate);
+      } catch (estimateError) {
+        console.warn('Gas estimation failed, using default:', estimateError);
+        gasEstimate = '0x30000'; // Fallback to 196k gas
+      }
+      
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{
           from: address,
           to: contract,
           data: data,
-          gas: '0x30000', // 196k gas should be enough
+          gas: gasEstimate,
         }],
       });
       
@@ -4025,8 +4049,9 @@ function App() {
                         disabled={!!faucetBusy}
                         onClick={() => claimFaucet('mon')}
                         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                        title="Monad testnet requires desktop wallet"
                       >
-                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON (Desktop only)'}
                       </button>
                       <button
                         disabled={!!faucetBusy}
