@@ -1,6 +1,6 @@
-import { createWalletClient, http, parseEther } from "viem";
+import { createWalletClient, http, parseEther, defineChain, type Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { base, celo, defineChain } from "viem/chains";
+import { base, celo } from "viem/chains";
 
 export const CHAINS = {
   base,
