@@ -1,8 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { encodeFunctionData, parseEther } from "viem";
-import { signerClient } from "../lib/clients";
-import { CONTRACTS, RPCS, type ChainKey } from "../lib/chains";
-import { signDailyVoucher } from "../lib/voucher";
+import { signerClient, CONTRACTS, RPCS } from "../lib/viem";
+import { signDailyVoucher, type ChainKey } from "../lib/voucher";
 import { weiForUsd } from "../lib/price";
 
 // Replace with your real FID to wallet check
@@ -101,6 +100,7 @@ export default async function handler(req: IncomingMessage & { method?: string }
     const amountWei =
       chain === "celo" ? parseEther("0.1") :
       chain === "mon"  ? parseEther("0.1") :
+      chain === "base" ? await weiForUsd(0.10) :
       await weiForUsd(0.10);
 
     const { value, signature } = await signDailyVoucher({
