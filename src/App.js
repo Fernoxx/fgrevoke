@@ -2584,13 +2584,9 @@ function App() {
     
     setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
-      // For Monad, use gasless transaction via backend
-      if (chain === 'mon') {
-        console.log('🚀 Using gasless transaction for Monad...');
-        
-        // Temporary check for Monad availability
-        alert('⚠️ Monad testnet faucet is temporarily unavailable. The gas signer needs to be funded with MON tokens.\n\nPlease try Base or Celo instead.');
-        return;
+      // For Monad and Celo, use gasless transaction via backend
+      if (chain === 'mon' || chain === 'celo') {
+        console.log(`🚀 Using gasless transaction for ${chain.toUpperCase()}...`);
         
         const res = await fetch('/api/claim', {
           method: 'POST',
@@ -2607,7 +2603,7 @@ function App() {
         }
         if (j.ok) {
           console.log('✅ Transaction sent:', j.txHash);
-          const chainName = 'MON';
+          const chainName = chain.toUpperCase();
           
           // Store claimed token info for share button
           setClaimedTokenInfo({
@@ -2622,14 +2618,15 @@ function App() {
           console.error('Faucet error:', j);
           const errorMsg = j.details || j.error || 'Failed to claim';
           if (errorMsg.includes('insufficient balance')) {
-            throw new Error('Gas signer has insufficient balance. Please fund the signer account with MON tokens.');
+            const tokenName = chain === 'mon' ? 'MON' : chain === 'celo' ? 'CELO' : 'native tokens';
+            throw new Error(`Gas signer has insufficient balance. Please fund the signer account with ${tokenName}.`);
           }
           throw new Error(errorMsg);
         }
         return;
       }
       
-      // For Base and Celo, use user wallet
+      // For Base, use user wallet
       if (!provider) {
         alert('Please connect your wallet first');
         return;
@@ -4072,12 +4069,11 @@ function App() {
                         {faucetBusy === 'eth' ? 'Claiming ETH...' : 'Claim ETH'}
                       </button>
                       <button
-                        disabled={true}
+                        disabled={!!faucetBusy}
                         onClick={() => claimFaucet('mon')}
                         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
-                        title="Temporarily unavailable - gas signer needs funding"
                       >
-                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON (Temporarily Unavailable)'}
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
                       </button>
                       <button
                         disabled={!!faucetBusy}
