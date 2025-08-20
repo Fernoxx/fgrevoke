@@ -43,11 +43,66 @@ export default async function handler(req: IncomingMessage & { method?: string }
     const buffers: Buffer[] = [];
     for await (const chunk of req) buffers.push(chunk as Buffer);
     const bodyRaw = Buffer.concat(buffers).toString("utf8");
-    const { chain, fid, address } = JSON.parse(bodyRaw || "{}") as {
+    
+    // Validate request body
+    if (!bodyRaw) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "empty request body" }));
+      return;
+    }
+
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(bodyRaw);
+    } catch (parseError) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "invalid JSON in request body" }));
+      return;
+    }
+
+    const { chain, fid, address } = parsedBody as {
       chain: ChainKey;
       fid: number;
       address: `0x${string}`;
     };
+
+    // Validate required fields
+    if (!chain || !fid || !address) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ 
+        error: "missing required fields: chain, fid, address",
+        received: { chain: !!chain, fid: !!fid, address: !!address }
+      }));
+      return;
+    }
+
+    // Validate chain
+    if (!["base", "celo", "mon"].includes(chain)) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: `unsupported chain: ${chain}` }));
+      return;
+    }
+
+    // Check environment variables
+    const requiredEnvVars = {
+      GAS_SIGNER_PRIVATE_KEY: process.env.GAS_SIGNER_PRIVATE_KEY,
+      [`${chain.toUpperCase()}_RPC`]: process.env[`${chain.toUpperCase()}_RPC`],
+      [`CONTRACT_${chain.toUpperCase()}`]: process.env[`CONTRACT_${chain.toUpperCase()}`],
+    };
+
+    for (const [name, value] of Object.entries(requiredEnvVars)) {
+      if (!value) {
+        console.error(`Missing environment variable: ${name}`);
+        res.statusCode = 500;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ error: `server configuration error: missing ${name}` }));
+        return;
+      }
+    }
 
     await assertWalletBelongsToFid(fid, address);
 
@@ -80,6 +135,7 @@ export default async function handler(req: IncomingMessage & { method?: string }
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ ok: true, txHash }));
   } catch (e: any) {
+    console.error('Claim API error:', e);
     res.statusCode = 500;
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ error: e?.message || "server error" }));
