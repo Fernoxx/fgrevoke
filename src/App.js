@@ -2584,8 +2584,8 @@ function App() {
     
     setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
-      // For Monad and Celo, use gasless transaction via backend
-      if (chain === 'mon' || chain === 'celo') {
+      // For Monad, use gasless transaction via backend
+      if (chain === 'mon') {
         console.log(`🚀 Using gasless transaction for ${chain.toUpperCase()}...`);
         
         const res = await fetch('/api/claim', {
@@ -2626,7 +2626,7 @@ function App() {
         return;
       }
       
-      // For Base, use user wallet
+      // For Base and Celo, use user wallet
       if (!provider) {
         alert('Please connect your wallet first');
         return;
