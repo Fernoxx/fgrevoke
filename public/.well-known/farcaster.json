@@ -46,5 +46,10 @@
       "https://fgrevoke.vercel.app/screenshot-1.png",
       "https://fgrevoke.vercel.app/screenshot-2.png"
     ]
+  },
+  "baseBuilder": {
+    "allowedAddresses": [
+      "0xD9d69f74D5464e417B4b7a317083234278df9721"
+    ]
   }
 }

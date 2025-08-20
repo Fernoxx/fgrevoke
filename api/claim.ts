@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { encodeFunctionData, parseEther } from "viem";
 import { signerClient } from "../lib/clients";
-import { CONTRACTS, type ChainKey } from "../lib/chains";
+import { CONTRACTS, CHAINS, RPCS, type ChainKey } from "../lib/chains";
 import { signDailyVoucher } from "../lib/voucher";
 import { weiForUsd } from "../lib/price";
 
@@ -43,11 +43,25 @@ export default async function handler(req: IncomingMessage & { method?: string }
     const buffers: Buffer[] = [];
     for await (const chunk of req) buffers.push(chunk as Buffer);
     const bodyRaw = Buffer.concat(buffers).toString("utf8");
-    const { chain, fid, address } = JSON.parse(bodyRaw || "{}") as {
+    const { chain, fid, address, mode } = JSON.parse(bodyRaw || "{}") as {
       chain: ChainKey;
       fid: number;
       address: `0x${string}`;
+      mode?: "prepare" | "send";
     };
+
+    if (!chain || !["base", "celo", "mon"].includes(chain)) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "invalid chain" }));
+      return;
+    }
+    if (!address) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "missing address" }));
+      return;
+    }
 
     await assertWalletBelongsToFid(fid, address);
 
@@ -63,26 +77,48 @@ export default async function handler(req: IncomingMessage & { method?: string }
       amountWei,
     });
 
-    const client = signerClient(chain as ChainKey);
     const data = encodeFunctionData({
       abi: ABI,
       functionName: "claimFor",
       args: [value as any, signature as `0x${string}`],
     });
+    const to = CONTRACTS[chain as ChainKey];
+    if (!to) {
+      throw new Error(`Missing faucet contract address for chain ${chain} (set CONTRACT_${chain.toUpperCase()} or CONTRACT_BASE)`);
+    }
 
-    const txHash = await client.sendTransaction({
-      to: CONTRACTS[chain as ChainKey],
-      data,
-      account: client.account,
-    });
+    // When mode is 'send', submit via server signer; otherwise return prepared params for client wallet
+    if (mode === "send") {
+      const client = signerClient(chain as ChainKey);
+      const txHash = await client.sendTransaction({
+        to,
+        data,
+        account: client.account,
+      });
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, txHash }));
+      return;
+    }
+
+    const chainId = CHAINS[chain as ChainKey].id;
+    const chainIdHex = `0x${chainId.toString(16)}` as const;
+    const native = (CHAINS[chain as ChainKey] as any).nativeCurrency || { name: "ETH", symbol: "ETH", decimals: 18 };
+    const chainParams = {
+      chainId: chainIdHex,
+      chainName: (CHAINS[chain as ChainKey] as any).name || chain,
+      nativeCurrency: native,
+      rpcUrls: [RPCS[chain as ChainKey]],
+    };
 
     res.statusCode = 200;
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ ok: true, txHash }));
+    res.end(JSON.stringify({ ok: true, prepared: { to, data, chainId, chainIdHex, chainParams } }));
   } catch (e: any) {
-    res.statusCode = 500;
+    const message = e?.message || "server error";
+    res.statusCode = /invalid|missing/i.test(message) ? 400 : 500;
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: e?.message || "server error" }));
+    res.end(JSON.stringify({ error: message }));
   }
 }
 
