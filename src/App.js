@@ -381,15 +381,20 @@ function App() {
       // Get latest block
       const latestBlock = await makeAlchemyCall('eth_blockNumber', [], 'Latest Block');
       const latestBlockNum = parseInt(latestBlock, 16);
-      const fromBlock = Math.max(0, latestBlockNum - 50000); // Last 50k blocks
       
-      console.log(`📊 Using Alchemy block range: ${fromBlock} to ${latestBlockNum}`);
+      // Use a smaller block range to avoid 400 errors - start with last 10k blocks
+      const fromBlock = Math.max(0, latestBlockNum - 10000);
       
-      // Get approval logs using simplified topic filter to avoid 400 error
+      console.log(`📊 Using Alchemy block range: ${fromBlock} to ${latestBlockNum} (${latestBlockNum - fromBlock} blocks)`);
+      
+      // Get approval logs with proper topic filtering including user address
       const logs = await makeAlchemyCall('eth_getLogs', [{
         fromBlock: `0x${fromBlock.toString(16)}`,
         toBlock: 'latest',
-        topics: [approvalTopic] // Only use the main approval topic, filter by user address later
+        topics: [
+          approvalTopic,  // Approval event signature
+          paddedAddress   // Filter by owner address (first indexed parameter)
+        ]
       }], 'Approval Logs');
       
       console.log(`✅ Alchemy returned ${logs.length} approval logs`);
@@ -402,6 +407,37 @@ function App() {
       }
     } catch (error) {
       console.error('❌ Alchemy approval fetch failed:', error);
+      
+      // If we get a 400 error, try with an even smaller block range
+      if (error.message && error.message.includes('400')) {
+        console.log('🔄 Retrying with smaller block range due to 400 error...');
+        try {
+          const retryApprovalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+          const retryPaddedAddress = '0x' + userAddress.slice(2).toLowerCase().padStart(64, '0');
+          
+          const latestBlock = await makeAlchemyCall('eth_blockNumber', [], 'Latest Block');
+          const latestBlockNum = parseInt(latestBlock, 16);
+          const fromBlock = Math.max(0, latestBlockNum - 1000); // Only last 1k blocks
+          
+          const logs = await makeAlchemyCall('eth_getLogs', [{
+            fromBlock: `0x${fromBlock.toString(16)}`,
+            toBlock: 'latest',
+            topics: [retryApprovalTopic, retryPaddedAddress]
+          }], 'Approval Logs (Retry)');
+          
+          console.log(`✅ Retry successful: ${logs.length} approval logs`);
+          
+          if (logs.length > 0) {
+            await processApprovalsFromAlchemy(logs, userAddress);
+          } else {
+            setApprovals([]);
+          }
+          return;
+        } catch (retryError) {
+          console.error('❌ Retry also failed:', retryError);
+        }
+      }
+      
       throw error;
     }
   };
@@ -2569,7 +2605,24 @@ function App() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chain, fid: currentUser.fid, address }),
       });
-      const j = await res.json();
+      
+      // Check if response is ok before trying to parse JSON
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Faucet API error:', res.status, errorText);
+        throw new Error(`API Error ${res.status}: ${errorText}`);
+      }
+      
+      // Try to parse JSON, with fallback for non-JSON responses
+      let j;
+      try {
+        j = await res.json();
+      } catch (jsonError) {
+        const responseText = await res.text();
+        console.error('Faucet error: Failed to parse JSON response:', responseText);
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
+      }
+      
       if (j.ok) {
         alert(`Success: ${j.txHash}`);
         setHasClaimedFaucet(true);
@@ -2577,6 +2630,7 @@ function App() {
         throw new Error(j.error || 'failed');
       }
     } catch (e) {
+      console.error('Faucet error:', e);
       if (e && e.code === 4001 && currentPage !== 'approvals') {
         // ignore global error message outside revoke tab
       } else {
