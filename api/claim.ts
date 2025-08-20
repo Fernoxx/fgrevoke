@@ -31,6 +31,7 @@ const ABI = [
 ] as const;
 
 export default async function handler(req: IncomingMessage & { method?: string }, res: ServerResponse) {
+  console.log("[api/claim] Handler started");
   try {
     if (req.method !== "POST") {
       res.statusCode = 405;
