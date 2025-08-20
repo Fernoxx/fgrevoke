@@ -3,7 +3,12 @@ import { base, celo, defineChain } from "viem/chains";
 export type ChainKey = "base" | "celo" | "mon";
 
 export const CHAINS = {
-  base,
+  base: {
+    ...base,
+    rpcUrls: {
+      default: { http: [process.env.BASE_RPC || 'https://mainnet.base.org'] }
+    }
+  },
   celo,
   mon: defineChain({
     id: 20143, // update if your provider shows a different testnet id

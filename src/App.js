@@ -2601,8 +2601,9 @@ function App() {
         alert(`Success! Claimed ${chainName}\nTransaction: ${j.txHash}`);
         setHasClaimedFaucet(true);
       } else {
-        console.error('Faucet error:', j.error);
-        throw new Error(j.error || 'failed');
+        console.error('Faucet error:', j);
+        const errorMsg = j.details ? `${j.error}\n${j.details}` : j.error;
+        throw new Error(errorMsg || 'failed');
       }
     } catch (e) {
       console.error('Faucet error:', e);

@@ -86,7 +86,15 @@ export default async function handler(req: IncomingMessage & { method?: string }
       return;
     }
 
-    console.log(`[api/claim] request`, { chain, fid, address, rpcSet: !!rpcUrl, contractSet: !!contractAddr, node: process.version });
+    console.log(`[api/claim] request`, { 
+      chain, 
+      fid, 
+      address, 
+      rpcSet: !!rpcUrl, 
+      contractSet: !!contractAddr,
+      contractAddr: contractAddr ? `${contractAddr.slice(0, 6)}...${contractAddr.slice(-4)}` : 'undefined',
+      node: process.version 
+    });
 
     await assertWalletBelongsToFid(fid, address);
 
@@ -119,10 +127,18 @@ export default async function handler(req: IncomingMessage & { method?: string }
     } catch (err: any) {
       const msg = err?.shortMessage || err?.message || "transaction failed";
       const code = err?.code || err?.name;
-      console.error(`[api/claim] sendTransaction error`, { code, msg });
+      const details = err?.details || err?.reason || "";
+      console.error(`[api/claim] sendTransaction error`, { 
+        code, 
+        msg,
+        details,
+        chain,
+        contractAddr: CONTRACTS[chain as ChainKey],
+        fullError: err 
+      });
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: msg, code }));
+      res.end(JSON.stringify({ error: msg, code, details }));
       return;
     }
 
