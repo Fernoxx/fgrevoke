@@ -1,6 +1,6 @@
 import { readContract, writeContract, signTypedData } from '@wagmi/core';
 import { wagmiConfig } from './wagmi';
-import { MultiRevokeHubAbi, MULTI_REVOKE_HUB } from '../abis/MultiRevokeHub';
+import { PERMIT2 } from '../consts';
 
 const ERC20_NAME_ABI = [{
   type: 'function',
@@ -79,36 +79,57 @@ export async function revokeViaEip2612({ owner, token, spender }) {
 
   const { v, r, s } = splitSig(signature);
 
+  // Call token.permit(owner, spender, 0, deadline, v, r, s)
+  const TOKEN_PERMIT_ABI = [{
+    type: 'function',
+    name: 'permit',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'v', type: 'uint8' },
+      { name: 'r', type: 'bytes32' },
+      { name: 's', type: 'bytes32' }
+    ],
+    outputs: []
+  }];
   return writeContract(wagmiConfig, {
-    address: MULTI_REVOKE_HUB,
-    abi: MultiRevokeHubAbi,
-    functionName: 'revokeWithPermit2612',
-    args: [token, owner, spender, deadline, v, r, s]
+    address: token,
+    abi: TOKEN_PERMIT_ABI,
+    functionName: 'permit',
+    args: [owner, spender, 0n, deadline, v, r, s]
   });
 }
 
 export async function revokeViaPermit2Approve({ token, spender }) {
+  const PERMIT2_APPROVE_ABI = [{
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint160' },
+      { name: 'expiration', type: 'uint48' }
+    ],
+    outputs: []
+  }];
   return writeContract(wagmiConfig, {
-    address: MULTI_REVOKE_HUB,
-    abi: MultiRevokeHubAbi,
-    functionName: 'revokeWithPermit2Approve',
-    args: [token, spender]
+    address: PERMIT2,
+    abi: PERMIT2_APPROVE_ABI,
+    functionName: 'approve',
+    args: [token, spender, 0n, 0n]
   });
 }
 
 export async function revokeFallbackAndProve({ token, spender }) {
-  await writeContract(wagmiConfig, {
+  return writeContract(wagmiConfig, {
     address: token,
     abi: ERC20_APPROVE_ABI,
     functionName: 'approve',
     args: [spender, 0n]
-  });
-
-  return writeContract(wagmiConfig, {
-    address: MULTI_REVOKE_HUB,
-    abi: MultiRevokeHubAbi,
-    functionName: 'proveRevoked',
-    args: [token, spender]
   });
 }
 

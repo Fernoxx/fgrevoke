@@ -1129,19 +1129,19 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // Use MultiRevokeHub paths (EIP-2612, Permit2 approve, or fallback approve+prove)
+      // Use direct paths (EIP-2612 permit, Permit2 approve, or ERC20 approve)
       const { revokeAuto } = await import('./utils/revoke');
       const owner = address;
       const token = approval.contract;
       const spender = approval.spender;
       const isPermit2Allowance = approval.isPermit2 === true;
       
-      console.log('🛠 Using MultiRevokeHub at 0x160d...f879 with auto path');
+      console.log('🛠 Using direct revoke (token/Permit2) auto path');
       await revokeAuto({ owner, token, spender, isPermit2Hint: isPermit2Allowance, wantProof: true });
 
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      console.log('✅ Revoke complete via MultiRevokeHub:', approval.name);
+      console.log('✅ Revoke complete:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
