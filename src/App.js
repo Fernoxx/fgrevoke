@@ -2600,7 +2600,7 @@ function App() {
     }
     setFaucetBusy(chain);
     try {
-      const res = await fetch('/api/claim', {
+      const res = await fetch('/api/claim-test', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chain, fid: currentUser.fid, address }),
