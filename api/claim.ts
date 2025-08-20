@@ -32,10 +32,24 @@ const ABI = [
 ] as const;
 
 export default async function handler(req: IncomingMessage & { method?: string }, res: ServerResponse) {
+  console.log('🚀 Claim API called:', { method: req.method, timestamp: new Date().toISOString() });
+  
+  // Set CORS headers and content type early
+  res.setHeader("content-type", "application/json");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  
   try {
+    if (req.method === "OPTIONS") {
+      res.statusCode = 200;
+      res.end();
+      return;
+    }
+    
     if (req.method !== "POST") {
+      console.log('❌ Method not allowed:', req.method);
       res.statusCode = 405;
-      res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ error: "method not allowed" }));
       return;
     }
@@ -87,58 +101,95 @@ export default async function handler(req: IncomingMessage & { method?: string }
       return;
     }
 
-    // Check environment variables
+    // Check environment variables with detailed logging
+    console.log('🔍 Checking environment variables for chain:', chain);
+    
     const requiredEnvVars = {
       GAS_SIGNER_PRIVATE_KEY: process.env.GAS_SIGNER_PRIVATE_KEY,
       [`${chain.toUpperCase()}_RPC`]: process.env[`${chain.toUpperCase()}_RPC`],
       [`CONTRACT_${chain.toUpperCase()}`]: process.env[`CONTRACT_${chain.toUpperCase()}`],
     };
 
+    console.log('📋 Environment variable check:', Object.fromEntries(
+      Object.entries(requiredEnvVars).map(([key, value]) => [key, value ? 'SET' : 'MISSING'])
+    ));
+
     for (const [name, value] of Object.entries(requiredEnvVars)) {
       if (!value) {
-        console.error(`Missing environment variable: ${name}`);
+        console.error(`❌ Missing environment variable: ${name}`);
         res.statusCode = 500;
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify({ error: `server configuration error: missing ${name}` }));
         return;
       }
     }
+    
+    console.log('✅ All environment variables present');
 
+    console.log('🔐 Validating wallet ownership...');
     await assertWalletBelongsToFid(fid, address);
+    console.log('✅ Wallet validation passed');
 
+    console.log('💰 Calculating amount wei for chain:', chain);
     const amountWei =
       chain === "celo" ? parseEther("0.1") :
       chain === "mon"  ? parseEther("0.1") :
       await weiForUsd(0.10);
+    console.log('✅ Amount wei calculated:', amountWei.toString());
 
+    console.log('📝 Signing daily voucher...');
     const { value, signature } = await signDailyVoucher({
       chain,
       fid: BigInt(fid),
       recipient: address,
       amountWei,
     });
+    console.log('✅ Voucher signed successfully');
 
+    console.log('🌐 Creating signer client for chain:', chain);
     const client = signerClient(chain as ChainKey);
+    console.log('✅ Client created, encoding function data...');
+    
     const data = encodeFunctionData({
       abi: ABI,
       functionName: "claimFor",
       args: [value as any, signature as `0x${string}`],
     });
+    console.log('✅ Function data encoded');
 
+    console.log('📤 Sending transaction to:', CONTRACTS[chain as ChainKey]);
     const txHash = await client.sendTransaction({
       to: CONTRACTS[chain as ChainKey],
       data,
       account: client.account,
     });
+    console.log('✅ Transaction sent successfully:', txHash);
 
     res.statusCode = 200;
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ ok: true, txHash }));
   } catch (e: any) {
-    console.error('Claim API error:', e);
-    res.statusCode = 500;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: e?.message || "server error" }));
+    console.error('❌ Claim API error:', {
+      message: e?.message,
+      stack: e?.stack,
+      name: e?.name,
+      cause: e?.cause
+    });
+    
+    // Ensure we always send a proper JSON response
+    try {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ 
+        error: e?.message || "server error",
+        timestamp: new Date().toISOString()
+      }));
+    } catch (responseError) {
+      console.error('❌ Failed to send error response:', responseError);
+      // Last resort fallback
+      res.statusCode = 500;
+      res.end('{"error":"internal server error"}');
+    }
   }
 }
 
