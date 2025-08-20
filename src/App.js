@@ -2580,9 +2580,16 @@ function App() {
       alert('Please connect your Farcaster wallet first');
       return;
     }
+    if (!provider) {
+      alert('Please connect your wallet first');
+      return;
+    }
+    
     setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
-      const res = await fetch('/api/claim', {
+      // Step 1: Get voucher from backend
+      console.log('🎫 Getting voucher from backend...');
+      const res = await fetch('/api/voucher', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chain, fid: currentUser.fid, address }),
@@ -2592,23 +2599,92 @@ function App() {
       try {
         j = JSON.parse(text);
       } catch (_) {
-        // Handle HTML/plain-text error body from server
         console.error('Failed to parse response:', text);
         throw new Error(text || `Server error (${res.status})`);
       }
-      if (j.ok) {
-        const chainName = chain === 'base' ? 'ETH' : chain.toUpperCase();
-        alert(`Success! Claimed ${chainName}\nTransaction: ${j.txHash}`);
-        setHasClaimedFaucet(true);
-      } else {
-        console.error('Faucet error:', j);
-        const errorMsg = j.details ? `${j.error}\n${j.details}` : j.error;
-        throw new Error(errorMsg || 'failed');
+      if (!j.ok) {
+        console.error('Voucher error:', j);
+        throw new Error(j.error || 'Failed to get voucher');
       }
+      
+      const { voucher, signature, contract, chainId } = j;
+      console.log('✅ Got voucher:', { voucher, contract, chainId });
+      
+      // Step 2: Switch to correct chain if needed
+      const chainIdHex = `0x${chainId.toString(16)}`;
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' });
+        if (currentChainId !== chainIdHex) {
+          console.log(`🔄 Switching from chain ${currentChainId} to ${chainIdHex}...`);
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: chainIdHex }],
+          });
+        }
+      } catch (switchError) {
+        console.error('Chain switch error:', switchError);
+        // If chain doesn't exist, we might need to add it
+        if (switchError.code === 4902 && chain === 'mon') {
+          // Add Monad testnet
+          await provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: chainIdHex,
+              chainName: 'Monad Testnet',
+              nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+              rpcUrls: ['https://testnet.monad.xyz'],
+              blockExplorerUrls: ['https://explorer.testnet.monad.xyz'],
+            }],
+          });
+        } else {
+          throw switchError;
+        }
+      }
+      
+      // Step 3: Import FaucetAbi and encode the transaction
+      const { FaucetAbi } = await import('./abis/faucet.js');
+      const { encodeFunctionData } = await import('viem');
+      
+      // Convert voucher fields back to BigInt for encoding
+      const voucherForContract = {
+        fid: BigInt(voucher.fid),
+        recipient: voucher.recipient,
+        day: BigInt(voucher.day),
+        amountWei: BigInt(voucher.amountWei),
+        deadline: BigInt(voucher.deadline),
+      };
+      
+      // Encode the claimSelf function call
+      const data = encodeFunctionData({
+        abi: FaucetAbi,
+        functionName: 'claimSelf',
+        args: [voucherForContract, signature],
+      });
+      
+      // Step 4: Send transaction using user's wallet
+      console.log('📝 Sending transaction...');
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: contract,
+          data: data,
+          gas: '0x30000', // 196k gas should be enough
+        }],
+      });
+      
+      console.log('✅ Transaction sent:', txHash);
+      const chainName = chain === 'base' ? 'ETH' : chain.toUpperCase();
+      alert(`Success! Claiming ${chainName}\nTransaction: ${txHash}\n\nPlease wait for confirmation.`);
+      setHasClaimedFaucet(true);
+      
     } catch (e) {
       console.error('Faucet error:', e);
-      if (e && e.code === 4001 && currentPage !== 'approvals') {
-        // ignore global error message outside revoke tab
+      if (e && e.code === 4001) {
+        // User rejected transaction
+        alert('Transaction cancelled');
+      } else if (e.code === -32000 || e.message?.includes('insufficient funds')) {
+        alert('Insufficient funds for gas. You need some native tokens to pay for gas.');
       } else {
         alert(e?.message || 'Failed to claim. Please try again.');
       }
