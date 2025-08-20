@@ -1250,7 +1250,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app".trim();
+    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here:\nhttps://fgrevoke.vercel.app";
     const text = encodeURIComponent(raw);
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
@@ -1260,8 +1260,8 @@ function App() {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
     const shareText = (currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey: https://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too: https://fgrevoke.vercel.app`);
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app`);
     const finalShareText = shareText.trim();
 
     try {
@@ -4043,7 +4043,7 @@ function App() {
                         </div>
                         <button
                           onClick={() => {
-                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily: https://fgrevoke.vercel.app`;
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:\nhttps://fgrevoke.vercel.app`;
                             const encoded = encodeURIComponent(text);
                             window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
                           }}
