@@ -2577,10 +2577,10 @@ function App() {
 
   async function claimFaucet(chain) {
     if (!currentUser?.fid || !address) {
-      alert('Need fid + wallet');
+      alert('Please connect your Farcaster wallet first');
       return;
     }
-    setFaucetBusy(chain);
+    setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
       const res = await fetch('/api/claim', {
         method: 'POST',
@@ -2593,19 +2593,23 @@ function App() {
         j = JSON.parse(text);
       } catch (_) {
         // Handle HTML/plain-text error body from server
+        console.error('Failed to parse response:', text);
         throw new Error(text || `Server error (${res.status})`);
       }
       if (j.ok) {
-        alert(`Success: ${j.txHash}`);
+        const chainName = chain === 'base' ? 'ETH' : chain.toUpperCase();
+        alert(`Success! Claimed ${chainName}\nTransaction: ${j.txHash}`);
         setHasClaimedFaucet(true);
       } else {
+        console.error('Faucet error:', j.error);
         throw new Error(j.error || 'failed');
       }
     } catch (e) {
+      console.error('Faucet error:', e);
       if (e && e.code === 4001 && currentPage !== 'approvals') {
         // ignore global error message outside revoke tab
       } else {
-        alert(e?.message || 'failed');
+        alert(e?.message || 'Failed to claim. Please try again.');
       }
     } finally {
       setFaucetBusy(null);

@@ -1,6 +1,7 @@
 import { createWalletClient, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base, mainnet, celo, defineChain } from "viem/chains";
+import { weiForUsd } from "./price";
 
 export const CHAINS = {
   eth: mainnet,
@@ -37,15 +38,6 @@ export function fixedPointOne(): bigint {
   return parseEther("0.1");
 }
 
-// crude price helper for 0.10 USD of ETH or use your own oracle
-export async function amountWeiForUsd(usd = 0.10): Promise<bigint> {
-  const price = await getEthUsd();
-  const eth = usd / price;
-  return BigInt(Math.floor(eth * 1e18));
-}
-
-async function getEthUsd(): Promise<number> {
-  // replace with Coingecko or your own cache, this placeholder is 3000
-  return 3000;
-}
+// Re-export for compatibility
+export const amountWeiForUsd = weiForUsd;
 
