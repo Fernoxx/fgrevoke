@@ -2587,6 +2587,11 @@ function App() {
       // For Monad, use gasless transaction via backend
       if (chain === 'mon') {
         console.log('🚀 Using gasless transaction for Monad...');
+        
+        // Temporary check for Monad availability
+        alert('⚠️ Monad testnet faucet is temporarily unavailable. The gas signer needs to be funded with MON tokens.\n\nPlease try Base or Celo instead.');
+        return;
+        
         const res = await fetch('/api/claim', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -2615,7 +2620,11 @@ function App() {
           setHasClaimedFaucet(true);
         } else {
           console.error('Faucet error:', j);
-          throw new Error(j.error || 'Failed to claim');
+          const errorMsg = j.details || j.error || 'Failed to claim';
+          if (errorMsg.includes('insufficient balance')) {
+            throw new Error('Gas signer has insufficient balance. Please fund the signer account with MON tokens.');
+          }
+          throw new Error(errorMsg);
         }
         return;
       }
@@ -4063,11 +4072,12 @@ function App() {
                         {faucetBusy === 'eth' ? 'Claiming ETH...' : 'Claim ETH'}
                       </button>
                       <button
-                        disabled={!!faucetBusy}
+                        disabled={true}
                         onClick={() => claimFaucet('mon')}
                         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                        title="Temporarily unavailable - gas signer needs funding"
                       >
-                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON (Temporarily Unavailable)'}
                       </button>
                       <button
                         disabled={!!faucetBusy}
