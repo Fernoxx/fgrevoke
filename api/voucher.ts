@@ -100,7 +100,8 @@ export default async function handler(req: IncomingMessage & { method?: string }
     // Create wallet client for signing
     const client = viem.createWalletClient({ 
       account: signerAccount, 
-      chain: CHAINS[chain], 
+      chain: CHAINS[chain],
+      transport: viem.http() // Dummy transport for signing
     });
     
     // Sign voucher
