@@ -71,8 +71,8 @@ export default async function handler(req: IncomingMessage & { method?: string }
     const contractAddr = CONTRACTS[chain];
     const missing: string[] = [];
     if (!signerPk) missing.push("GAS_SIGNER_PRIVATE_KEY");
-    if (!rpcUrl) missing.push(`${chain.toUpperCase()}_RPC`);
-    if (!contractAddr) missing.push(`CONTRACT_${chain.toUpperCase()}`);
+    if (!rpcUrl) missing.push(`${chain === 'base' ? 'BASE_RPC or ETH_RPC' : `${chain.toUpperCase()}_RPC`}`);
+    if (!contractAddr) missing.push(`CONTRACT_${chain === 'base' ? 'BASE or CONTRACT_ETH' : chain.toUpperCase()}`);
     if (missing.length) {
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
