@@ -43,11 +43,27 @@ export default async function handler(req: IncomingMessage & { method?: string }
     const buffers: Buffer[] = [];
     for await (const chunk of req) buffers.push(chunk as Buffer);
     const bodyRaw = Buffer.concat(buffers).toString("utf8");
-    const { chain, fid, address } = JSON.parse(bodyRaw || "{}") as {
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(bodyRaw || "{}");
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "invalid JSON body" }));
+      return;
+    }
+    const { chain, fid, address } = parsed as {
       chain: ChainKey;
       fid: number;
       address: `0x${string}`;
     };
+
+    if (!chain || !fid || !address) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "missing required fields: chain, fid, address" }));
+      return;
+    }
 
     await assertWalletBelongsToFid(fid, address);
 
@@ -80,9 +96,19 @@ export default async function handler(req: IncomingMessage & { method?: string }
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ ok: true, txHash }));
   } catch (e: any) {
-    res.statusCode = 500;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: e?.message || "server error" }));
+    // Ensure we never send non-JSON to the client
+    try {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: e?.message || "server error" }));
+    } catch (_) {
+      // Last resort fallback
+      try {
+        res.statusCode = 500;
+        res.setHeader("content-type", "application/json");
+        res.end("{\"error\":\"server error\"}");
+      } catch {}
+    }
   }
 }
 

@@ -348,7 +348,18 @@ function App() {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let errorDetail = '';
+        try {
+          const errJson = await response.json();
+          errorDetail = errJson?.error?.message || JSON.stringify(errJson);
+        } catch (_) {
+          try {
+            errorDetail = await response.text();
+          } catch (_) {
+            errorDetail = response.statusText || 'Unknown error';
+          }
+        }
+        throw new Error(`HTTP ${response.status}: ${errorDetail}`);
       }
       
       const data = await response.json();
@@ -382,20 +393,27 @@ function App() {
       const latestBlock = await makeAlchemyCall('eth_blockNumber', [], 'Latest Block');
       const latestBlockNum = parseInt(latestBlock, 16);
       const fromBlock = Math.max(0, latestBlockNum - 50000); // Last 50k blocks
+      const chunkSize = 10000; // Stay under Alchemy eth_getLogs range limits
+      console.log(`📊 Using Alchemy block range: ${fromBlock} to ${latestBlockNum} (chunkSize=${chunkSize})`);
       
-      console.log(`📊 Using Alchemy block range: ${fromBlock} to ${latestBlockNum}`);
+      // Fetch in chunks to avoid HTTP 400 due to large ranges
+      const allLogs = [];
+      for (let start = fromBlock; start <= latestBlockNum; start += chunkSize) {
+        const end = Math.min(start + chunkSize - 1, latestBlockNum);
+        const chunkLogs = await makeAlchemyCall('eth_getLogs', [{
+          fromBlock: `0x${start.toString(16)}`,
+          toBlock: `0x${end.toString(16)}`,
+          topics: [approvalTopic]
+        }], `Approval Logs ${start}-${end}`);
+        if (Array.isArray(chunkLogs)) allLogs.push(...chunkLogs);
+        // Limit total logs to keep processing bounded
+        if (allLogs.length > 5000) break;
+      }
       
-      // Get approval logs using simplified topic filter to avoid 400 error
-      const logs = await makeAlchemyCall('eth_getLogs', [{
-        fromBlock: `0x${fromBlock.toString(16)}`,
-        toBlock: 'latest',
-        topics: [approvalTopic] // Only use the main approval topic, filter by user address later
-      }], 'Approval Logs');
+      console.log(`✅ Alchemy returned ${allLogs.length} approval logs in chunks`);
       
-      console.log(`✅ Alchemy returned ${logs.length} approval logs`);
-      
-      if (logs.length > 0) {
-        await processApprovalsFromAlchemy(logs, userAddress);
+      if (allLogs.length > 0) {
+        await processApprovalsFromAlchemy(allLogs, userAddress);
       } else {
         console.log('ℹ️ No approval events found');
         setApprovals([]);
@@ -2569,7 +2587,14 @@ function App() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chain, fid: currentUser.fid, address }),
       });
-      const j = await res.json();
+      let j;
+      const text = await res.text();
+      try {
+        j = JSON.parse(text);
+      } catch (_) {
+        // Handle HTML/plain-text error body from server
+        throw new Error(text || `Server error (${res.status})`);
+      }
       if (j.ok) {
         alert(`Success: ${j.txHash}`);
         setHasClaimedFaucet(true);
