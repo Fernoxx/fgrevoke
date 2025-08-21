@@ -129,6 +129,17 @@ export default async function handler(req: IncomingMessage & { method?: string; 
         res.end(JSON.stringify({ error: `Gas signer has no ${chain.toUpperCase()} balance` }));
         return;
       }
+      
+      // Also check contract balance
+      const contractBalance = await publicClient.getBalance({
+        address: CONTRACTS[chain],
+      });
+      console.log(`[api/relay-metatx] Contract balance on ${chain}:`, contractBalance.toString(), 'wei');
+      
+      if (contractBalance === 0n) {
+        console.error(`[api/relay-metatx] CONTRACT has 0 balance on ${chain}`);
+        console.error(`[api/relay-metatx] You need to fund the contract at ${CONTRACTS[chain]} with MON`);
+      }
     } catch (balanceError) {
       console.error(`[api/relay-metatx] Failed to check balance:`, balanceError);
     }
@@ -139,6 +150,24 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       functionSignature: functionSignature.slice(0, 10) + '...',
       r, s, v
     });
+    
+    // Add gas estimation to see if it would fail
+    try {
+      const gasEstimate = await client.estimateContractGas({
+        address: CONTRACTS[chain],
+        abi: METATX_ABI,
+        functionName: "executeMetaTransaction",
+        args: [userAddress, functionSignature, r, s, v],
+      });
+      console.log(`[api/relay-metatx] Gas estimate:`, gasEstimate.toString());
+    } catch (estimateError: any) {
+      console.error(`[api/relay-metatx] Gas estimation failed:`, estimateError);
+      // Check if it's a contract revert
+      if (estimateError.message?.includes('insufficient balance')) {
+        console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
+        console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
+      }
+    }
     
     const txHash = await client.writeContract({
       address: CONTRACTS[chain],
