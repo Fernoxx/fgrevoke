@@ -235,12 +235,29 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.error(`[api/relay-metatx] User address:`, userAddress);
     }
     
-    const txHash = await client.writeContract({
-      address: CONTRACTS[chain],
-      abi: METATX_ABI,
-      functionName: "executeMetaTransaction",
-      args: [userAddress, functionSignature, r, s, v],
-    });
+    // Try with value in case contract expects payment
+    let txHash;
+    try {
+      txHash = await client.writeContract({
+        address: CONTRACTS[chain],
+        abi: METATX_ABI,
+        functionName: "executeMetaTransaction",
+        args: [userAddress, functionSignature, r, s, v],
+        value: 0n, // Explicitly set value to 0
+      });
+    } catch (writeError: any) {
+      console.error(`[api/relay-metatx] Write contract failed:`, writeError);
+      
+      // Try to extract more specific error
+      if (writeError.cause?.reason) {
+        console.error(`[api/relay-metatx] Contract revert reason:`, writeError.cause.reason);
+      }
+      if (writeError.cause?.data) {
+        console.error(`[api/relay-metatx] Contract revert data:`, writeError.cause.data);
+      }
+      
+      throw writeError;
+    }
 
     console.log(`[api/relay-metatx] Transaction sent:`, txHash);
 
