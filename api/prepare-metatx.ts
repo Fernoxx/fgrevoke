@@ -125,10 +125,10 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       message: voucher,
     });
 
-    // ABI for claimWithMetaTx
+    // ABI for claim function
     const METATX_ABI = [
       {
-        name: "claimWithMetaTx",
+        name: "claim",
         type: "function",
         inputs: [
           {
@@ -150,7 +150,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     // Encode function call
     const functionSignature = encodeFunctionData({
       abi: METATX_ABI,
-      functionName: "claimWithMetaTx",
+      functionName: "claim",
       args: [voucher, voucherSignature],
     });
 

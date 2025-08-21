@@ -140,6 +140,15 @@ export default async function handler(req: IncomingMessage & { method?: string; 
         console.error(`[api/relay-metatx] CONTRACT has 0 balance on ${chain}`);
         console.error(`[api/relay-metatx] You need to fund the contract at ${CONTRACTS[chain]} with MON`);
       }
+      
+      // Check if contract has code
+      const contractCode = await publicClient.getBytecode({
+        address: CONTRACTS[chain],
+      });
+      console.log(`[api/relay-metatx] Contract has code:`, contractCode ? 'YES' : 'NO');
+      if (!contractCode) {
+        console.error(`[api/relay-metatx] No contract deployed at ${CONTRACTS[chain]}`);
+      }
     } catch (balanceError) {
       console.error(`[api/relay-metatx] Failed to check balance:`, balanceError);
     }
