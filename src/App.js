@@ -1162,7 +1162,7 @@ function App() {
           ],
           outputs: [{ name: '', type: 'bool' }]
         }
-      ] as const;
+      ];
       
       // Encode approve(spender, 0)
       const data = encodeFunctionData({
