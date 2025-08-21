@@ -51,6 +51,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     };
     
     console.log('[api/relay-metatx] Request:', { chain, userAddress, hasSignature: !!signature });
+    console.log(`[api/relay-metatx] RPC for ${chain}:`, RPCS[chain] ? 'configured' : 'missing');
     
     if (!RPCS[chain]) {
       console.error(`[api/relay-metatx] Missing RPC for chain ${chain}`);
@@ -106,7 +107,39 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       },
     ] as const;
 
+    // First check signer balance
+    console.log(`[api/relay-metatx] Relayer address:`, relayerAccount.address);
+    
+    try {
+      // Create a public client to check balance
+      const publicClient = viem.createPublicClient({
+        chain: chainConfig,
+        transport: http(RPCS[chain]),
+      });
+      
+      const balance = await publicClient.getBalance({
+        address: relayerAccount.address,
+      });
+      
+      console.log(`[api/relay-metatx] Relayer balance on ${chain}:`, balance.toString(), 'wei');
+      
+      if (balance === 0n) {
+        console.error(`[api/relay-metatx] Relayer has 0 balance on ${chain}`);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: `Gas signer has no ${chain.toUpperCase()} balance` }));
+        return;
+      }
+    } catch (balanceError) {
+      console.error(`[api/relay-metatx] Failed to check balance:`, balanceError);
+    }
+    
     // Send meta-transaction
+    console.log(`[api/relay-metatx] Sending transaction with args:`, {
+      userAddress,
+      functionSignature: functionSignature.slice(0, 10) + '...',
+      r, s, v
+    });
+    
     const txHash = await client.writeContract({
       address: CONTRACTS[chain],
       abi: METATX_ABI,

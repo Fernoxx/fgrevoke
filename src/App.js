@@ -2844,7 +2844,7 @@ function App() {
         <header className="w-full max-w-4xl flex flex-col space-y-4 py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
           <div className="flex flex-col sm:flex-row items-center justify-between">
             <div className="flex items-center gap-3 mb-4 sm:mb-0">
-              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
+              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-12 h-12" />
               <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
             </div>
             
