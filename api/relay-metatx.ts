@@ -109,6 +109,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     // First check signer balance
     console.log(`[api/relay-metatx] Relayer address:`, relayerAccount.address);
     
+    let contractBalance = 0n;
     try {
       // Create a public client to check balance
       const publicClient = createPublicClient({
@@ -130,7 +131,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       }
       
       // Also check contract balance
-      const contractBalance = await publicClient.getBalance({
+      contractBalance = await publicClient.getBalance({
         address: CONTRACTS[chain],
       });
       console.log(`[api/relay-metatx] Contract balance on ${chain}:`, contractBalance.toString(), 'wei');
