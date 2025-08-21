@@ -82,7 +82,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const signerAccount = privateKeyToAccount(signerPk as `0x${string}`);
     
     const domain = {
-      name: chain === "celo" ? "DailyGasClaim" : "DailyGasClaimMetaTx", // Different name for Monad
+      name: chain === "celo" ? "DailyGasClaim" : "DailyGasClaimMetaTx", // Different names per chain
       version: "1",
       chainId: chain === "celo" ? 42220 : 10143,
       verifyingContract: CONTRACTS[chain],

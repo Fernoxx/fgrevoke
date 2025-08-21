@@ -201,7 +201,16 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     console.log(`[api/relay-metatx] Sending transaction with args:`, {
       userAddress,
       functionSignature: functionSignature.slice(0, 10) + '...',
+      functionSignatureLength: functionSignature.length,
       r, s, v
+    });
+    
+    // Log the expected meta-tx domain
+    console.log(`[api/relay-metatx] Expected domain for ${chain}:`, {
+      name: "DailyGasClaimMetaTx",
+      version: "1",
+      chainId: chain === "celo" ? 42220 : 10143,
+      verifyingContract: CONTRACTS[chain]
     });
     
     // Add gas estimation to see if it would fail
@@ -219,17 +228,33 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       
       // Check different error types
       let errorMessage = "Transaction would fail";
-      if (estimateError.message?.includes('insufficient balance')) {
-        console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
-        console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
-        errorMessage = `Contract has insufficient ${chain.toUpperCase()} balance to distribute`;
-      } else if (estimateError.message?.includes('signature')) {
-        console.error(`[api/relay-metatx] Signature verification failed`);
-        console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
-        errorMessage = "Signature verification failed";
-      } else if (estimateError.message?.includes('Already claimed')) {
+      
+      // Log the actual error message to understand what's happening
+      const errorStr = estimateError.message || estimateError.toString();
+      console.error(`[api/relay-metatx] Raw error message:`, errorStr);
+      
+      if (errorStr.includes('insufficient funds')) {
+        console.error(`[api/relay-metatx] Contract reverted with insufficient funds`);
+        console.error(`[api/relay-metatx] Contract balance: ${(Number(contractBalance) / 1e18).toFixed(6)} ${chain.toUpperCase()}`);
+        errorMessage = `Contract has insufficient ${chain.toUpperCase()} balance`;
+      } else if (errorStr.includes('invalid meta-tx signature')) {
+        console.error(`[api/relay-metatx] Meta-transaction signature verification failed`);
+        errorMessage = "Invalid meta-transaction signature";
+      } else if (errorStr.includes('bad voucher signature')) {
+        console.error(`[api/relay-metatx] Voucher signature verification failed`);
+        errorMessage = "Invalid voucher signature";
+      } else if (errorStr.includes('already claimed')) {
         console.error(`[api/relay-metatx] User already claimed today`);
         errorMessage = "Already claimed today";
+      } else if (errorStr.includes('expired')) {
+        console.error(`[api/relay-metatx] Voucher has expired`);
+        errorMessage = "Voucher expired";
+      } else if (errorStr.includes('wrong day')) {
+        console.error(`[api/relay-metatx] Wrong day in voucher`);
+        errorMessage = "Wrong day";
+      } else if (errorStr.includes('recipient mismatch')) {
+        console.error(`[api/relay-metatx] Recipient mismatch`);
+        errorMessage = "Recipient mismatch";
       }
       
       // Extract revert reason if available

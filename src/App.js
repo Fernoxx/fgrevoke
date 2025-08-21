@@ -2640,7 +2640,7 @@ function App() {
         
         const { functionSignature, contract, chainId, domain, types } = prepareData;
         
-        // Step 2: Use nonce 0 for now
+        // Step 2: Use nonce 0 (first transaction for this user)
         const nonce = 0;
         console.log('Using nonce:', nonce);
         
