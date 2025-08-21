@@ -21,6 +21,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       celo: process.env.CELO_RPC || "https://forno.celo.org",
       mon: process.env.MON_RPC || "",
     };
+    
+    if (!RPCS[chain]) {
+      console.error(`[api/relay-metatx] Missing RPC for chain ${chain}`);
+      res.status(500).json({ error: `Server configuration error: missing RPC for ${chain}` });
+      return;
+    }
 
     if (req.method !== "POST") {
       res.status(405).json({ error: "method not allowed" });
@@ -33,6 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       functionSignature: `0x${string}`;
       signature: `0x${string}`;
     };
+    
+    console.log('[api/relay-metatx] Request:', { chain, userAddress, hasSignature: !!signature });
 
     // Parse signature
     const sig = signature.slice(2);
@@ -41,8 +49,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const v = parseInt(sig.slice(128, 130), 16);
 
     // Create relayer client
-    const relayerPk = process.env.GAS_SIGNER_PRIVATE_KEY as `0x${string}`;
-    const relayerAccount = privateKeyToAccount(relayerPk);
+    const relayerPk = process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK;
+    if (!relayerPk || !relayerPk.startsWith('0x')) {
+      console.error('[api/relay-metatx] Missing or invalid GAS_SIGNER_PRIVATE_KEY');
+      res.status(500).json({ error: 'Server configuration error: missing signer key' });
+      return;
+    }
+    const relayerAccount = privateKeyToAccount(relayerPk as `0x${string}`);
     
     const chainConfig = chain === "celo" 
       ? celo 

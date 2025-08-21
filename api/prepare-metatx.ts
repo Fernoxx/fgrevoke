@@ -33,6 +33,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(400).json({ error: "missing required fields: chain, fid, address" });
       return;
     }
+    
+    console.log('[api/prepare-metatx] Request:', { chain, fid, address });
 
     // Get amount
     const amountWei = chain === "celo" ? parseEther("0.1") : parseEther("0.1");
@@ -50,8 +52,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     // Sign voucher with backend signer
-    const signerPk = process.env.GAS_SIGNER_PRIVATE_KEY as `0x${string}`;
-    const signerAccount = privateKeyToAccount(signerPk);
+    const signerPk = process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK;
+    if (!signerPk || !signerPk.startsWith('0x')) {
+      console.error('[api/prepare-metatx] Missing or invalid GAS_SIGNER_PRIVATE_KEY');
+      res.status(500).json({ error: 'Server configuration error: missing signer key' });
+      return;
+    }
+    const signerAccount = privateKeyToAccount(signerPk as `0x${string}`);
     
     const domain = {
       name: "DailyGasClaimMetaTx",
