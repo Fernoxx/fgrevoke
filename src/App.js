@@ -1105,12 +1105,13 @@ function App() {
     }
   }, [hasClaimedLocally]);
 
-  // Reset activity page number when switching chains or pages
+  // Reset activity page number and clear errors when switching chains or pages
   useEffect(() => {
     setActivityPageNumber(1);
+    setError(null); // Clear errors when switching tabs
   }, [selectedChain, currentPage]);
 
-  // Real revoke function - requires wallet popup and successful transaction
+  // Real revoke function - direct approve(spender, 0) like revoke.cash
   const requestRevokeApproval = async (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
     console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
@@ -1148,24 +1149,49 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // Use MultiRevokeHub paths (EIP-2612, Permit2 approve, or fallback approve+prove)
-      const { revokeAuto } = await import('./utils/revoke');
-      const owner = address;
-      const token = approval.contract;
-      const spender = approval.spender;
-      const isPermit2Allowance = approval.isPermit2 === true;
+      // Direct approve(spender, 0) - just like revoke.cash
+      const { encodeFunctionData } = await import('viem');
       
-      console.log('🛠 Using MultiRevokeHub at 0x160d...f879 with auto path');
-      await revokeAuto({ owner, token, spender, isPermit2Hint: isPermit2Allowance, wantProof: true });
-
+      const ERC20_APPROVE_ABI = [
+        {
+          name: 'approve',
+          type: 'function',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          outputs: [{ name: '', type: 'bool' }]
+        }
+      ] as const;
+      
+      // Encode approve(spender, 0)
+      const data = encodeFunctionData({
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [approval.spender, BigInt(0)]
+      });
+      
+      console.log('📝 Sending direct approve(spender, 0) transaction...');
+      
+      // Send transaction
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: approval.contract,
+          data: data,
+        }],
+      });
+      
+      console.log('✅ Revoke transaction sent:', txHash);
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      console.log('✅ Revoke complete via MultiRevokeHub:', approval.name);
+      console.log('✅ Revoke complete for:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
       if (error.code === 4001) {
-        if (currentPage === 'approvals') setError('Transaction cancelled by user');
+        setError('Transaction cancelled by user');
       } else {
         setError(`Failed to revoke approval: ${error.message}`);
       }
@@ -1250,7 +1276,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here:\nhttps://fgrevoke.vercel.app.";
+    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here:\nhttps://fgrevoke.vercel.app";
     const text = encodeURIComponent(raw);
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
@@ -1260,8 +1286,8 @@ function App() {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
     const shareText = (currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app.`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app.`);
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app`);
     const finalShareText = shareText.trim();
 
     try {
@@ -4139,7 +4165,7 @@ function App() {
                         </div>
                         <button
                           onClick={() => {
-                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:\nhttps://fgrevoke.vercel.app.`;
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:\nhttps://fgrevoke.vercel.app`;
                             const encoded = encodeURIComponent(text);
                             window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
                           }}
@@ -4298,21 +4324,7 @@ function App() {
       </div>
 
       {/* Footer - Reduced margin for miniapp compatibility */}
-      <footer className="mt-4 p-2 text-center border-t border-purple-700">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-purple-300">
-          <span>
-            Built by{' '}
-            <a 
-              href="https://farcaster.xyz/doteth" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-purple-200 hover:text-white font-medium transition-colors underline decoration-purple-400 hover:decoration-white"
-            >
-              @doteth
-            </a>
-          </span>
-        </div>
-      </footer>
+
     </div>
   );
 }

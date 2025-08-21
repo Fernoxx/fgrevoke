@@ -1,6 +1,6 @@
-import type { IncomingMessage, ServerResponse } from "http";
+import type { NextApiRequest, NextApiResponse } from "next";
 
-export default async function handler(req: IncomingMessage & { method?: string }, res: ServerResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log("[api/relay-metatx] Handler started");
   try {
     const viem = await import("viem");
@@ -23,26 +23,11 @@ export default async function handler(req: IncomingMessage & { method?: string }
     };
 
     if (req.method !== "POST") {
-      res.statusCode = 405;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: "method not allowed" }));
+      res.status(405).json({ error: "method not allowed" });
       return;
     }
 
-    const buffers: Buffer[] = [];
-    for await (const chunk of req) buffers.push(chunk as Buffer);
-    const bodyRaw = Buffer.concat(buffers).toString("utf8");
-    let parsed: any = {};
-    try {
-      parsed = JSON.parse(bodyRaw || "{}");
-    } catch (err: any) {
-      res.statusCode = 400;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: "invalid JSON body" }));
-      return;
-    }
-
-    const { chain, userAddress, functionSignature, signature } = parsed as {
+    const { chain, userAddress, functionSignature, signature } = req.body as {
       chain: ChainKey;
       userAddress: `0x${string}`;
       functionSignature: `0x${string}`;
@@ -94,13 +79,9 @@ export default async function handler(req: IncomingMessage & { method?: string }
 
     console.log(`[api/relay-metatx] Transaction sent:`, txHash);
 
-    res.statusCode = 200;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ ok: true, txHash }));
+    res.status(200).json({ ok: true, txHash });
   } catch (e: any) {
     console.error("[api/relay-metatx] error:", e);
-    res.statusCode = 500;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: e?.message || "server error" }));
+    res.status(500).json({ error: e?.message || "server error" });
   }
 }

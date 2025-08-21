@@ -1,6 +1,6 @@
-import type { IncomingMessage, ServerResponse } from "http";
+import type { NextApiRequest, NextApiResponse } from "next";
 
-export default async function handler(req: IncomingMessage & { method?: string }, res: ServerResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log("[api/prepare-metatx] Handler started");
   try {
     // Dynamic imports
@@ -19,35 +19,18 @@ export default async function handler(req: IncomingMessage & { method?: string }
     };
     
     if (req.method !== "POST") {
-      res.statusCode = 405;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: "method not allowed" }));
-      return;
-    }
-
-    const buffers: Buffer[] = [];
-    for await (const chunk of req) buffers.push(chunk as Buffer);
-    const bodyRaw = Buffer.concat(buffers).toString("utf8");
-    let parsed: any = {};
-    try {
-      parsed = JSON.parse(bodyRaw || "{}");
-    } catch (err: any) {
-      res.statusCode = 400;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: "invalid JSON body" }));
+      res.status(405).json({ error: "method not allowed" });
       return;
     }
     
-    const { chain, fid, address } = parsed as {
+    const { chain, fid, address } = req.body as {
       chain: ChainKey;
       fid: number;
       address: `0x${string}`;
     };
 
     if (!chain || !fid || !address) {
-      res.statusCode = 400;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: "missing required fields: chain, fid, address" }));
+      res.status(400).json({ error: "missing required fields: chain, fid, address" });
       return;
     }
 
@@ -131,9 +114,7 @@ export default async function handler(req: IncomingMessage & { method?: string }
 
     // Get nonce - for now return 0, frontend should fetch actual nonce
     
-    res.statusCode = 200;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({
+    res.status(200).json({
       voucher: {
         fid: voucher.fid.toString(),
         recipient: voucher.recipient,
@@ -153,11 +134,9 @@ export default async function handler(req: IncomingMessage & { method?: string }
           { name: "functionSignature", type: "bytes" },
         ],
       },
-    }));
+    });
   } catch (e: any) {
     console.error("[api/prepare-metatx] error:", e);
-    res.statusCode = 500;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: e?.message || "server error" }));
+    res.status(500).json({ error: e?.message || "server error" });
   }
 }
