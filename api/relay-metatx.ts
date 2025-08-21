@@ -26,10 +26,9 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   }
   
   try {
-    const viem = await import("viem");
-    const { createWalletClient, http, createPublicClient } = viem;
-    const viemAccounts = await import("viem/accounts");
-    const { privateKeyToAccount } = viemAccounts;
+    const { createWalletClient, http, createPublicClient, defineChain } = await import("viem");
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const { celo } = await import("viem/chains");
     
     type ChainKey = "celo" | "mon";
     
@@ -40,7 +39,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const RPCS: Record<ChainKey, string> = {
       celo: process.env.CELO_RPC || "https://forno.celo.org",
-      mon: process.env.MON_RPC || "",
+      mon: process.env.MON_RPC || "https://testnet.monad.network",
     };
     
     const { chain, userAddress, functionSignature, signature } = parsed as {
@@ -78,8 +77,8 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const relayerAccount = privateKeyToAccount(relayerPk as `0x${string}`);
     
     const chainConfig = chain === "celo" 
-      ? viem.celo
-      : viem.defineChain({
+      ? celo
+      : defineChain({
           id: 10143,
           name: "Monad Testnet", 
           nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
@@ -110,9 +109,10 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     // First check signer balance
     console.log(`[api/relay-metatx] Relayer address:`, relayerAccount.address);
     
+    let contractBalance = 0n;
     try {
       // Create a public client to check balance
-      const publicClient = viem.createPublicClient({
+      const publicClient = createPublicClient({
         chain: chainConfig,
         transport: http(RPCS[chain]),
       });
@@ -131,18 +131,20 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       }
       
       // Also check contract balance
-      const contractBalance = await publicClient.getBalance({
+      contractBalance = await publicClient.getBalance({
         address: CONTRACTS[chain],
       });
       console.log(`[api/relay-metatx] Contract balance on ${chain}:`, contractBalance.toString(), 'wei');
+      console.log(`[api/relay-metatx] Contract balance in ${chain.toUpperCase()}:`, (Number(contractBalance) / 1e18).toFixed(6));
       
       if (contractBalance === 0n) {
         console.error(`[api/relay-metatx] CONTRACT has 0 balance on ${chain}`);
-        console.error(`[api/relay-metatx] You need to fund the contract at ${CONTRACTS[chain]} with MON`);
+        console.error(`[api/relay-metatx] You need to fund the contract at ${CONTRACTS[chain]} with ${chain.toUpperCase()}`);
       }
       
       // Log amount being claimed (0.1 tokens)
-      const claimAmount = viem.parseEther("0.1");
+      const { parseEther } = await import("viem");
+      const claimAmount = parseEther("0.1");
       console.log(`[api/relay-metatx] Claim amount: ${claimAmount.toString()} wei (0.1 ${chain.toUpperCase()})`);
       console.log(`[api/relay-metatx] Contract has enough? ${contractBalance >= claimAmount}`);
       
@@ -152,9 +154,10 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       
       // Parse the function signature to get FID
       try {
-        const decodedData = viem.decodeFunctionData({
+        const { decodeFunctionData } = await import("viem");
+        const decodedData = decodeFunctionData({
           abi: [{
-            name: "claim",
+            name: chain === "celo" ? "claim" : "claimWithMetaTx",
             type: "function",
             inputs: [
               {
@@ -198,7 +201,16 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     console.log(`[api/relay-metatx] Sending transaction with args:`, {
       userAddress,
       functionSignature: functionSignature.slice(0, 10) + '...',
+      functionSignatureLength: functionSignature.length,
       r, s, v
+    });
+    
+    // Log the expected meta-tx domain
+    console.log(`[api/relay-metatx] Expected domain for ${chain}:`, {
+      name: "DailyGasClaimMetaTx",
+      version: "1",
+      chainId: chain === "celo" ? 42220 : 10143,
+      verifyingContract: CONTRACTS[chain]
     });
     
     // Add gas estimation to see if it would fail
@@ -215,14 +227,34 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.error(`[api/relay-metatx] Full error:`, JSON.stringify(estimateError, null, 2));
       
       // Check different error types
-      if (estimateError.message?.includes('insufficient balance')) {
-        console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
-        console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
-      } else if (estimateError.message?.includes('signature')) {
-        console.error(`[api/relay-metatx] Signature verification failed`);
-        console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
-      } else if (estimateError.message?.includes('Already claimed')) {
+      let errorMessage = "Transaction would fail";
+      
+      // Log the actual error message to understand what's happening
+      const errorStr = estimateError.message || estimateError.toString();
+      console.error(`[api/relay-metatx] Raw error message:`, errorStr);
+      
+      if (errorStr.includes('insufficient funds')) {
+        console.error(`[api/relay-metatx] Contract reverted with insufficient funds`);
+        console.error(`[api/relay-metatx] Contract balance: ${(Number(contractBalance) / 1e18).toFixed(6)} ${chain.toUpperCase()}`);
+        errorMessage = `Contract has insufficient ${chain.toUpperCase()} balance`;
+      } else if (errorStr.includes('invalid meta-tx signature')) {
+        console.error(`[api/relay-metatx] Meta-transaction signature verification failed`);
+        errorMessage = "Invalid meta-transaction signature";
+      } else if (errorStr.includes('bad voucher signature')) {
+        console.error(`[api/relay-metatx] Voucher signature verification failed`);
+        errorMessage = "Invalid voucher signature";
+      } else if (errorStr.includes('already claimed')) {
         console.error(`[api/relay-metatx] User already claimed today`);
+        errorMessage = "Already claimed today";
+      } else if (errorStr.includes('expired')) {
+        console.error(`[api/relay-metatx] Voucher has expired`);
+        errorMessage = "Voucher expired";
+      } else if (errorStr.includes('wrong day')) {
+        console.error(`[api/relay-metatx] Wrong day in voucher`);
+        errorMessage = "Wrong day";
+      } else if (errorStr.includes('recipient mismatch')) {
+        console.error(`[api/relay-metatx] Recipient mismatch`);
+        errorMessage = "Recipient mismatch";
       }
       
       // Extract revert reason if available
@@ -233,6 +265,23 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.error(`[api/relay-metatx] Function signature:`, functionSignature.slice(0, 10));
       console.error(`[api/relay-metatx] Contract address:`, CONTRACTS[chain]);
       console.error(`[api/relay-metatx] User address:`, userAddress);
+      console.error(`[api/relay-metatx] Chain:`, chain);
+      console.error(`[api/relay-metatx] Full error details:`, {
+        message: estimateError.message,
+        cause: estimateError.cause,
+        details: estimateError.details,
+        metaMessages: estimateError.metaMessages
+      });
+      
+      // Return error response and exit early
+      res.statusCode = 400;
+      res.end(JSON.stringify({ 
+        error: errorMessage,
+        details: revertReason,
+        contractBalance: contractBalance.toString(),
+        contractAddress: CONTRACTS[chain]
+      }));
+      return;
     }
     
     const txHash = await client.writeContract({

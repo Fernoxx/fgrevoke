@@ -1286,33 +1286,38 @@ function App() {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
     const shareText = (currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app`);
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:`);
     const finalShareText = shareText.trim();
 
     try {
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
-        await sdk.actions.composeCast({ text: finalShareText });
+        await sdk.actions.composeCast({ 
+          text: finalShareText,
+          embeds: ["https://fgrevoke.vercel.app"]
+        });
         console.log('✅ Shared to Farcaster');
         return;
       }
       
       // Fallback to clipboard
+      const fullShareText = finalShareText + '\nhttps://fgrevoke.vercel.app';
       try {
-        await navigator.clipboard.writeText(finalShareText);
+        await navigator.clipboard.writeText(fullShareText);
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(finalShareText);
+        const encoded = encodeURIComponent(fullShareText);
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     } catch (error) {
       console.error('Share failed:', error);
+      const fullShareText = finalShareText + '\nhttps://fgrevoke.vercel.app';
       try {
-        await navigator.clipboard.writeText(finalShareText);
+        await navigator.clipboard.writeText(fullShareText);
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(finalShareText);
+        const encoded = encodeURIComponent(fullShareText);
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     }
@@ -2635,7 +2640,7 @@ function App() {
         
         const { functionSignature, contract, chainId, domain, types } = prepareData;
         
-        // Step 2: Use nonce 0 for now
+        // Step 2: Use nonce 0 (first transaction for this user)
         const nonce = 0;
         console.log('Using nonce:', nonce);
         

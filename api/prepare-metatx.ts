@@ -28,12 +28,11 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   try {
     // Import everything we need
     console.log("[api/prepare-metatx] Starting imports");
-    const viem = await import("viem");
+    const { parseEther, encodeFunctionData, createWalletClient, http, defineChain } = await import("viem");
+    const { celo } = await import("viem/chains");
     console.log("[api/prepare-metatx] Viem imported");
-    const { parseEther, encodeFunctionData, createWalletClient, http } = viem;
-    const viemAccounts = await import("viem/accounts");
+    const { privateKeyToAccount } = await import("viem/accounts");
     console.log("[api/prepare-metatx] Viem accounts imported");
-    const { privateKeyToAccount } = viemAccounts;
     
     type ChainKey = "celo" | "mon";
     
@@ -83,7 +82,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const signerAccount = privateKeyToAccount(signerPk as `0x${string}`);
     
     const domain = {
-      name: "DailyGasClaim", // Try without MetaTx suffix
+      name: chain === "celo" ? "DailyGasClaim" : "DailyGasClaimMetaTx", // Different names per chain
       version: "1",
       chainId: chain === "celo" ? 42220 : 10143,
       verifyingContract: CONTRACTS[chain],
@@ -109,7 +108,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const client = createWalletClient({ 
       account: signerAccount,
-      chain: chain === "celo" ? viem.celo : viem.defineChain({
+      chain: chain === "celo" ? celo : defineChain({
         id: 10143,
         name: "Monad Testnet",
         nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
@@ -125,10 +124,10 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       message: voucher,
     });
 
-    // ABI for claim function
+    // ABI for claim function - use claimWithMetaTx for Monad
     const METATX_ABI = [
       {
-        name: "claim",
+        name: chain === "celo" ? "claim" : "claimWithMetaTx",
         type: "function",
         inputs: [
           {
@@ -150,7 +149,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     // Encode function call
     const functionSignature = encodeFunctionData({
       abi: METATX_ABI,
-      functionName: "claim",
+      functionName: chain === "celo" ? "claim" : "claimWithMetaTx",
       args: [voucher, voucherSignature],
     });
 
