@@ -2635,28 +2635,9 @@ function App() {
         
         const { functionSignature, contract, chainId, domain, types } = prepareData;
         
-        // Step 2: Get user's nonce from contract
-        const { MetaTxAbi } = await import('./abis/metatx.js');
-        const { createPublicClient, http } = await import('viem');
-        
-        // Create public client to read nonce
-        const publicClient = createPublicClient({
-          chain: chain === 'celo' ? { id: 42220, name: 'Celo' } : { id: 10143, name: 'Monad' },
-          transport: http(),
-        });
-        
-        let nonce = 0;
-        try {
-          nonce = await publicClient.readContract({
-            address: contract,
-            abi: MetaTxAbi,
-            functionName: 'getNonce',
-            args: [address],
-          });
-        } catch (e) {
-          console.log('Failed to fetch nonce, using 0:', e);
-          nonce = 0;
-        }
+        // Step 2: Use nonce 0 for now
+        const nonce = 0;
+        console.log('Using nonce:', nonce);
         
         // Step 3: User signs meta-transaction
         const message = {

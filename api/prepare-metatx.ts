@@ -27,9 +27,12 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   
   try {
     // Import everything we need
+    console.log("[api/prepare-metatx] Starting imports");
     const viem = await import("viem");
+    console.log("[api/prepare-metatx] Viem imported");
     const { parseEther, encodeFunctionData, createWalletClient, http } = viem;
     const viemAccounts = await import("viem/accounts");
+    console.log("[api/prepare-metatx] Viem accounts imported");
     const { privateKeyToAccount } = viemAccounts;
     
     type ChainKey = "celo" | "mon";
@@ -96,15 +99,23 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       ],
     } as const;
 
+    // Get RPC URLs
+    const RPCS = {
+      celo: process.env.CELO_RPC || "https://forno.celo.org",
+      mon: process.env.MON_RPC || "https://testnet.monad.network",
+    };
+    
+    console.log(`[api/prepare-metatx] Using RPC for ${chain}:`, RPCS[chain] ? "configured" : "missing");
+    
     const client = createWalletClient({ 
       account: signerAccount,
       chain: chain === "celo" ? viem.celo : viem.defineChain({
         id: 10143,
         name: "Monad Testnet",
         nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
-        rpcUrls: { default: { http: [process.env.MON_RPC || ""] } },
+        rpcUrls: { default: { http: [RPCS.mon] } },
       }),
-      transport: http()
+      transport: http(RPCS[chain])
     });
 
     const voucherSignature = await client.signTypedData({
