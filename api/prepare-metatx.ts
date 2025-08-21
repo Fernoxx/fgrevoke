@@ -124,10 +124,10 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       message: voucher,
     });
 
-    // ABI for claim function
+    // ABI for claim function - use claimWithMetaTx for Monad
     const METATX_ABI = [
       {
-        name: "claim",
+        name: chain === "celo" ? "claim" : "claimWithMetaTx",
         type: "function",
         inputs: [
           {
@@ -149,7 +149,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     // Encode function call
     const functionSignature = encodeFunctionData({
       abi: METATX_ABI,
-      functionName: "claim",
+      functionName: chain === "celo" ? "claim" : "claimWithMetaTx",
       args: [voucher, voucherSignature],
     });
 

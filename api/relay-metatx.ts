@@ -157,7 +157,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
         const { decodeFunctionData } = await import("viem");
         const decodedData = decodeFunctionData({
           abi: [{
-            name: "claim",
+            name: chain === "celo" ? "claim" : "claimWithMetaTx",
             type: "function",
             inputs: [
               {
