@@ -2584,49 +2584,98 @@ function App() {
     
     setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
-      // For Monad, use gasless transaction via backend
-      if (chain === 'mon') {
-        console.log(`🚀 Using gasless transaction for ${chain.toUpperCase()}...`);
+      // For Monad and Celo, use meta-transactions (user signs, we pay gas)
+      if (chain === 'mon' || chain === 'celo') {
+        console.log(`🎫 Using meta-transaction for ${chain.toUpperCase()}...`);
         
-        const res = await fetch('/api/claim', {
+        // Step 1: Prepare meta-transaction data
+        const prepareRes = await fetch('/api/prepare-metatx', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ chain, fid: currentUser.fid, address }),
         });
-        let j;
-        const text = await res.text();
-        try {
-          j = JSON.parse(text);
-        } catch (_) {
-          console.error('Failed to parse response:', text);
-          throw new Error(text || `Server error (${res.status})`);
+        
+        const prepareData = await prepareRes.json();
+        if (!prepareRes.ok) {
+          throw new Error(prepareData.error || 'Failed to prepare transaction');
         }
-        if (j.ok) {
-          console.log('✅ Transaction sent:', j.txHash);
-          const chainName = chain.toUpperCase();
-          
-          // Store claimed token info for share button
-          setClaimedTokenInfo({
-            chain: chainName,
-            amount: '0.1',
-            displayAmount: `0.1 ${chainName}`
-          });
-          
-          alert(`Success! Claimed ${chainName}\nTransaction: ${j.txHash}`);
-          setHasClaimedFaucet(true);
-        } else {
-          console.error('Faucet error:', j);
-          const errorMsg = j.details || j.error || 'Failed to claim';
-          if (errorMsg.includes('insufficient balance')) {
-            const tokenName = chain === 'mon' ? 'MON' : chain === 'celo' ? 'CELO' : 'native tokens';
-            throw new Error(`Gas signer has insufficient balance. Please fund the signer account with ${tokenName}.`);
-          }
-          throw new Error(errorMsg);
+        
+        const { functionSignature, contract, chainId, domain, types } = prepareData;
+        
+        // Step 2: Get user's nonce (for now use 0, should fetch from contract)
+        const nonce = 0;
+        
+        // Step 3: User signs meta-transaction
+        const message = {
+          nonce: BigInt(nonce),
+          from: address,
+          functionSignature,
+        };
+        
+        console.log('📝 Requesting user signature...');
+        const signature = await provider.request({
+          method: 'eth_signTypedData_v4',
+          params: [
+            address,
+            JSON.stringify({
+              domain: {
+                ...domain,
+                chainId: BigInt(domain.chainId).toString()
+              },
+              types: {
+                EIP712Domain: [
+                  { name: "name", type: "string" },
+                  { name: "version", type: "string" },
+                  { name: "chainId", type: "uint256" },
+                  { name: "verifyingContract", type: "address" }
+                ],
+                ...types
+              },
+              primaryType: 'MetaTransaction',
+              message: {
+                nonce: nonce.toString(),
+                from: address,
+                functionSignature,
+              }
+            })
+          ],
+        });
+        
+        console.log('✅ User signature obtained');
+        
+        // Step 4: Send to relayer
+        const relayRes = await fetch('/api/relay-metatx', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ 
+            chain, 
+            userAddress: address, 
+            functionSignature, 
+            signature 
+          }),
+        });
+        
+        const relayData = await relayRes.json();
+        if (!relayRes.ok) {
+          throw new Error(relayData.error || 'Failed to relay transaction');
         }
+        
+        console.log('✅ Transaction sent:', relayData.txHash);
+        const chainName = chain.toUpperCase();
+        
+        // Store claimed token info for share button
+        setClaimedTokenInfo({
+          chain: chainName,
+          amount: '0.1',
+          displayAmount: `0.1 ${chainName}`
+        });
+        
+        alert(`Success! Claimed ${chainName}\nTransaction: ${relayData.txHash}`);
+        setHasClaimedFaucet(true);
         return;
       }
       
-      // For Base and Celo, use user wallet
+      // For Base, use user wallet
       if (!provider) {
         alert('Please connect your wallet first');
         return;
