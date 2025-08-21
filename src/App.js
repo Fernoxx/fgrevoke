@@ -39,6 +39,7 @@ function App() {
   const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
   const [hasClaimedFaucet, setHasClaimedFaucet] = useState(false);
+  const [claimedTokenInfo, setClaimedTokenInfo] = useState(null);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -1104,12 +1105,13 @@ function App() {
     }
   }, [hasClaimedLocally]);
 
-  // Reset activity page number when switching chains or pages
+  // Reset activity page number and clear errors when switching chains or pages
   useEffect(() => {
     setActivityPageNumber(1);
+    setError(null); // Clear errors when switching tabs
   }, [selectedChain, currentPage]);
 
-  // Real revoke function - requires wallet popup and successful transaction
+  // Real revoke function - direct approve(spender, 0) like revoke.cash
   const requestRevokeApproval = async (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
     console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
@@ -1147,24 +1149,49 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // Use MultiRevokeHub paths (EIP-2612, Permit2 approve, or fallback approve+prove)
-      const { revokeAuto } = await import('./utils/revoke');
-      const owner = address;
-      const token = approval.contract;
-      const spender = approval.spender;
-      const isPermit2Allowance = approval.isPermit2 === true;
+      // Direct approve(spender, 0) - just like revoke.cash
+      const { encodeFunctionData } = await import('viem');
       
-      console.log('🛠 Using MultiRevokeHub at 0x160d...f879 with auto path');
-      await revokeAuto({ owner, token, spender, isPermit2Hint: isPermit2Allowance, wantProof: true });
-
+      const ERC20_APPROVE_ABI = [
+        {
+          name: 'approve',
+          type: 'function',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          outputs: [{ name: '', type: 'bool' }]
+        }
+      ];
+      
+      // Encode approve(spender, 0)
+      const data = encodeFunctionData({
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [approval.spender, BigInt(0)]
+      });
+      
+      console.log('📝 Sending direct approve(spender, 0) transaction...');
+      
+      // Send transaction
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: approval.contract,
+          data: data,
+        }],
+      });
+      
+      console.log('✅ Revoke transaction sent:', txHash);
       localStorage.setItem('hasRevoked', 'true');
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      console.log('✅ Revoke complete via MultiRevokeHub:', approval.name);
+      console.log('✅ Revoke complete for:', approval.name);
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
       if (error.code === 4001) {
-        if (currentPage === 'approvals') setError('Transaction cancelled by user');
+        setError('Transaction cancelled by user');
       } else {
         setError(`Failed to revoke approval: ${error.message}`);
       }
@@ -1249,7 +1276,7 @@ function App() {
   };
 
   const shareCast = () => {
-    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here: https://fgrevoke.vercel.app".trim();
+    const raw = "Claimed 0.5 USDC for just securing my wallet - try it here:\nhttps://fgrevoke.vercel.app";
     const text = encodeURIComponent(raw);
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
@@ -1259,8 +1286,8 @@ function App() {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
     const shareText = (currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey: https://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard! \n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too: https://fgrevoke.vercel.app`);
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app`);
     const finalShareText = shareText.trim();
 
     try {
@@ -2577,12 +2604,120 @@ function App() {
 
   async function claimFaucet(chain) {
     if (!currentUser?.fid || !address) {
-      alert('Need fid + wallet');
+      alert('Please connect your Farcaster wallet first');
       return;
     }
-    setFaucetBusy(chain);
+    
+    setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
-      const res = await fetch('/api/claim', {
+      // For Monad and Celo, use meta-transactions (user signs, we pay gas)
+      if (chain === 'mon' || chain === 'celo') {
+        console.log(`🎫 Using meta-transaction for ${chain.toUpperCase()}...`);
+        
+        // Step 1: Prepare meta-transaction data
+        const prepareRes = await fetch('/api/prepare-metatx', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ chain, fid: currentUser.fid, address }),
+        });
+        
+        let prepareData;
+        try {
+          prepareData = await prepareRes.json();
+        } catch (e) {
+          console.error('Failed to parse prepare-metatx response:', e);
+          throw new Error(`Server error: ${prepareRes.status} ${prepareRes.statusText}`);
+        }
+        
+        if (!prepareRes.ok) {
+          throw new Error(prepareData.error || 'Failed to prepare transaction');
+        }
+        
+        const { functionSignature, contract, chainId, domain, types } = prepareData;
+        
+        // Step 2: Use nonce 0 for now
+        const nonce = 0;
+        console.log('Using nonce:', nonce);
+        
+        // Step 3: User signs meta-transaction
+        const message = {
+          nonce: BigInt(nonce),
+          from: address,
+          functionSignature,
+        };
+        
+        console.log('📝 Requesting user signature...');
+        const signature = await provider.request({
+          method: 'eth_signTypedData_v4',
+          params: [
+            address,
+            JSON.stringify({
+              domain: {
+                ...domain,
+                chainId: BigInt(domain.chainId).toString()
+              },
+              types: {
+                EIP712Domain: [
+                  { name: "name", type: "string" },
+                  { name: "version", type: "string" },
+                  { name: "chainId", type: "uint256" },
+                  { name: "verifyingContract", type: "address" }
+                ],
+                ...types
+              },
+              primaryType: 'MetaTransaction',
+              message: {
+                nonce: nonce.toString(),
+                from: address,
+                functionSignature,
+              }
+            })
+          ],
+        });
+        
+        console.log('✅ User signature obtained');
+        
+        // Step 4: Send to relayer
+        const relayRes = await fetch('/api/relay-metatx', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ 
+            chain, 
+            userAddress: address, 
+            functionSignature, 
+            signature 
+          }),
+        });
+        
+        const relayData = await relayRes.json();
+        if (!relayRes.ok) {
+          throw new Error(relayData.error || 'Failed to relay transaction');
+        }
+        
+        console.log('✅ Transaction sent:', relayData.txHash);
+        const chainName = chain.toUpperCase();
+        
+        // Store claimed token info for share button
+        setClaimedTokenInfo({
+          chain: chainName,
+          amount: '0.1',
+          displayAmount: `0.1 ${chainName}`
+        });
+        
+        alert(`Success! Claimed ${chainName}\nTransaction: ${relayData.txHash}`);
+        setHasClaimedFaucet(true);
+        return;
+      }
+      
+      // For Base, use user wallet
+      if (!provider) {
+        alert('Please connect your wallet first');
+        return;
+      }
+      
+      // Step 1: Get voucher from backend
+      console.log('🎫 Getting voucher from backend...');
+      const res = await fetch('/api/voucher', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chain, fid: currentUser.fid, address }),
@@ -2592,20 +2727,110 @@ function App() {
       try {
         j = JSON.parse(text);
       } catch (_) {
-        // Handle HTML/plain-text error body from server
+        console.error('Failed to parse response:', text);
         throw new Error(text || `Server error (${res.status})`);
       }
-      if (j.ok) {
-        alert(`Success: ${j.txHash}`);
-        setHasClaimedFaucet(true);
-      } else {
-        throw new Error(j.error || 'failed');
+      if (!j.ok) {
+        console.error('Voucher error:', j);
+        throw new Error(j.error || 'Failed to get voucher');
       }
+      
+      const { voucher, signature, contract, chainId } = j;
+      console.log('✅ Got voucher:', { voucher, contract, chainId });
+      
+      // Step 2: Switch to correct chain if needed
+      const chainIdHex = `0x${chainId.toString(16)}`;
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' });
+        if (currentChainId !== chainIdHex) {
+          console.log(`🔄 Switching from chain ${currentChainId} to ${chainIdHex}...`);
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: chainIdHex }],
+          });
+        }
+      } catch (switchError) {
+        console.error('Chain switch error:', switchError);
+        throw switchError;
+      }
+      
+      // Step 3: Import FaucetAbi and encode the transaction
+      const { FaucetAbi } = await import('./abis/faucet.js');
+      const { encodeFunctionData } = await import('viem');
+      
+      // Convert voucher fields back to BigInt for encoding
+      const voucherForContract = {
+        fid: BigInt(voucher.fid),
+        recipient: voucher.recipient,
+        day: BigInt(voucher.day),
+        amountWei: BigInt(voucher.amountWei),
+        deadline: BigInt(voucher.deadline),
+      };
+      
+      // Encode the claimSelf function call
+      const data = encodeFunctionData({
+        abi: FaucetAbi,
+        functionName: 'claimSelf',
+        args: [voucherForContract, signature],
+      });
+      
+      // Step 4: Send transaction using user's wallet
+      console.log('📝 Sending transaction...');
+      
+      // Estimate gas first for better compatibility
+      let gasEstimate;
+      try {
+        gasEstimate = await provider.request({
+          method: 'eth_estimateGas',
+          params: [{
+            from: address,
+            to: contract,
+            data: data,
+          }],
+        });
+        console.log('Gas estimate:', gasEstimate);
+      } catch (estimateError) {
+        console.warn('Gas estimation failed, using default:', estimateError);
+        gasEstimate = '0x30000'; // Fallback to 196k gas
+      }
+      
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: contract,
+          data: data,
+          gas: gasEstimate,
+        }],
+      });
+      
+      console.log('✅ Transaction sent:', txHash);
+      const chainName = chain === 'base' ? 'ETH' : chain.toUpperCase();
+      const amount = chain === 'base' ? '~$0.10 worth of ETH' : '0.1';
+      
+      // Store claimed token info for share button
+      setClaimedTokenInfo({
+        chain: chainName,
+        amount: amount,
+        displayAmount: chain === 'base' ? '~$0.10 worth of ETH' : `0.1 ${chainName}`
+      });
+      
+      alert(`Success! Claiming ${chainName}\nTransaction: ${txHash}\n\nPlease wait for confirmation.`);
+      setHasClaimedFaucet(true);
+      
     } catch (e) {
-      if (e && e.code === 4001 && currentPage !== 'approvals') {
-        // ignore global error message outside revoke tab
+      console.error('Faucet error:', e);
+      if (e && e.code === 4001) {
+        // User rejected transaction
+        alert('Transaction cancelled');
+      } else if (e.message?.includes('insufficient balance') && (chain === 'mon' || chain === 'celo')) {
+        // Gas signer has insufficient balance
+        const tokenName = chain === 'mon' ? 'MON' : 'CELO';
+        alert(`Backend gas signer has insufficient ${tokenName} balance. Please contact support to fund the gas wallet.`);
+      } else if (e.code === -32000 || e.message?.includes('insufficient funds')) {
+        alert('Insufficient funds for gas. You need some native tokens to pay for gas.');
       } else {
-        alert(e?.message || 'failed');
+        alert(e?.message || 'Failed to claim. Please try again.');
       }
     } finally {
       setFaucetBusy(null);
@@ -2619,7 +2844,7 @@ function App() {
         <header className="w-full max-w-4xl flex flex-col space-y-4 py-4 px-6 bg-purple-800 rounded-xl shadow-lg mb-8">
           <div className="flex flex-col sm:flex-row items-center justify-between">
             <div className="flex items-center gap-3 mb-4 sm:mb-0">
-              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-8 h-8" />
+              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-12 h-12" />
               <h1 className="text-3xl font-bold text-purple-200">FarGuard</h1>
             </div>
             
@@ -3945,12 +4170,15 @@ function App() {
                         {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
                       </button>
                     </div>
-                    {hasClaimedFaucet && (
+                    {hasClaimedFaucet && claimedTokenInfo && (
                       <div className="mt-3 text-center">
+                        <div className="text-green-400 text-sm mb-2">
+                          ✅ {claimedTokenInfo.displayAmount} claimed!
+                        </div>
                         <button
                           onClick={() => {
-                            const text = `Claimed todays free faucets from Farguard - https://fgrevoke.vercel.app`;
-                            const encoded = encodeURIComponent(text.trim());
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:\nhttps://fgrevoke.vercel.app`;
+                            const encoded = encodeURIComponent(text);
                             window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
                           }}
                           className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -4108,21 +4336,7 @@ function App() {
       </div>
 
       {/* Footer - Reduced margin for miniapp compatibility */}
-      <footer className="mt-4 p-2 text-center border-t border-purple-700">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-sm text-purple-300">
-          <span>
-            Built by{' '}
-            <a 
-              href="https://farcaster.xyz/doteth" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-purple-200 hover:text-white font-medium transition-colors underline decoration-purple-400 hover:decoration-white"
-            >
-              @doteth
-            </a>
-          </span>
-        </div>
-      </footer>
+
     </div>
   );
 }

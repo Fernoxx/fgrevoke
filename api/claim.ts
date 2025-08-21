@@ -1,9 +1,4 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { encodeFunctionData, parseEther } from "viem";
-import { signerClient } from "../lib/clients";
-import { CONTRACTS, RPCS, type ChainKey } from "../lib/chains";
-import { signDailyVoucher } from "../lib/voucher";
-import { weiForUsd } from "../lib/price";
 
 // Replace with your real FID to wallet check
 async function assertWalletBelongsToFid(fid: number, address: `0x${string}`) {
@@ -32,7 +27,45 @@ const ABI = [
 ] as const;
 
 export default async function handler(req: IncomingMessage & { method?: string }, res: ServerResponse) {
+  console.log("[api/claim] Handler started");
   try {
+    // Dynamic imports to avoid Vercel bundling issues
+    const viem = await import("viem");
+    const { encodeFunctionData, parseEther } = viem;
+    const viemChains = await import("viem/chains");
+    const { base, celo } = viemChains;
+    const viemAccounts = await import("viem/accounts");
+    const { privateKeyToAccount } = viemAccounts;
+    
+    // Import our modules
+    const priceModule = await import("../lib/price");
+    const { weiForUsd } = priceModule;
+    
+    type ChainKey = "base" | "celo" | "mon";
+    
+    // Define chains inline to avoid module issues
+    const CHAINS = {
+      base,
+      celo,
+      mon: {
+        id: 20143,
+        name: "Monad Testnet",
+        nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+        rpcUrls: { default: { http: [process.env.MON_RPC || ""] } },
+      },
+    } as const;
+    
+    const CONTRACTS: Record<ChainKey, `0x${string}`> = {
+      base: (process.env.CONTRACT_BASE || "") as `0x${string}`,
+      celo: (process.env.CONTRACT_CELO || "") as `0x${string}`,
+      mon: (process.env.CONTRACT_MON || "") as `0x${string}`,
+    };
+    
+    const RPCS: Record<ChainKey, string> = {
+      base: process.env.BASE_RPC || "",
+      celo: process.env.CELO_RPC || "",
+      mon: process.env.MON_RPC || "",
+    };
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.setHeader("content-type", "application/json");
@@ -86,23 +119,73 @@ export default async function handler(req: IncomingMessage & { method?: string }
       return;
     }
 
-    console.log(`[api/claim] request`, { chain, fid, address, rpcSet: !!rpcUrl, contractSet: !!contractAddr, node: process.version });
+    console.log(`[api/claim] request`, { 
+      chain, 
+      fid, 
+      address, 
+      rpcSet: !!rpcUrl, 
+      contractSet: !!contractAddr,
+      contractAddr: contractAddr ? `${contractAddr.slice(0, 6)}...${contractAddr.slice(-4)}` : 'undefined',
+      node: process.version 
+    });
 
     await assertWalletBelongsToFid(fid, address);
 
     const amountWei =
       chain === "celo" ? parseEther("0.1") :
       chain === "mon"  ? parseEther("0.1") :
+      chain === "base" ? await weiForUsd(0.10) :
       await weiForUsd(0.10);
 
-    const { value, signature } = await signDailyVoucher({
-      chain,
+    // Get signer account
+    const signerHex = (process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK) as `0x${string}`;
+    const signerAccount = privateKeyToAccount(signerHex);
+    
+    // Create signer client
+    const rpc = RPCS[chain];
+    const client = viem.createWalletClient({ 
+      account: signerAccount, 
+      chain: CHAINS[chain], 
+      transport: viem.http(rpc) 
+    });
+    
+    // Sign voucher
+    const day = BigInt(Math.floor(Date.now() / 1000 / 86400));
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 15 * 60);
+    
+    const domain = {
+      name: "DailyGasClaim",
+      version: "1",
+      chainId: CHAINS[chain].id,
+      verifyingContract: CONTRACTS[chain],
+    } as const;
+    
+    const types = {
+      Claim: [
+        { name: "fid", type: "uint256" },
+        { name: "recipient", type: "address" },
+        { name: "day", type: "uint256" },
+        { name: "amountWei", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    } as const;
+    
+    const message = {
       fid: BigInt(fid),
       recipient: address,
+      day,
       amountWei,
+      deadline,
+    } as const;
+    
+    const signature = await client.signTypedData({
+      domain,
+      types,
+      primaryType: "Claim",
+      message,
     });
-
-    const client = signerClient(chain as ChainKey);
+    
+    const value = message;
     const data = encodeFunctionData({
       abi: ABI,
       functionName: "claimFor",
@@ -119,10 +202,18 @@ export default async function handler(req: IncomingMessage & { method?: string }
     } catch (err: any) {
       const msg = err?.shortMessage || err?.message || "transaction failed";
       const code = err?.code || err?.name;
-      console.error(`[api/claim] sendTransaction error`, { code, msg });
+      const details = err?.details || err?.reason || "";
+      console.error(`[api/claim] sendTransaction error`, { 
+        code, 
+        msg,
+        details,
+        chain,
+        contractAddr: CONTRACTS[chain as ChainKey],
+        fullError: err 
+      });
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: msg, code }));
+      res.end(JSON.stringify({ error: msg, code, details }));
       return;
     }
 

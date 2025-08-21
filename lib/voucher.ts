@@ -1,5 +1,6 @@
-import { CHAINS, CONTRACTS, type ChainKey } from "./chains";
-import { signerClient } from "./clients";
+import { CHAINS, CONTRACTS, signerClient } from "./viem";
+
+export type ChainKey = "base" | "celo" | "mon";
 
 export async function signDailyVoucher(params: {
   chain: ChainKey;
