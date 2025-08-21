@@ -6,7 +6,7 @@ export const CHAINS = {
   base,
   celo,
   mon: defineChain({
-    id: 10143, // Monad testnet
+    id: 41000, // Monad testnet
     name: "Monad Testnet",
     nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
     rpcUrls: { default: { http: [process.env.MON_RPC || ""] } },
