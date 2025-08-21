@@ -162,11 +162,22 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.log(`[api/relay-metatx] Gas estimate:`, gasEstimate.toString());
     } catch (estimateError: any) {
       console.error(`[api/relay-metatx] Gas estimation failed:`, estimateError);
-      // Check if it's a contract revert
+      console.error(`[api/relay-metatx] Full error:`, JSON.stringify(estimateError, null, 2));
+      
+      // Check different error types
       if (estimateError.message?.includes('insufficient balance')) {
         console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
         console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
+      } else if (estimateError.message?.includes('signature')) {
+        console.error(`[api/relay-metatx] Signature verification failed`);
+        console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
+      } else if (estimateError.message?.includes('Already claimed')) {
+        console.error(`[api/relay-metatx] User already claimed today`);
       }
+      
+      // Extract revert reason if available
+      const revertReason = estimateError.shortMessage || estimateError.reason || estimateError.message;
+      console.error(`[api/relay-metatx] Revert reason:`, revertReason);
     }
     
     const txHash = await client.writeContract({
