@@ -39,7 +39,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const RPCS: Record<ChainKey, string> = {
       celo: process.env.CELO_RPC || "https://forno.celo.org",
-      mon: process.env.MON_RPC || "",
+      mon: process.env.MON_RPC || "https://testnet.monad.network",
     };
     
     const { chain, userAddress, functionSignature, signature } = parsed as {
