@@ -2823,6 +2823,10 @@ function App() {
       if (e && e.code === 4001) {
         // User rejected transaction
         alert('Transaction cancelled');
+      } else if (e.message?.includes('insufficient balance') && (chain === 'mon' || chain === 'celo')) {
+        // Gas signer has insufficient balance
+        const tokenName = chain === 'mon' ? 'MON' : 'CELO';
+        alert(`Backend gas signer has insufficient ${tokenName} balance. Please contact support to fund the gas wallet.`);
       } else if (e.code === -32000 || e.message?.includes('insufficient funds')) {
         alert('Insufficient funds for gas. You need some native tokens to pay for gas.');
       } else {
