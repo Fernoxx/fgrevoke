@@ -141,6 +141,47 @@ export default async function handler(req: IncomingMessage & { method?: string; 
         console.error(`[api/relay-metatx] You need to fund the contract at ${CONTRACTS[chain]} with MON`);
       }
       
+      // Log amount being claimed (0.1 tokens)
+      const claimAmount = viem.parseEther("0.1");
+      console.log(`[api/relay-metatx] Claim amount: ${claimAmount.toString()} wei (0.1 ${chain.toUpperCase()})`);
+      console.log(`[api/relay-metatx] Contract has enough? ${contractBalance >= claimAmount}`);
+      
+      if (contractBalance < claimAmount) {
+        console.error(`[api/relay-metatx] CONTRACT INSUFFICIENT: Has ${contractBalance.toString()} but needs ${claimAmount.toString()}`);
+      }
+      
+      // Parse the function signature to get FID
+      try {
+        const decodedData = viem.decodeFunctionData({
+          abi: [{
+            name: "claim",
+            type: "function",
+            inputs: [
+              {
+                name: "c",
+                type: "tuple",
+                components: [
+                  { name: "fid", type: "uint256" },
+                  { name: "recipient", type: "address" },
+                  { name: "day", type: "uint256" },
+                  { name: "amountWei", type: "uint256" },
+                  { name: "deadline", type: "uint256" },
+                ],
+              },
+              { name: "signature", type: "bytes" },
+            ],
+          }],
+          data: functionSignature as `0x${string}`,
+        });
+        console.log(`[api/relay-metatx] Decoded claim data:`, {
+          fid: decodedData.args[0].fid.toString(),
+          day: decodedData.args[0].day.toString(),
+          amountWei: decodedData.args[0].amountWei.toString(),
+        });
+      } catch (decodeErr) {
+        console.error(`[api/relay-metatx] Failed to decode function data:`, decodeErr);
+      }
+      
       // Check if contract has code
       const contractCode = await publicClient.getBytecode({
         address: CONTRACTS[chain],
@@ -187,6 +228,11 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       // Extract revert reason if available
       const revertReason = estimateError.shortMessage || estimateError.reason || estimateError.message;
       console.error(`[api/relay-metatx] Revert reason:`, revertReason);
+      
+      // Log the function being called
+      console.error(`[api/relay-metatx] Function signature:`, functionSignature.slice(0, 10));
+      console.error(`[api/relay-metatx] Contract address:`, CONTRACTS[chain]);
+      console.error(`[api/relay-metatx] User address:`, userAddress);
     }
     
     const txHash = await client.writeContract({
