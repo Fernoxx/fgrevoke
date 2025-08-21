@@ -1,14 +1,35 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: IncomingMessage & { method?: string; body?: any }, res: ServerResponse) {
   console.log("[api/relay-metatx] Handler started");
+  
+  res.setHeader("content-type", "application/json");
+  
+  if (req.method !== "POST") {
+    res.statusCode = 405;
+    res.end(JSON.stringify({ error: "method not allowed" }));
+    return;
+  }
+  
+  // Parse body manually
+  const buffers: Buffer[] = [];
+  for await (const chunk of req) buffers.push(chunk as Buffer);
+  const bodyRaw = Buffer.concat(buffers).toString("utf8");
+  let parsed: any = {};
+  try {
+    parsed = JSON.parse(bodyRaw || "{}");
+  } catch (err: any) {
+    console.error("[api/relay-metatx] Failed to parse body:", err);
+    res.statusCode = 400;
+    res.end(JSON.stringify({ error: "invalid JSON body" }));
+    return;
+  }
+  
   try {
     const viem = await import("viem");
-    const { createWalletClient, http } = viem;
+    const { createWalletClient, http, createPublicClient } = viem;
     const viemAccounts = await import("viem/accounts");
     const { privateKeyToAccount } = viemAccounts;
-    const viemChains = await import("viem/chains");
-    const { celo } = viemChains;
     
     type ChainKey = "celo" | "mon";
     
@@ -22,18 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       mon: process.env.MON_RPC || "",
     };
     
-    if (!RPCS[chain]) {
-      console.error(`[api/relay-metatx] Missing RPC for chain ${chain}`);
-      res.status(500).json({ error: `Server configuration error: missing RPC for ${chain}` });
-      return;
-    }
-
-    if (req.method !== "POST") {
-      res.status(405).json({ error: "method not allowed" });
-      return;
-    }
-
-    const { chain, userAddress, functionSignature, signature } = req.body as {
+    const { chain, userAddress, functionSignature, signature } = parsed as {
       chain: ChainKey;
       userAddress: `0x${string}`;
       functionSignature: `0x${string}`;
@@ -41,6 +51,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
     
     console.log('[api/relay-metatx] Request:', { chain, userAddress, hasSignature: !!signature });
+    
+    if (!RPCS[chain]) {
+      console.error(`[api/relay-metatx] Missing RPC for chain ${chain}`);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: `Server configuration error: missing RPC for ${chain}` }));
+      return;
+    }
 
     // Parse signature
     const sig = signature.slice(2);
@@ -52,18 +69,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const relayerPk = process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK;
     if (!relayerPk || !relayerPk.startsWith('0x')) {
       console.error('[api/relay-metatx] Missing or invalid GAS_SIGNER_PRIVATE_KEY');
-      res.status(500).json({ error: 'Server configuration error: missing signer key' });
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Server configuration error: missing signer key' }));
       return;
     }
+    
     const relayerAccount = privateKeyToAccount(relayerPk as `0x${string}`);
     
     const chainConfig = chain === "celo" 
-      ? celo 
-      : { id: 10143, name: "Monad Testnet", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 } };
+      ? viem.celo
+      : viem.defineChain({
+          id: 10143,
+          name: "Monad Testnet", 
+          nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+          rpcUrls: { default: { http: [RPCS[chain]] } }
+        });
     
     const client = createWalletClient({
       account: relayerAccount,
-      chain: chainConfig as any,
+      chain: chainConfig,
       transport: http(RPCS[chain]),
     });
 
@@ -92,9 +116,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`[api/relay-metatx] Transaction sent:`, txHash);
 
-    res.status(200).json({ ok: true, txHash });
+    res.statusCode = 200;
+    res.end(JSON.stringify({ ok: true, txHash }));
   } catch (e: any) {
     console.error("[api/relay-metatx] error:", e);
-    res.status(500).json({ error: e?.message || "server error" });
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: e?.message || "server error" }));
   }
 }

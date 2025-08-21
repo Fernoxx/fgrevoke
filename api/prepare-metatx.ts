@@ -1,15 +1,36 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: IncomingMessage & { method?: string; body?: any }, res: ServerResponse) {
   console.log("[api/prepare-metatx] Handler started");
+  
+  res.setHeader("content-type", "application/json");
+  
+  if (req.method !== "POST") {
+    res.statusCode = 405;
+    res.end(JSON.stringify({ error: "method not allowed" }));
+    return;
+  }
+  
+  // Parse body manually like in api/claim.ts
+  const buffers: Buffer[] = [];
+  for await (const chunk of req) buffers.push(chunk as Buffer);
+  const bodyRaw = Buffer.concat(buffers).toString("utf8");
+  let parsed: any = {};
   try {
-    // Dynamic imports
+    parsed = JSON.parse(bodyRaw || "{}");
+  } catch (err: any) {
+    console.error("[api/prepare-metatx] Failed to parse body:", err);
+    res.statusCode = 400;
+    res.end(JSON.stringify({ error: "invalid JSON body" }));
+    return;
+  }
+  
+  try {
+    // Import everything we need
     const viem = await import("viem");
-    const { parseEther, encodeFunctionData } = viem;
+    const { parseEther, encodeFunctionData, createWalletClient, http } = viem;
     const viemAccounts = await import("viem/accounts");
     const { privateKeyToAccount } = viemAccounts;
-    const priceModule = await import("../lib/price");
-    const { weiForUsd } = priceModule;
     
     type ChainKey = "celo" | "mon";
     
@@ -18,26 +39,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       mon: "0x60b430e8083a0c395a7789633fc742d2b3209854" as `0x${string}`,
     };
     
-    if (req.method !== "POST") {
-      res.status(405).json({ error: "method not allowed" });
-      return;
-    }
-    
-    const { chain, fid, address } = req.body as {
+    const { chain, fid, address } = parsed as {
       chain: ChainKey;
       fid: number;
       address: `0x${string}`;
     };
 
     if (!chain || !fid || !address) {
-      res.status(400).json({ error: "missing required fields: chain, fid, address" });
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "missing required fields: chain, fid, address" }));
       return;
     }
     
     console.log('[api/prepare-metatx] Request:', { chain, fid, address });
 
-    // Get amount
-    const amountWei = chain === "celo" ? parseEther("0.1") : parseEther("0.1");
+    // Get amount - 0.1 tokens for both chains
+    const amountWei = parseEther("0.1");
 
     // Create voucher
     const day = BigInt(Math.floor(Date.now() / 1000 / 86400));
@@ -55,9 +72,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const signerPk = process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK;
     if (!signerPk || !signerPk.startsWith('0x')) {
       console.error('[api/prepare-metatx] Missing or invalid GAS_SIGNER_PRIVATE_KEY');
-      res.status(500).json({ error: 'Server configuration error: missing signer key' });
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Server configuration error: missing signer key' }));
       return;
     }
+    
     const signerAccount = privateKeyToAccount(signerPk as `0x${string}`);
     
     const domain = {
@@ -77,10 +96,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ],
     } as const;
 
-    const client = viem.createWalletClient({ 
+    const client = createWalletClient({ 
       account: signerAccount,
-      chain: chain === "celo" ? { id: 42220, name: "Celo" } : { id: 10143, name: "Monad" },
-      transport: viem.http()
+      chain: chain === "celo" ? viem.celo : viem.defineChain({
+        id: 10143,
+        name: "Monad Testnet",
+        nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+        rpcUrls: { default: { http: [process.env.MON_RPC || ""] } },
+      }),
+      transport: http()
     });
 
     const voucherSignature = await client.signTypedData({
@@ -119,9 +143,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       args: [voucher, voucherSignature],
     });
 
-    // Get nonce - for now return 0, frontend should fetch actual nonce
-    
-    res.status(200).json({
+    // Return data for frontend
+    res.statusCode = 200;
+    res.end(JSON.stringify({
       voucher: {
         fid: voucher.fid.toString(),
         recipient: voucher.recipient,
@@ -141,9 +165,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           { name: "functionSignature", type: "bytes" },
         ],
       },
-    });
+    }));
   } catch (e: any) {
     console.error("[api/prepare-metatx] error:", e);
-    res.status(500).json({ error: e?.message || "server error" });
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: e?.message || "server error" }));
   }
 }
