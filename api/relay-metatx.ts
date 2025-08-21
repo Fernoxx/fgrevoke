@@ -134,10 +134,11 @@ export default async function handler(req: IncomingMessage & { method?: string; 
         address: CONTRACTS[chain],
       });
       console.log(`[api/relay-metatx] Contract balance on ${chain}:`, contractBalance.toString(), 'wei');
+      console.log(`[api/relay-metatx] Contract balance in ${chain.toUpperCase()}:`, (Number(contractBalance) / 1e18).toFixed(6));
       
       if (contractBalance === 0n) {
         console.error(`[api/relay-metatx] CONTRACT has 0 balance on ${chain}`);
-        console.error(`[api/relay-metatx] You need to fund the contract at ${CONTRACTS[chain]} with MON`);
+        console.error(`[api/relay-metatx] You need to fund the contract at ${CONTRACTS[chain]} with ${chain.toUpperCase()}`);
       }
       
       // Log amount being claimed (0.1 tokens)
@@ -238,6 +239,13 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.error(`[api/relay-metatx] Function signature:`, functionSignature.slice(0, 10));
       console.error(`[api/relay-metatx] Contract address:`, CONTRACTS[chain]);
       console.error(`[api/relay-metatx] User address:`, userAddress);
+      console.error(`[api/relay-metatx] Chain:`, chain);
+      console.error(`[api/relay-metatx] Full error details:`, {
+        message: estimateError.message,
+        cause: estimateError.cause,
+        details: estimateError.details,
+        metaMessages: estimateError.metaMessages
+      });
       
       // Return error response and exit early
       res.statusCode = 400;
