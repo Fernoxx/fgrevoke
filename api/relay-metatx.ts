@@ -27,7 +27,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   
   try {
     const viem = await import("viem");
-    const { createWalletClient, http, createPublicClient } = viem;
+    const { createWalletClient, http, createPublicClient, encodeFunctionData } = viem;
     const viemAccounts = await import("viem/accounts");
     const { privateKeyToAccount } = viemAccounts;
     
@@ -226,11 +226,14 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     // Add gas estimation to see if it would fail
     try {
-      const gasEstimate = await client.estimateContractGas({
-        address: CONTRACTS[chain],
-        abi: METATX_ABI,
-        functionName: "executeMetaTransaction",
-        args: [userAddress, functionSignature, r, s, v],
+      const gasEstimate = await publicClient.estimateGas({
+        account: relayerAccount.address,
+        to: CONTRACTS[chain],
+        data: encodeFunctionData({
+          abi: METATX_ABI,
+          functionName: "executeMetaTransaction",
+          args: [userAddress, functionSignature, r, s, v],
+        }),
       });
       console.log(`[api/relay-metatx] Gas estimate:`, gasEstimate.toString());
     } catch (estimateError: any) {

@@ -2640,7 +2640,7 @@ function App() {
         try {
           // Import ethers to read nonce from contract
           const { ethers } = await import('ethers');
-          const ethersProvider = new ethers.BrowserProvider(provider);
+          const ethersProvider = new ethers.providers.Web3Provider(provider);
           const metaTxContract = new ethers.Contract(
             contract,
             [
