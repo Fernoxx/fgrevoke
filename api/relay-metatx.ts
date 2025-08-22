@@ -133,12 +133,13 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     };
     console.log(`[api/relay-metatx] Expected domain for signature verification:`, expectedDomain);
     
+    // Create a public client to check balance
+    const publicClient = createPublicClient({
+      chain: chainConfig,
+      transport: http(RPCS[chain]),
+    });
+    
     try {
-      // Create a public client to check balance
-      const publicClient = viem.createPublicClient({
-        chain: chainConfig,
-        transport: http(RPCS[chain]),
-      });
       
       const balance = await publicClient.getBalance({
         address: relayerAccount.address,
