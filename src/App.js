@@ -2719,7 +2719,17 @@ function App() {
           }),
         });
         
-        const relayData = await relayRes.json();
+        let relayData;
+        const responseText = await relayRes.text();
+        
+        try {
+          relayData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Failed to parse relay response:', parseError);
+          console.error('Response text:', responseText);
+          throw new Error(`Server error (${relayRes.status}): Invalid JSON response`);
+        }
+        
         if (!relayRes.ok) {
           throw new Error(relayData.error || 'Failed to relay transaction');
         }

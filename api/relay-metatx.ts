@@ -38,8 +38,6 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       mon: "0x60b430e8083a0c395a7789633fc742d2b3209854" as `0x${string}`,
     };
     
-    console.log(`[api/relay-metatx] Using contract address for ${chain}:`, CONTRACTS[chain]);
-    
     const RPCS: Record<ChainKey, string> = {
       celo: process.env.CELO_RPC || "https://forno.celo.org",
       mon: process.env.MON_RPC || "https://testnet.monad.network",
@@ -52,7 +50,21 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       signature: `0x${string}`;
     };
     
+    // Validate required fields
+    if (!chain || !userAddress || !functionSignature || !signature) {
+      console.error('[api/relay-metatx] Missing required fields:', { 
+        hasChain: !!chain, 
+        hasUserAddress: !!userAddress, 
+        hasFunctionSignature: !!functionSignature,
+        hasSignature: !!signature 
+      });
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'Missing required fields: chain, userAddress, functionSignature, or signature' }));
+      return;
+    }
+    
     console.log('[api/relay-metatx] Request:', { chain, userAddress, hasSignature: !!signature });
+    console.log(`[api/relay-metatx] Using contract address for ${chain}:`, CONTRACTS[chain]);
     console.log(`[api/relay-metatx] RPC for ${chain}:`, RPCS[chain] ? 'configured' : 'missing');
     
     if (!RPCS[chain]) {
@@ -270,6 +282,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     res.end(JSON.stringify({ ok: true, txHash }));
   } catch (e: any) {
     console.error("[api/relay-metatx] error:", e);
+    console.error("[api/relay-metatx] error stack:", e?.stack);
     res.statusCode = 500;
     res.end(JSON.stringify({ error: e?.message || "server error" }));
   }
