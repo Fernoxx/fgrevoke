@@ -27,7 +27,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   
   try {
     const viem = await import("viem");
-    const { createWalletClient, http, createPublicClient, encodeFunctionData } = viem;
+    const { createWalletClient, http, createPublicClient, encodeFunctionData, decodeFunctionData } = viem;
     const viemAccounts = await import("viem/accounts");
     const { privateKeyToAccount } = viemAccounts;
     
@@ -79,6 +79,12 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const r = `0x${sig.slice(0, 64)}` as `0x${string}`;
     const s = `0x${sig.slice(64, 128)}` as `0x${string}`;
     const v = parseInt(sig.slice(128, 130), 16);
+    
+    console.log(`[api/relay-metatx] Signature components:`, {
+      r: r.slice(0, 10) + '...',
+      s: s.slice(0, 10) + '...',
+      v
+    });
 
     // Create relayer client
     const relayerPk = process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK;
@@ -245,15 +251,41 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       const revertReason = estimateError.shortMessage || estimateError.reason || estimateError.message;
       console.error(`[api/relay-metatx] Revert reason:`, revertReason);
       
+      // Try to decode the function data to understand what's being called
+      try {
+        const decodedClaimData = decodeFunctionData({
+          abi: [{
+            name: "claim",
+            type: "function",
+            inputs: [{
+              name: "c",
+              type: "tuple",
+              components: [
+                { name: "fid", type: "uint256" },
+                { name: "recipient", type: "address" },
+                { name: "day", type: "uint256" },
+                { name: "amountWei", type: "uint256" },
+                { name: "deadline", type: "uint256" },
+              ],
+            }],
+          }],
+          data: functionSignature as `0x${string}`,
+        });
+        console.log(`[api/relay-metatx] Claim data being submitted:`, decodedClaimData);
+      } catch (decodeErr) {
+        console.log(`[api/relay-metatx] Could not decode claim data`);
+      }
+      
       // Check different error types
       let errorMessage = 'Transaction would fail';
       if (estimateError.message?.includes('insufficient balance')) {
         console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
         console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
         errorMessage = `Contract has insufficient ${chain.toUpperCase()} balance to distribute`;
-      } else if (estimateError.message?.includes('signature')) {
+      } else if (estimateError.message?.includes('signature') || estimateError.message?.includes('Sig')) {
         console.error(`[api/relay-metatx] Signature verification failed`);
         console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
+        console.error(`[api/relay-metatx] Expected domain:`, expectedDomain);
         errorMessage = 'Signature verification failed - possible nonce or domain mismatch';
       } else if (estimateError.message?.includes('Already claimed')) {
         console.error(`[api/relay-metatx] User already claimed today`);

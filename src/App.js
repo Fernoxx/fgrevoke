@@ -2641,28 +2641,23 @@ function App() {
         
         const { functionSignature, contract, chainId, domain, types } = prepareData;
         
-        // Step 2: Get the nonce from the contract
+        // Step 2: Get the nonce from the backend
         let nonce = 0;
         try {
-          // Import ethers to read nonce from contract
-          const { ethers } = await import('ethers');
-          const ethersProvider = new ethers.providers.Web3Provider(provider);
-          const metaTxContract = new ethers.Contract(
-            contract,
-            [
-              {
-                name: "getNonce",
-                type: "function",
-                stateMutability: "view",
-                inputs: [{ name: "user", type: "address" }],
-                outputs: [{ name: "nonce_", type: "uint256" }],
-              },
-            ],
-            ethersProvider
-          );
+          console.log('🔢 Fetching nonce from backend...');
+          const nonceRes = await fetch('/api/get-nonce', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ chain, userAddress: address }),
+          });
           
-          nonce = await metaTxContract.getNonce(address);
-          console.log('Fetched nonce from contract:', nonce.toString());
+          const nonceData = await nonceRes.json();
+          if (nonceData.ok) {
+            nonce = BigInt(nonceData.nonce);
+            console.log('Fetched nonce from backend:', nonce.toString());
+          } else {
+            console.error('Failed to fetch nonce from backend:', nonceData.error);
+          }
         } catch (nonceError) {
           console.error('Failed to fetch nonce, using 0:', nonceError);
           // If fetching nonce fails, continue with 0
