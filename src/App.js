@@ -1313,11 +1313,12 @@ function App() {
       }
     } catch (error) {
       console.error('Share failed:', error);
+      const fallbackText = `${shareTextContent}\n${url}`;
       try {
-        await navigator.clipboard.writeText(finalShareText);
+        await navigator.clipboard.writeText(fallbackText);
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(finalShareText);
+        const encoded = encodeURIComponent(fallbackText);
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     }
