@@ -1285,20 +1285,25 @@ function App() {
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
-    const shareText = (currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:\nhttps://fgrevoke.vercel.app`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:\nhttps://fgrevoke.vercel.app`);
-    const finalShareText = shareText.trim();
+    const shareTextContent = currentPage === 'activity'
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:`
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:`;
+    
+    const url = "https://fgrevoke.vercel.app";
 
     try {
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
-        await sdk.actions.composeCast({ text: finalShareText });
+        await sdk.actions.composeCast({ 
+          text: shareTextContent.trim(),
+          embeds: [url]
+        });
         console.log('✅ Shared to Farcaster');
         return;
       }
       
       // Fallback to clipboard
+      const finalShareText = `${shareTextContent}\n${url}`;
       try {
         await navigator.clipboard.writeText(finalShareText);
         alert('✅ Share text copied to clipboard!');
@@ -1308,11 +1313,12 @@ function App() {
       }
     } catch (error) {
       console.error('Share failed:', error);
+      const fallbackText = `${shareTextContent}\n${url}`;
       try {
-        await navigator.clipboard.writeText(finalShareText);
+        await navigator.clipboard.writeText(fallbackText);
         alert('✅ Share text copied to clipboard!');
       } catch (clipboardError) {
-        const encoded = encodeURIComponent(finalShareText);
+        const encoded = encodeURIComponent(fallbackText);
         window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
     }
@@ -2635,9 +2641,27 @@ function App() {
         
         const { functionSignature, contract, chainId, domain, types } = prepareData;
         
-        // Step 2: Use nonce 0 for now
-        const nonce = 0;
-        console.log('Using nonce:', nonce);
+        // Step 2: Get the nonce from the backend
+        let nonce = 0;
+        try {
+          console.log('🔢 Fetching nonce from backend...');
+          const nonceRes = await fetch('/api/get-nonce', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ chain, userAddress: address }),
+          });
+          
+          const nonceData = await nonceRes.json();
+          if (nonceData.ok) {
+            nonce = BigInt(nonceData.nonce);
+            console.log('Fetched nonce from backend:', nonce.toString());
+          } else {
+            console.error('Failed to fetch nonce from backend:', nonceData.error);
+          }
+        } catch (nonceError) {
+          console.error('Failed to fetch nonce, using 0:', nonceError);
+          // If fetching nonce fails, continue with 0
+        }
         
         // Step 3: User signs meta-transaction
         const message = {
@@ -2653,8 +2677,10 @@ function App() {
             address,
             JSON.stringify({
               domain: {
-                ...domain,
-                chainId: BigInt(domain.chainId).toString()
+                name: "DailyGasClaim", // Use the base domain name for meta-transaction
+                version: "1",
+                chainId: Number(domain.chainId), // Use number instead of string
+                verifyingContract: domain.verifyingContract
               },
               types: {
                 EIP712Domain: [
@@ -2667,7 +2693,7 @@ function App() {
               },
               primaryType: 'MetaTransaction',
               message: {
-                nonce: nonce.toString(),
+                nonce: BigInt(nonce).toString(),
                 from: address,
                 functionSignature,
               }
@@ -2675,7 +2701,12 @@ function App() {
           ],
         });
         
-        console.log('✅ User signature obtained');
+        console.log('✅ User signature obtained:', signature);
+        console.log('📋 Signed message:', {
+          nonce: BigInt(nonce).toString(),
+          from: address,
+          functionSignature: functionSignature.slice(0, 10) + '...'
+        });
         
         // Step 4: Send to relayer
         const relayRes = await fetch('/api/relay-metatx', {
@@ -2689,7 +2720,17 @@ function App() {
           }),
         });
         
-        const relayData = await relayRes.json();
+        let relayData;
+        const responseText = await relayRes.text();
+        
+        try {
+          relayData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Failed to parse relay response:', parseError);
+          console.error('Response text:', responseText);
+          throw new Error(`Server error (${relayRes.status}): Invalid JSON response`);
+        }
+        
         if (!relayRes.ok) {
           throw new Error(relayData.error || 'Failed to relay transaction');
         }
@@ -4176,10 +4217,31 @@ function App() {
                           ✅ {claimedTokenInfo.displayAmount} claimed!
                         </div>
                         <button
-                          onClick={() => {
-                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:\nhttps://fgrevoke.vercel.app`;
-                            const encoded = encodeURIComponent(text);
-                            window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+                          onClick={async () => {
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:`;
+                            const url = "https://fgrevoke.vercel.app";
+                            
+                            try {
+                              if (sdk?.actions?.composeCast) {
+                                console.log('📝 Composing cast via SDK...');
+                                await sdk.actions.composeCast({ 
+                                  text: text.trim(),
+                                  embeds: [url]
+                                });
+                                console.log('✅ Shared to Farcaster');
+                              } else {
+                                // Fallback to window.open
+                                const fullText = `${text}\n${url}`;
+                                const encoded = encodeURIComponent(fullText);
+                                window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+                              }
+                            } catch (error) {
+                              console.error('Share error:', error);
+                              // Fallback to clipboard
+                              const fullText = `${text}\n${url}`;
+                              await navigator.clipboard.writeText(fullText);
+                              alert('✅ Share text copied to clipboard!');
+                            }
                           }}
                           className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                         >

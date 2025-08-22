@@ -27,7 +27,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   
   try {
     const viem = await import("viem");
-    const { createWalletClient, http, createPublicClient } = viem;
+    const { createWalletClient, http, createPublicClient, encodeFunctionData, decodeFunctionData } = viem;
     const viemAccounts = await import("viem/accounts");
     const { privateKeyToAccount } = viemAccounts;
     
@@ -40,7 +40,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const RPCS: Record<ChainKey, string> = {
       celo: process.env.CELO_RPC || "https://forno.celo.org",
-      mon: process.env.MON_RPC || "",
+      mon: process.env.MON_RPC || "https://testnet.monad.network",
     };
     
     const { chain, userAddress, functionSignature, signature } = parsed as {
@@ -50,7 +50,21 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       signature: `0x${string}`;
     };
     
+    // Validate required fields
+    if (!chain || !userAddress || !functionSignature || !signature) {
+      console.error('[api/relay-metatx] Missing required fields:', { 
+        hasChain: !!chain, 
+        hasUserAddress: !!userAddress, 
+        hasFunctionSignature: !!functionSignature,
+        hasSignature: !!signature 
+      });
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'Missing required fields: chain, userAddress, functionSignature, or signature' }));
+      return;
+    }
+    
     console.log('[api/relay-metatx] Request:', { chain, userAddress, hasSignature: !!signature });
+    console.log(`[api/relay-metatx] Using contract address for ${chain}:`, CONTRACTS[chain]);
     console.log(`[api/relay-metatx] RPC for ${chain}:`, RPCS[chain] ? 'configured' : 'missing');
     
     if (!RPCS[chain]) {
@@ -65,6 +79,12 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const r = `0x${sig.slice(0, 64)}` as `0x${string}`;
     const s = `0x${sig.slice(64, 128)}` as `0x${string}`;
     const v = parseInt(sig.slice(128, 130), 16);
+    
+    console.log(`[api/relay-metatx] Signature components:`, {
+      r: r.slice(0, 10) + '...',
+      s: s.slice(0, 10) + '...',
+      v
+    });
 
     // Create relayer client
     const relayerPk = process.env.GAS_SIGNER_PRIVATE_KEY || process.env.SIGNER_PK;
@@ -110,12 +130,22 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     // First check signer balance
     console.log(`[api/relay-metatx] Relayer address:`, relayerAccount.address);
     
+    // Log the expected domain for debugging
+    const expectedDomain = {
+      name: "DailyGasClaim", // Should match what the contract expects
+      version: "1",
+      chainId: chain === "celo" ? 42220 : 10143,
+      verifyingContract: CONTRACTS[chain],
+    };
+    console.log(`[api/relay-metatx] Expected domain for signature verification:`, expectedDomain);
+    
+    // Create a public client to check balance
+    const publicClient = createPublicClient({
+      chain: chainConfig,
+      transport: http(RPCS[chain]),
+    });
+    
     try {
-      // Create a public client to check balance
-      const publicClient = viem.createPublicClient({
-        chain: chainConfig,
-        transport: http(RPCS[chain]),
-      });
       
       const balance = await publicClient.getBalance({
         address: relayerAccount.address,
@@ -203,36 +233,76 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     // Add gas estimation to see if it would fail
     try {
-      const gasEstimate = await client.estimateContractGas({
-        address: CONTRACTS[chain],
-        abi: METATX_ABI,
-        functionName: "executeMetaTransaction",
-        args: [userAddress, functionSignature, r, s, v],
+      const gasEstimate = await publicClient.estimateGas({
+        account: relayerAccount.address,
+        to: CONTRACTS[chain],
+        data: encodeFunctionData({
+          abi: METATX_ABI,
+          functionName: "executeMetaTransaction",
+          args: [userAddress, functionSignature, r, s, v],
+        }),
       });
       console.log(`[api/relay-metatx] Gas estimate:`, gasEstimate.toString());
     } catch (estimateError: any) {
       console.error(`[api/relay-metatx] Gas estimation failed:`, estimateError);
       console.error(`[api/relay-metatx] Full error:`, JSON.stringify(estimateError, null, 2));
       
-      // Check different error types
-      if (estimateError.message?.includes('insufficient balance')) {
-        console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
-        console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
-      } else if (estimateError.message?.includes('signature')) {
-        console.error(`[api/relay-metatx] Signature verification failed`);
-        console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
-      } else if (estimateError.message?.includes('Already claimed')) {
-        console.error(`[api/relay-metatx] User already claimed today`);
-      }
-      
       // Extract revert reason if available
       const revertReason = estimateError.shortMessage || estimateError.reason || estimateError.message;
       console.error(`[api/relay-metatx] Revert reason:`, revertReason);
+      
+      // Try to decode the function data to understand what's being called
+      try {
+        const decodedClaimData = decodeFunctionData({
+          abi: [{
+            name: "claim",
+            type: "function",
+            inputs: [{
+              name: "c",
+              type: "tuple",
+              components: [
+                { name: "fid", type: "uint256" },
+                { name: "recipient", type: "address" },
+                { name: "day", type: "uint256" },
+                { name: "amountWei", type: "uint256" },
+                { name: "deadline", type: "uint256" },
+              ],
+            }],
+          }],
+          data: functionSignature as `0x${string}`,
+        });
+        console.log(`[api/relay-metatx] Claim data being submitted:`, decodedClaimData);
+      } catch (decodeErr) {
+        console.log(`[api/relay-metatx] Could not decode claim data`);
+      }
+      
+      // Check different error types
+      let errorMessage = 'Transaction would fail';
+      if (estimateError.message?.includes('insufficient balance')) {
+        console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
+        console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
+        errorMessage = `Contract has insufficient ${chain.toUpperCase()} balance to distribute`;
+      } else if (estimateError.message?.includes('signature') || estimateError.message?.includes('Sig')) {
+        console.error(`[api/relay-metatx] Signature verification failed`);
+        console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
+        console.error(`[api/relay-metatx] Expected domain:`, expectedDomain);
+        errorMessage = 'Signature verification failed - possible nonce or domain mismatch';
+      } else if (estimateError.message?.includes('Already claimed')) {
+        console.error(`[api/relay-metatx] User already claimed today`);
+        errorMessage = 'Already claimed today';
+      } else if (revertReason) {
+        errorMessage = `Transaction would fail: ${revertReason}`;
+      }
       
       // Log the function being called
       console.error(`[api/relay-metatx] Function signature:`, functionSignature.slice(0, 10));
       console.error(`[api/relay-metatx] Contract address:`, CONTRACTS[chain]);
       console.error(`[api/relay-metatx] User address:`, userAddress);
+      
+      // Return error response
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: errorMessage }));
+      return;
     }
     
     const txHash = await client.writeContract({
@@ -248,6 +318,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     res.end(JSON.stringify({ ok: true, txHash }));
   } catch (e: any) {
     console.error("[api/relay-metatx] error:", e);
+    console.error("[api/relay-metatx] error stack:", e?.stack);
     res.statusCode = 500;
     res.end(JSON.stringify({ error: e?.message || "server error" }));
   }
