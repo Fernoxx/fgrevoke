@@ -38,9 +38,11 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       mon: "0x60b430e8083a0c395a7789633fc742d2b3209854" as `0x${string}`,
     };
     
+    console.log(`[api/relay-metatx] Using contract address for ${chain}:`, CONTRACTS[chain]);
+    
     const RPCS: Record<ChainKey, string> = {
       celo: process.env.CELO_RPC || "https://forno.celo.org",
-      mon: process.env.MON_RPC || "",
+      mon: process.env.MON_RPC || "https://testnet.monad.network",
     };
     
     const { chain, userAddress, functionSignature, signature } = parsed as {
@@ -109,6 +111,15 @@ export default async function handler(req: IncomingMessage & { method?: string; 
 
     // First check signer balance
     console.log(`[api/relay-metatx] Relayer address:`, relayerAccount.address);
+    
+    // Log the expected domain for debugging
+    const expectedDomain = {
+      name: "DailyGasClaim", // Should match what the contract expects
+      version: "1",
+      chainId: chain === "celo" ? 42220 : 10143,
+      verifyingContract: CONTRACTS[chain],
+    };
+    console.log(`[api/relay-metatx] Expected domain for signature verification:`, expectedDomain);
     
     try {
       // Create a public client to check balance
@@ -214,25 +225,36 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       console.error(`[api/relay-metatx] Gas estimation failed:`, estimateError);
       console.error(`[api/relay-metatx] Full error:`, JSON.stringify(estimateError, null, 2));
       
-      // Check different error types
-      if (estimateError.message?.includes('insufficient balance')) {
-        console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
-        console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
-      } else if (estimateError.message?.includes('signature')) {
-        console.error(`[api/relay-metatx] Signature verification failed`);
-        console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
-      } else if (estimateError.message?.includes('Already claimed')) {
-        console.error(`[api/relay-metatx] User already claimed today`);
-      }
-      
       // Extract revert reason if available
       const revertReason = estimateError.shortMessage || estimateError.reason || estimateError.message;
       console.error(`[api/relay-metatx] Revert reason:`, revertReason);
+      
+      // Check different error types
+      let errorMessage = 'Transaction would fail';
+      if (estimateError.message?.includes('insufficient balance')) {
+        console.error(`[api/relay-metatx] Contract reverted with insufficient balance`);
+        console.error(`[api/relay-metatx] This likely means the contract at ${CONTRACTS[chain]} doesn't have MON to distribute`);
+        errorMessage = `Contract has insufficient ${chain.toUpperCase()} balance to distribute`;
+      } else if (estimateError.message?.includes('signature')) {
+        console.error(`[api/relay-metatx] Signature verification failed`);
+        console.error(`[api/relay-metatx] This could be due to domain name mismatch or nonce issue`);
+        errorMessage = 'Signature verification failed - possible nonce or domain mismatch';
+      } else if (estimateError.message?.includes('Already claimed')) {
+        console.error(`[api/relay-metatx] User already claimed today`);
+        errorMessage = 'Already claimed today';
+      } else if (revertReason) {
+        errorMessage = `Transaction would fail: ${revertReason}`;
+      }
       
       // Log the function being called
       console.error(`[api/relay-metatx] Function signature:`, functionSignature.slice(0, 10));
       console.error(`[api/relay-metatx] Contract address:`, CONTRACTS[chain]);
       console.error(`[api/relay-metatx] User address:`, userAddress);
+      
+      // Return error response
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: errorMessage }));
+      return;
     }
     
     const txHash = await client.writeContract({

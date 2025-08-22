@@ -2635,9 +2635,32 @@ function App() {
         
         const { functionSignature, contract, chainId, domain, types } = prepareData;
         
-        // Step 2: Use nonce 0 for now
-        const nonce = 0;
-        console.log('Using nonce:', nonce);
+        // Step 2: Get the nonce from the contract
+        let nonce = 0;
+        try {
+          // Import ethers to read nonce from contract
+          const { ethers } = await import('ethers');
+          const ethersProvider = new ethers.BrowserProvider(provider);
+          const metaTxContract = new ethers.Contract(
+            contract,
+            [
+              {
+                name: "getNonce",
+                type: "function",
+                stateMutability: "view",
+                inputs: [{ name: "user", type: "address" }],
+                outputs: [{ name: "nonce_", type: "uint256" }],
+              },
+            ],
+            ethersProvider
+          );
+          
+          nonce = await metaTxContract.getNonce(address);
+          console.log('Fetched nonce from contract:', nonce.toString());
+        } catch (nonceError) {
+          console.error('Failed to fetch nonce, using 0:', nonceError);
+          // If fetching nonce fails, continue with 0
+        }
         
         // Step 3: User signs meta-transaction
         const message = {
@@ -2653,8 +2676,10 @@ function App() {
             address,
             JSON.stringify({
               domain: {
-                ...domain,
-                chainId: BigInt(domain.chainId).toString()
+                name: "DailyGasClaim", // Use the base domain name for meta-transaction
+                version: "1",
+                chainId: Number(domain.chainId), // Use number instead of string
+                verifyingContract: domain.verifyingContract
               },
               types: {
                 EIP712Domain: [
@@ -2667,7 +2692,7 @@ function App() {
               },
               primaryType: 'MetaTransaction',
               message: {
-                nonce: nonce.toString(),
+                nonce: BigInt(nonce).toString(),
                 from: address,
                 functionSignature,
               }
@@ -2675,7 +2700,12 @@ function App() {
           ],
         });
         
-        console.log('✅ User signature obtained');
+        console.log('✅ User signature obtained:', signature);
+        console.log('📋 Signed message:', {
+          nonce: BigInt(nonce).toString(),
+          from: address,
+          functionSignature: functionSignature.slice(0, 10) + '...'
+        });
         
         // Step 4: Send to relayer
         const relayRes = await fetch('/api/relay-metatx', {

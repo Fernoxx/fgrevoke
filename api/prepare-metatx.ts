@@ -83,7 +83,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const signerAccount = privateKeyToAccount(signerPk as `0x${string}`);
     
     const domain = {
-      name: "DailyGasClaim", // Try without MetaTx suffix
+      name: "DailyGasClaim", // Use consistent domain name
       version: "1",
       chainId: chain === "celo" ? 42220 : 10143,
       verifyingContract: CONTRACTS[chain],
