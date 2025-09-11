@@ -4,7 +4,7 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
-import { UNISWAP_V2_ROUTER_ABI, UNISWAP_V2_ROUTER_ADDRESS, WETH_ADDRESS, USDC_ADDRESS } from './abis/swap';
+import { UNISWAP_V3_ROUTER_ABI, UNISWAP_V3_ROUTER_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, CLANKER_V4_FEE_TIER } from './abis/swap';
 
 
 function App() {
@@ -44,19 +44,13 @@ function App() {
   const [buyCurrency, setBuyCurrency] = useState('ETH'); // ETH or USDC
   const [tokenPrice, setTokenPrice] = useState(0);
   const [loadingPrice, setLoadingPrice] = useState(false);
-  const [buyLoading, setBuyLoading] = useState(false);
   const [buyError, setBuyError] = useState(null);
-  const [usdcApproved, setUsdcApproved] = useState(false);
-  const [pendingSwap, setPendingSwap] = useState(null);
 
   // Token contract address
   const TOKEN_CONTRACT_ADDRESS = '0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07';
 
-  // Wagmi hooks for contract interactions
-  const { writeContract, data: hash, isPending, error: swapError } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash,
-  });
+  // Note: Removed direct contract interaction hooks to prevent fund loss
+  // Using Uniswap redirect approach for safety
   const [trendingWallets, setTrendingWallets] = useState([]);
   const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
@@ -2974,12 +2968,6 @@ function App() {
   };
 
   const handleBuyTokens = async () => {
-    // TEMPORARILY DISABLED - INCORRECT IMPLEMENTATION
-    setBuyError('⚠️ BUY FUNCTIONALITY TEMPORARILY DISABLED - Please contact support for correct purchase method. The previous implementation was incorrect and may have caused fund loss.');
-    return;
-    
-    // Original code commented out for safety
-    /*
     if (!isConnected || !address || !buyAmount) {
       setBuyError('Please connect wallet and enter amount');
       return;
@@ -2991,122 +2979,41 @@ function App() {
       return;
     }
 
-    setBuyLoading(true);
-    setBuyError(null);
+    // Get the current chain
+    const currentChain = chains.find(c => c.value === selectedChain);
+    if (!currentChain) {
+      setBuyError('Invalid chain selected');
+      return;
+    }
+
+    // Only allow on Base network for Clanker v4 tokens
+    if (currentChain.value !== 'base') {
+      setSelectedChain('base');
+      setBuyError('Please switch to Base network to purchase Clanker v4 tokens. Network changed automatically.');
+      return;
+    }
 
     try {
-      // Get the current chain
-      const currentChain = chains.find(c => c.value === selectedChain);
-      if (!currentChain) {
-        throw new Error('Invalid chain selected');
-      }
-
-      // Only allow swaps on Base network
-      if (currentChain.value !== 'base') {
-        setSelectedChain('base');
-        setBuyError('Please switch to Base network to purchase tokens. Network changed automatically.');
-        return;
-      }
-
-      // Calculate amounts
-      const amountInWei = buyCurrency === 'ETH' 
-        ? (amount * Math.pow(10, 18)).toString()
-        : (amount * Math.pow(10, 6)).toString(); // USDC has 6 decimals
-
-      // Set minimum amount out (with 5% slippage tolerance)
-      const estimatedTokens = calculateTokenAmount(buyAmount);
-      const amountOutMin = Math.floor(estimatedTokens * 0.95 * Math.pow(10, 18)).toString(); // Assuming 18 decimals for your token
-
-      // Set deadline (20 minutes from now)
-      const deadline = Math.floor(Date.now() / 1000) + 1200;
-
-      if (buyCurrency === 'ETH') {
-        // ETH to Token swap
-        const path = [WETH_ADDRESS, TOKEN_CONTRACT_ADDRESS];
-        
-        writeContract({
-          address: UNISWAP_V2_ROUTER_ADDRESS,
-          abi: UNISWAP_V2_ROUTER_ABI,
-          functionName: 'swapExactETHForTokens',
-          args: [amountOutMin, path, address, deadline],
-          value: BigInt(amountInWei),
-        });
-      } else {
-        // USDC to Token swap - need to approve first
-        const path = [USDC_ADDRESS, TOKEN_CONTRACT_ADDRESS];
-        
-        // Store swap parameters for after approval
-        setPendingSwap({
-          amountInWei,
-          amountOutMin,
-          path,
-          deadline
-        });
-        
-        setBuyError('USDC swaps require approval first. Please approve USDC spending, then the swap will execute automatically.');
-        
-        // First approve USDC spending
-        writeContract({
-          address: USDC_ADDRESS,
-          abi: [
-            {
-              "inputs": [
-                {"internalType": "address", "name": "spender", "type": "address"},
-                {"internalType": "uint256", "name": "amount", "type": "uint256"}
-              ],
-              "name": "approve",
-              "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-              "stateMutability": "nonpayable",
-              "type": "function"
-            }
-          ],
-          functionName: 'approve',
-          args: [UNISWAP_V2_ROUTER_ADDRESS, BigInt(amountInWei)],
-        });
-      }
-
+      // Create the correct Uniswap v3 link for Clanker v4 tokens
+      const inputToken = buyCurrency === 'ETH' ? 'ETH' : USDC_ADDRESS;
+      const outputToken = TOKEN_CONTRACT_ADDRESS;
+      
+      // Create Uniswap v3 swap URL with correct parameters for Clanker v4
+      const uniswapUrl = `https://app.uniswap.org/#/swap?chain=base&inputCurrency=${inputToken}&outputCurrency=${outputToken}&exactAmount=${buyAmount}`;
+      
+      // Open Uniswap in new tab with correct parameters
+      window.open(uniswapUrl, '_blank');
+      
+      setBuyError(null);
+      alert(`✅ Opening Uniswap v3 for Clanker v4 token purchase\n\nAmount: ${buyAmount} ${buyCurrency}\nToken: ${TOKEN_CONTRACT_ADDRESS}\n\nPlease complete the swap on Uniswap.`);
+      
     } catch (error) {
       console.error('Buy error:', error);
-      setBuyError(error.message || 'Failed to initiate token purchase');
-    } finally {
-      setBuyLoading(false);
+      setBuyError(error.message || 'Failed to open Uniswap');
     }
-    */
   };
 
-  // Handle transaction status
-  useEffect(() => {
-    if (isConfirmed) {
-      setBuyError(null);
-      alert(`✅ Transaction confirmed! You've successfully purchased tokens.`);
-      setBuyAmount(''); // Clear the form
-      setUsdcApproved(false);
-      setPendingSwap(null);
-    }
-  }, [isConfirmed]);
-
-  // Handle USDC swap after approval
-  useEffect(() => {
-    if (isConfirmed && pendingSwap && buyCurrency === 'USDC') {
-      // Execute the swap after approval is confirmed
-      const { amountInWei, amountOutMin, path, deadline } = pendingSwap;
-      
-      writeContract({
-        address: UNISWAP_V2_ROUTER_ADDRESS,
-        abi: UNISWAP_V2_ROUTER_ABI,
-        functionName: 'swapExactTokensForTokens',
-        args: [BigInt(amountInWei), BigInt(amountOutMin), path, address, deadline],
-      });
-      
-      setPendingSwap(null);
-    }
-  }, [isConfirmed, pendingSwap, buyCurrency, address, writeContract]);
-
-  useEffect(() => {
-    if (swapError) {
-      setBuyError(swapError.message || 'Transaction failed');
-    }
-  }, [swapError]);
+  // Note: Removed transaction handling effects since we're using Uniswap redirect
 
   // Fetch token price when component mounts or when connected
   useEffect(() => {
@@ -4625,15 +4532,14 @@ function App() {
                         Contract: {TOKEN_CONTRACT_ADDRESS}
                       </p>
                       
-                      {/* CRITICAL WARNING */}
-                      <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                      {/* Clanker v4 Info */}
+                      <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
                         <div className="flex items-start gap-2">
-                          <AlertTriangle className="w-5 h-5 text-red-300 flex-shrink-0 mt-0.5" />
+                          <CheckCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-red-200 text-sm font-bold">⚠️ CRITICAL WARNING</p>
-                            <p className="text-red-200/80 text-xs mt-1">
-                              The previous buy implementation was incorrect and may have caused fund loss. 
-                              This functionality is temporarily disabled until the correct Clanker v4 purchase method is implemented.
+                            <p className="text-blue-200 text-sm font-bold">✅ Clanker v4 Compatible</p>
+                            <p className="text-blue-200/80 text-xs mt-1">
+                              This token is deployed with Clanker v4 and will open the correct Uniswap v3 pool for trading.
                             </p>
                           </div>
                         </div>
@@ -4718,44 +4624,25 @@ function App() {
                         </div>
                       )}
 
-                      {/* Buy Button - DISABLED */}
+                      {/* Buy Button */}
                       <button
                         onClick={handleBuyTokens}
-                        disabled={true}
-                        className="w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg cursor-not-allowed flex items-center justify-center space-x-2"
+                        disabled={!isConnected || !buyAmount || loadingPrice}
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                       >
-                        <AlertTriangle className="w-5 h-5" />
-                        <span>FUNCTIONALITY DISABLED - Contact Support</span>
+                        {!isConnected ? (
+                          <>
+                            <Wallet className="w-5 h-5" />
+                            <span>Connect Wallet First</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-5 h-5" />
+                            <span>Open Uniswap v3</span>
+                          </>
+                        )}
                       </button>
 
-                      {/* Transaction Hash Display */}
-                      {hash && (
-                        <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <span className="text-blue-200 text-sm">
-                              {buyCurrency === 'USDC' && pendingSwap ? 'Approval Transaction:' : 'Transaction Hash:'}
-                            </span>
-                            <button
-                              onClick={() => window.open(`https://basescan.org/tx/${hash}`, '_blank')}
-                              className="text-blue-300 hover:text-blue-100 text-xs underline"
-                            >
-                              {hash.slice(0, 10)}...{hash.slice(-8)}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* USDC Approval Status */}
-                      {buyCurrency === 'USDC' && pendingSwap && (
-                        <div className="mt-4 p-3 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <RefreshCw className="w-4 h-4 text-yellow-300 animate-spin" />
-                            <span className="text-yellow-200 text-sm">
-                              Waiting for USDC approval confirmation, then swap will execute automatically...
-                            </span>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Network Warning */}
                       {selectedChain !== 'base' && (
@@ -4776,15 +4663,15 @@ function App() {
                     {/* Safety Notice */}
                     <div className="mt-6 p-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
                       <div className="flex items-start gap-3">
-                        <AlertTriangle className="w-5 h-5 text-yellow-300 flex-shrink-0 mt-0.5" />
+                        <CheckCircle className="w-5 h-5 text-green-300 flex-shrink-0 mt-0.5" />
                         <div>
-                          <h5 className="text-white font-semibold mb-2">Important Notice</h5>
+                          <h5 className="text-white font-semibold mb-2">Safe Trading Instructions</h5>
                           <ul className="text-purple-100 text-sm space-y-1">
-                            <li>• Swaps are executed directly in your wallet (Farcaster compatible)</li>
-                            <li>• Always verify the token contract address before trading</li>
-                            <li>• Prices may vary due to market conditions and slippage</li>
-                            <li>• Ensure you have sufficient gas for the transaction</li>
-                            <li>• 5% slippage tolerance is applied for price protection</li>
+                            <li>• Click "Open Uniswap v3" to access the correct Clanker v4 pool</li>
+                            <li>• Always verify the token contract address: {TOKEN_CONTRACT_ADDRESS}</li>
+                            <li>• Ensure you're on Base network before trading</li>
+                            <li>• Set appropriate slippage tolerance (recommended: 1-3%)</li>
+                            <li>• Complete the swap directly on Uniswap for maximum security</li>
                           </ul>
                         </div>
                       </div>
