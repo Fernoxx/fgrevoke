@@ -37,6 +37,17 @@ function App() {
   
   // Trending Wallets states
   const [showTrendingWallets, setShowTrendingWallets] = useState(false);
+
+  // Buy functionality states
+  const [buyAmount, setBuyAmount] = useState('');
+  const [buyCurrency, setBuyCurrency] = useState('ETH'); // ETH or USDC
+  const [tokenPrice, setTokenPrice] = useState(0);
+  const [loadingPrice, setLoadingPrice] = useState(false);
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [buyError, setBuyError] = useState(null);
+
+  // Token contract address
+  const TOKEN_CONTRACT_ADDRESS = '0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07';
   const [trendingWallets, setTrendingWallets] = useState([]);
   const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
@@ -2928,6 +2939,91 @@ function App() {
     }
   }
 
+  // Buy token functionality
+  const fetchTokenPrice = async () => {
+    if (!isConnected || !address) return;
+    
+    setLoadingPrice(true);
+    setBuyError(null);
+    
+    try {
+      // For now, we'll use a simple price calculation
+      // In a real implementation, you'd fetch from a DEX or price oracle
+      const mockPrice = 0.0001; // Mock price in ETH per token
+      setTokenPrice(mockPrice);
+    } catch (error) {
+      console.error('Error fetching token price:', error);
+      setBuyError('Failed to fetch token price');
+    } finally {
+      setLoadingPrice(false);
+    }
+  };
+
+  const calculateTokenAmount = (inputAmount) => {
+    if (!inputAmount || !tokenPrice) return 0;
+    return parseFloat(inputAmount) / tokenPrice;
+  };
+
+  const handleBuyTokens = async () => {
+    if (!isConnected || !address || !buyAmount) {
+      setBuyError('Please connect wallet and enter amount');
+      return;
+    }
+
+    const amount = parseFloat(buyAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setBuyError('Please enter a valid amount');
+      return;
+    }
+
+    setBuyLoading(true);
+    setBuyError(null);
+
+    try {
+      // Get the current chain
+      const currentChain = chains.find(c => c.value === selectedChain);
+      if (!currentChain) {
+        throw new Error('Invalid chain selected');
+      }
+
+      // For Base chain, we'll use Uniswap V3 or similar DEX
+      if (currentChain.value === 'base') {
+        // Create Uniswap swap URL
+        const inputToken = buyCurrency === 'ETH' ? 'ETH' : '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'; // USDC on Base
+        const outputToken = TOKEN_CONTRACT_ADDRESS;
+        
+        // Convert to wei for ETH or to proper decimals for USDC
+        const amountInWei = buyCurrency === 'ETH' 
+          ? (amount * Math.pow(10, 18)).toString()
+          : (amount * Math.pow(10, 6)).toString(); // USDC has 6 decimals
+        
+        const uniswapUrl = `https://app.uniswap.org/#/swap?chain=base&inputCurrency=${inputToken}&outputCurrency=${outputToken}&exactAmount=${amountInWei}`;
+        
+        // Open Uniswap in new tab
+        window.open(uniswapUrl, '_blank');
+        
+        setBuyError(null);
+        alert(`✅ Redirecting to Uniswap to buy tokens with ${buyAmount} ${buyCurrency}\n\nYou'll receive approximately ${calculateTokenAmount(buyAmount).toLocaleString()} tokens.`);
+      } else {
+        // Auto-switch to Base network
+        setSelectedChain('base');
+        setBuyError('Please switch to Base network to purchase tokens. Network changed automatically.');
+      }
+    } catch (error) {
+      console.error('Buy error:', error);
+      setBuyError(error.message || 'Failed to initiate token purchase');
+    } finally {
+      setBuyLoading(false);
+    }
+  };
+
+  // Fetch token price when component mounts or when connected
+  useEffect(() => {
+    if (isConnected && currentPage === 'buy') {
+      fetchTokenPrice();
+    }
+  }, [isConnected, currentPage]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-purple-100 text-gray-900 flex flex-col" style={{fontFamily: 'Maven Pro, sans-serif'}}>
       {/* Professional Modern Header */}
@@ -4427,95 +4523,147 @@ function App() {
                   </div>
                 </div>
               ) : currentPage === 'buy' ? (
-                // Buy Page
+                // Buy Page - Token Purchase Box
                 <div className="space-y-6">
-                  <div className="bg-purple-700 rounded-lg p-6">
+                  <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl p-6 shadow-lg">
                     <div className="text-center mb-6">
-                      <ShoppingCart className="w-12 h-12 text-purple-300 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold text-white mb-2">Buy Tokens</h3>
-                      <p className="text-purple-200">Purchase tokens directly from trusted exchanges</p>
+                      <ShoppingCart className="w-12 h-12 text-white mx-auto mb-4" />
+                      <h3 className="text-2xl font-bold text-white mb-2">Buy FarGuard Token</h3>
+                      <p className="text-purple-100">Purchase tokens with ETH or USDC on Base network</p>
+                      <p className="text-xs text-purple-200 mt-2">
+                        Contract: {TOKEN_CONTRACT_ADDRESS}
+                      </p>
                     </div>
                     
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {/* Coinbase */}
-                      <div className="bg-purple-800 rounded-lg p-4 hover:bg-purple-600 transition-colors cursor-pointer">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-lg font-semibold text-white">Coinbase</h4>
-                          <ExternalLink className="w-4 h-4 text-purple-300" />
+                    {/* Buy Box */}
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+                      {buyError && (
+                        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                          <p className="text-red-200 text-sm">{buyError}</p>
                         </div>
-                        <p className="text-purple-200 text-sm mb-4">
-                          Buy crypto with credit card, bank transfer, or PayPal
-                        </p>
-                        <button 
-                          onClick={() => window.open('https://coinbase.com/buy', '_blank')}
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors"
-                        >
-                          Buy on Coinbase
-                        </button>
+                      )}
+                      
+                      {/* Currency Selection */}
+                      <div className="mb-4">
+                        <label className="block text-white font-medium mb-2">Pay with</label>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => setBuyCurrency('ETH')}
+                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                              buyCurrency === 'ETH' 
+                                ? 'bg-white text-purple-600' 
+                                : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                          >
+                            ETH
+                          </button>
+                          <button
+                            onClick={() => setBuyCurrency('USDC')}
+                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                              buyCurrency === 'USDC' 
+                                ? 'bg-white text-purple-600' 
+                                : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                          >
+                            USDC
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Binance */}
-                      <div className="bg-purple-800 rounded-lg p-4 hover:bg-purple-600 transition-colors cursor-pointer">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-lg font-semibold text-white">Binance</h4>
-                          <ExternalLink className="w-4 h-4 text-purple-300" />
+                      {/* Amount Input */}
+                      <div className="mb-4">
+                        <label className="block text-white font-medium mb-2">
+                          Amount ({buyCurrency})
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={buyAmount}
+                            onChange={(e) => setBuyAmount(e.target.value)}
+                            placeholder={`Enter ${buyCurrency} amount`}
+                            className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-3 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent"
+                            step="0.0001"
+                            min="0"
+                          />
                         </div>
-                        <p className="text-purple-200 text-sm mb-4">
-                          World's largest crypto exchange with low fees
-                        </p>
-                        <button 
-                          onClick={() => window.open('https://binance.com/buy-sell-crypto', '_blank')}
-                          className="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 rounded-lg transition-colors"
-                        >
-                          Buy on Binance
-                        </button>
                       </div>
 
-                      {/* Uniswap */}
-                      <div className="bg-purple-800 rounded-lg p-4 hover:bg-purple-600 transition-colors cursor-pointer">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-lg font-semibold text-white">Uniswap</h4>
-                          <ExternalLink className="w-4 h-4 text-purple-300" />
+                      {/* Token Amount Display */}
+                      {buyAmount && tokenPrice > 0 && (
+                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white font-medium">You'll receive:</span>
+                            <span className="text-green-300 font-bold text-lg">
+                              {calculateTokenAmount(buyAmount).toLocaleString()} tokens
+                            </span>
+                          </div>
+                          <div className="text-xs text-purple-200 mt-1">
+                            Rate: 1 {buyCurrency} = {(1 / tokenPrice).toLocaleString()} tokens
+                          </div>
                         </div>
-                        <p className="text-purple-200 text-sm mb-4">
-                          Decentralized exchange for token swapping
-                        </p>
-                        <button 
-                          onClick={() => window.open('https://app.uniswap.org/', '_blank')}
-                          className="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 rounded-lg transition-colors"
-                        >
-                          Swap on Uniswap
-                        </button>
-                      </div>
+                      )}
 
-                      {/* 1inch */}
-                      <div className="bg-purple-800 rounded-lg p-4 hover:bg-purple-600 transition-colors cursor-pointer">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-lg font-semibold text-white">1inch</h4>
-                          <ExternalLink className="w-4 h-4 text-purple-300" />
+                      {/* Price Loading */}
+                      {loadingPrice && (
+                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
+                          <div className="flex items-center justify-center">
+                            <RefreshCw className="w-4 h-4 text-white animate-spin mr-2" />
+                            <span className="text-white text-sm">Loading token price...</span>
+                          </div>
                         </div>
-                        <p className="text-purple-200 text-sm mb-4">
-                          DEX aggregator for best prices across exchanges
-                        </p>
-                        <button 
-                          onClick={() => window.open('https://1inch.io/', '_blank')}
-                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg transition-colors"
-                        >
-                          Trade on 1inch
-                        </button>
-                      </div>
+                      )}
+
+                      {/* Buy Button */}
+                      <button
+                        onClick={handleBuyTokens}
+                        disabled={!isConnected || !buyAmount || buyLoading || loadingPrice}
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                      >
+                        {buyLoading ? (
+                          <>
+                            <RefreshCw className="w-5 h-5 animate-spin" />
+                            <span>Processing...</span>
+                          </>
+                        ) : !isConnected ? (
+                          <>
+                            <Wallet className="w-5 h-5" />
+                            <span>Connect Wallet First</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-5 h-5" />
+                            <span>Buy Tokens</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Network Warning */}
+                      {selectedChain !== 'base' && (
+                        <div className="mt-4 p-3 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-yellow-300 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-yellow-200 text-sm font-medium">Switch to Base Network</p>
+                              <p className="text-yellow-200/80 text-xs mt-1">
+                                Token purchase is only available on Base network. Please switch your wallet to Base.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="mt-6 p-4 bg-purple-800 rounded-lg">
+                    {/* Safety Notice */}
+                    <div className="mt-6 p-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
                       <div className="flex items-start gap-3">
-                        <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 text-yellow-300 flex-shrink-0 mt-0.5" />
                         <div>
-                          <h5 className="text-white font-semibold mb-2">Safety Reminder</h5>
-                          <ul className="text-purple-200 text-sm space-y-1">
-                            <li>• Always verify URLs before entering sensitive information</li>
-                            <li>• Never share your private keys or seed phrase</li>
-                            <li>• Use hardware wallets for large amounts</li>
-                            <li>• Double-check recipient addresses before sending</li>
+                          <h5 className="text-white font-semibold mb-2">Important Notice</h5>
+                          <ul className="text-purple-100 text-sm space-y-1">
+                            <li>• You'll be redirected to Uniswap for the actual swap</li>
+                            <li>• Always verify the token contract address before trading</li>
+                            <li>• Prices may vary due to market conditions</li>
+                            <li>• Ensure you have sufficient gas for the transaction</li>
                           </ul>
                         </div>
                       </div>
