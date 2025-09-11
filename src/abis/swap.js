@@ -1,21 +1,36 @@
-// Clanker Router ABI for direct token purchases
-export const CLANKER_ROUTER_ABI = [
+// Uniswap v4 Universal Router ABI for Clanker v4 tokens
+export const UNISWAP_V4_UNIVERSAL_ROUTER_ABI = [
   {
     "inputs": [
-      {"internalType": "address", "name": "recipient", "type": "address"},
-      {"internalType": "address", "name": "tokenOut", "type": "address"},
-      {"internalType": "uint256", "name": "amountOut", "type": "uint256"},
-      {"internalType": "uint256", "name": "maxAmountIn", "type": "uint256"},
-      {"internalType": "bytes", "name": "swapData", "type": "bytes"}
+      {"internalType": "bytes", "name": "commands", "type": "bytes"},
+      {"internalType": "bytes[]", "name": "inputs", "type": "bytes[]"},
+      {"internalType": "uint256", "name": "deadline", "type": "uint256"}
     ],
-    "name": "swapExactOutput",
-    "outputs": [{"internalType": "uint256", "name": "amountIn", "type": "uint256"}],
+    "name": "execute",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "bytes", "name": "commands", "type": "bytes"},
+      {"internalType": "bytes[]", "name": "inputs", "type": "bytes[]"},
+      {"internalType": "uint256", "name": "deadline", "type": "uint256"}
+    ],
+    "name": "execute",
+    "outputs": [{"internalType": "bytes", "name": "output", "type": "bytes"}],
     "stateMutability": "payable",
     "type": "function"
   }
 ];
 
-// Clanker Router contract address on Base
+// Uniswap v4 Universal Router contract address on Base
+export const UNISWAP_V4_UNIVERSAL_ROUTER_ADDRESS = "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad";
+
+// Uniswap v4 PoolManager contract address on Base
+export const UNISWAP_V4_POOL_MANAGER_ADDRESS = "0x0000000000000000000000000000000000000000"; // Will be updated with correct address
+
+// Clanker Router contract address on Base (for reference)
 export const CLANKER_ROUTER_ADDRESS = "0xf525ff21c370beb8d9f5c12dc0da2b583f4b949f";
 
 // Uniswap V3 Router ABI (fallback for older pools)

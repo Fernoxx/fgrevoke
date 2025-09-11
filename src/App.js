@@ -4,7 +4,8 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
-import { CLANKER_ROUTER_ABI, CLANKER_ROUTER_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, CLANKER_V4_FEE_TIER } from './abis/swap';
+import { UNISWAP_V4_UNIVERSAL_ROUTER_ABI, UNISWAP_V4_UNIVERSAL_ROUTER_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, CLANKER_V4_FEE_TIER } from './abis/swap';
+import { encodeAbiParameters, parseAbiParameters } from 'viem';
 
 
 function App() {
@@ -3006,40 +3007,49 @@ function App() {
       // We'll use the exact same contract call structure as your working transaction
       
       if (buyCurrency === 'ETH') {
-        // Use the exact same transaction data structure as your working example
-        // Based on the transaction you provided, we need to construct the exact same call
+        // Use Uniswap v4 Universal Router for Clanker v4 tokens
+        // Based on Uniswap v4 documentation, we need to use the execute function with commands
         
-        // The working transaction uses function selector 0x1fff991f
-        // Let's construct the exact same call with your parameters
+        // Set deadline (20 minutes from now)
+        const deadline = Math.floor(Date.now() / 1000) + 1200;
         
-        const recipient = address.slice(2).toLowerCase().padStart(64, '0');
-        const tokenOut = TOKEN_CONTRACT_ADDRESS.slice(2).toLowerCase().padStart(64, '0');
-        const amountOutHex = BigInt(amountInWei).toString(16).padStart(64, '0');
+        // For ETH to Token swap using Uniswap v4 Universal Router
+        // We need to construct the commands and inputs for the execute function
         
-        // Construct the exact same data as your working transaction
-        const swapData = "0x1fff991f" + 
-          recipient + 
-          tokenOut + 
-          amountOutHex + 
-          "00000000000000000000000000000000000000000000000000000000000000a0" + // offset
-          "2165523bd332a20c6ccbd8b60000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000000a0" + // more data
-          "0000000000000000000000000000000000000000000000000000000000000000"; // empty data
-
-        // Send the transaction using the exact same structure
+        // Command for ETH payment (SETTLE)
+        const settleCommand = "0x00"; // SETTLE command
+        
+        // Command for token receipt (TAKE)
+        const takeCommand = "0x01"; // TAKE command
+        
+        // Combine commands
+        const commands = settleCommand + takeCommand;
+        
+        // Input for SETTLE (ETH payment)
+        const settleInput = encodeAbiParameters(
+          parseAbiParameters("address, uint256"),
+          [WETH_ADDRESS, BigInt(amountInWei)]
+        );
+        
+        // Input for TAKE (Token receipt)
+        const estimatedTokens = calculateTokenAmount(buyAmount);
+        const amountOut = Math.floor(estimatedTokens * Math.pow(10, 18)).toString();
+        const takeInput = encodeAbiParameters(
+          parseAbiParameters("address, uint256, address"),
+          [TOKEN_CONTRACT_ADDRESS, BigInt(amountOut), address]
+        );
+        
+        // Execute the swap using Uniswap v4 Universal Router
         writeContract({
-          address: CLANKER_ROUTER_ADDRESS,
-          abi: [
-            {
-              "inputs": [],
-              "name": "fallback",
-              "outputs": [],
-              "stateMutability": "payable",
-              "type": "function"
-            }
+          address: UNISWAP_V4_UNIVERSAL_ROUTER_ADDRESS,
+          abi: UNISWAP_V4_UNIVERSAL_ROUTER_ABI,
+          functionName: 'execute',
+          args: [
+            commands, // commands
+            [settleInput, takeInput], // inputs
+            deadline // deadline
           ],
-          functionName: "fallback",
-          value: BigInt(amountInWei),
-          data: swapData
+          value: BigInt(amountInWei), // ETH value
         });
       } else {
         // USDC to Token swap - would need approval first
@@ -4585,14 +4595,14 @@ function App() {
                         Contract: {TOKEN_CONTRACT_ADDRESS}
                       </p>
                       
-                      {/* Clanker v4 Info */}
+                      {/* Clanker v4 + Uniswap v4 Info */}
                       <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
                         <div className="flex items-start gap-2">
                           <CheckCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-blue-200 text-sm font-bold">✅ Clanker v4 Compatible</p>
+                            <p className="text-blue-200 text-sm font-bold">✅ Clanker v4 + Uniswap v4</p>
                             <p className="text-blue-200/80 text-xs mt-1">
-                              This token is deployed with Clanker v4 and will open the correct Uniswap v3 pool for trading.
+                              This token uses Clanker v4 with Uniswap v4 Universal Router for direct swaps.
                             </p>
                           </div>
                         </div>
@@ -4743,12 +4753,12 @@ function App() {
                       <div className="flex items-start gap-3">
                         <CheckCircle className="w-5 h-5 text-green-300 flex-shrink-0 mt-0.5" />
                         <div>
-                          <h5 className="text-white font-semibold mb-2">Direct Clanker v4 Swap</h5>
+                          <h5 className="text-white font-semibold mb-2">Uniswap v4 Universal Router</h5>
                           <ul className="text-purple-100 text-sm space-y-1">
-                            <li>• Swaps execute directly through Clanker router contract</li>
+                            <li>• Swaps execute through Uniswap v4 Universal Router</li>
                             <li>• Always verify the token contract address: {TOKEN_CONTRACT_ADDRESS}</li>
                             <li>• Ensure you're on Base network before trading</li>
-                            <li>• 10% slippage tolerance is applied for price protection</li>
+                            <li>• Uses SETTLE and TAKE commands for efficient swaps</li>
                             <li>• Transaction executes directly in your Farcaster wallet</li>
                           </ul>
                         </div>
