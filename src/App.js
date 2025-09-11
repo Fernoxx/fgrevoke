@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target, ShoppingCart, Menu } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useReadContract } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
+import { UNISWAP_V2_ROUTER_ABI, UNISWAP_V2_ROUTER_ADDRESS, WETH_ADDRESS, USDC_ADDRESS } from './abis/swap';
 
 
 function App() {
@@ -45,9 +46,17 @@ function App() {
   const [loadingPrice, setLoadingPrice] = useState(false);
   const [buyLoading, setBuyLoading] = useState(false);
   const [buyError, setBuyError] = useState(null);
+  const [usdcApproved, setUsdcApproved] = useState(false);
+  const [pendingSwap, setPendingSwap] = useState(null);
 
   // Token contract address
   const TOKEN_CONTRACT_ADDRESS = '0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07';
+
+  // Wagmi hooks for contract interactions
+  const { writeContract, data: hash, isPending, error: swapError } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+    hash,
+  });
   const [trendingWallets, setTrendingWallets] = useState([]);
   const [loadingTrendingWallets, setLoadingTrendingWallets] = useState(false);
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
@@ -2986,29 +2995,70 @@ function App() {
         throw new Error('Invalid chain selected');
       }
 
-      // For Base chain, we'll use Uniswap V3 or similar DEX
-      if (currentChain.value === 'base') {
-        // Create Uniswap swap URL
-        const inputToken = buyCurrency === 'ETH' ? 'ETH' : '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'; // USDC on Base
-        const outputToken = TOKEN_CONTRACT_ADDRESS;
-        
-        // Convert to wei for ETH or to proper decimals for USDC
-        const amountInWei = buyCurrency === 'ETH' 
-          ? (amount * Math.pow(10, 18)).toString()
-          : (amount * Math.pow(10, 6)).toString(); // USDC has 6 decimals
-        
-        const uniswapUrl = `https://app.uniswap.org/#/swap?chain=base&inputCurrency=${inputToken}&outputCurrency=${outputToken}&exactAmount=${amountInWei}`;
-        
-        // Open Uniswap in new tab
-        window.open(uniswapUrl, '_blank');
-        
-        setBuyError(null);
-        alert(`✅ Redirecting to Uniswap to buy tokens with ${buyAmount} ${buyCurrency}\n\nYou'll receive approximately ${calculateTokenAmount(buyAmount).toLocaleString()} tokens.`);
-      } else {
-        // Auto-switch to Base network
+      // Only allow swaps on Base network
+      if (currentChain.value !== 'base') {
         setSelectedChain('base');
         setBuyError('Please switch to Base network to purchase tokens. Network changed automatically.');
+        return;
       }
+
+      // Calculate amounts
+      const amountInWei = buyCurrency === 'ETH' 
+        ? (amount * Math.pow(10, 18)).toString()
+        : (amount * Math.pow(10, 6)).toString(); // USDC has 6 decimals
+
+      // Set minimum amount out (with 5% slippage tolerance)
+      const estimatedTokens = calculateTokenAmount(buyAmount);
+      const amountOutMin = Math.floor(estimatedTokens * 0.95 * Math.pow(10, 18)).toString(); // Assuming 18 decimals for your token
+
+      // Set deadline (20 minutes from now)
+      const deadline = Math.floor(Date.now() / 1000) + 1200;
+
+      if (buyCurrency === 'ETH') {
+        // ETH to Token swap
+        const path = [WETH_ADDRESS, TOKEN_CONTRACT_ADDRESS];
+        
+        writeContract({
+          address: UNISWAP_V2_ROUTER_ADDRESS,
+          abi: UNISWAP_V2_ROUTER_ABI,
+          functionName: 'swapExactETHForTokens',
+          args: [amountOutMin, path, address, deadline],
+          value: BigInt(amountInWei),
+        });
+      } else {
+        // USDC to Token swap - need to approve first
+        const path = [USDC_ADDRESS, TOKEN_CONTRACT_ADDRESS];
+        
+        // Store swap parameters for after approval
+        setPendingSwap({
+          amountInWei,
+          amountOutMin,
+          path,
+          deadline
+        });
+        
+        setBuyError('USDC swaps require approval first. Please approve USDC spending, then the swap will execute automatically.');
+        
+        // First approve USDC spending
+        writeContract({
+          address: USDC_ADDRESS,
+          abi: [
+            {
+              "inputs": [
+                {"internalType": "address", "name": "spender", "type": "address"},
+                {"internalType": "uint256", "name": "amount", "type": "uint256"}
+              ],
+              "name": "approve",
+              "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+              "stateMutability": "nonpayable",
+              "type": "function"
+            }
+          ],
+          functionName: 'approve',
+          args: [UNISWAP_V2_ROUTER_ADDRESS, BigInt(amountInWei)],
+        });
+      }
+
     } catch (error) {
       console.error('Buy error:', error);
       setBuyError(error.message || 'Failed to initiate token purchase');
@@ -3016,6 +3066,40 @@ function App() {
       setBuyLoading(false);
     }
   };
+
+  // Handle transaction status
+  useEffect(() => {
+    if (isConfirmed) {
+      setBuyError(null);
+      alert(`✅ Transaction confirmed! You've successfully purchased tokens.`);
+      setBuyAmount(''); // Clear the form
+      setUsdcApproved(false);
+      setPendingSwap(null);
+    }
+  }, [isConfirmed]);
+
+  // Handle USDC swap after approval
+  useEffect(() => {
+    if (isConfirmed && pendingSwap && buyCurrency === 'USDC') {
+      // Execute the swap after approval is confirmed
+      const { amountInWei, amountOutMin, path, deadline } = pendingSwap;
+      
+      writeContract({
+        address: UNISWAP_V2_ROUTER_ADDRESS,
+        abi: UNISWAP_V2_ROUTER_ABI,
+        functionName: 'swapExactTokensForTokens',
+        args: [BigInt(amountInWei), BigInt(amountOutMin), path, address, deadline],
+      });
+      
+      setPendingSwap(null);
+    }
+  }, [isConfirmed, pendingSwap, buyCurrency, address, writeContract]);
+
+  useEffect(() => {
+    if (swapError) {
+      setBuyError(swapError.message || 'Transaction failed');
+    }
+  }, [swapError]);
 
   // Fetch token price when component mounts or when connected
   useEffect(() => {
@@ -3025,7 +3109,7 @@ function App() {
   }, [isConnected, currentPage]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-purple-100 text-gray-900 flex flex-col" style={{fontFamily: 'Maven Pro, sans-serif'}}>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 text-gray-900 flex flex-col" style={{fontFamily: 'Maven Pro, sans-serif'}}>
       {/* Professional Modern Header */}
       <header className="modern-header sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b border-gray-200/20 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -4616,13 +4700,18 @@ function App() {
                       {/* Buy Button */}
                       <button
                         onClick={handleBuyTokens}
-                        disabled={!isConnected || !buyAmount || buyLoading || loadingPrice}
+                        disabled={!isConnected || !buyAmount || isPending || isConfirming || loadingPrice}
                         className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                       >
-                        {buyLoading ? (
+                        {isPending ? (
                           <>
                             <RefreshCw className="w-5 h-5 animate-spin" />
-                            <span>Processing...</span>
+                            <span>{buyCurrency === 'USDC' && pendingSwap ? 'Approving USDC...' : 'Confirming Transaction...'}</span>
+                          </>
+                        ) : isConfirming ? (
+                          <>
+                            <RefreshCw className="w-5 h-5 animate-spin" />
+                            <span>{buyCurrency === 'USDC' && pendingSwap ? 'Executing Swap...' : 'Transaction Pending...'}</span>
                           </>
                         ) : !isConnected ? (
                           <>
@@ -4632,10 +4721,39 @@ function App() {
                         ) : (
                           <>
                             <ShoppingCart className="w-5 h-5" />
-                            <span>Buy Tokens</span>
+                            <span>Buy Tokens Directly</span>
                           </>
                         )}
                       </button>
+
+                      {/* Transaction Hash Display */}
+                      {hash && (
+                        <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-blue-200 text-sm">
+                              {buyCurrency === 'USDC' && pendingSwap ? 'Approval Transaction:' : 'Transaction Hash:'}
+                            </span>
+                            <button
+                              onClick={() => window.open(`https://basescan.org/tx/${hash}`, '_blank')}
+                              className="text-blue-300 hover:text-blue-100 text-xs underline"
+                            >
+                              {hash.slice(0, 10)}...{hash.slice(-8)}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* USDC Approval Status */}
+                      {buyCurrency === 'USDC' && pendingSwap && (
+                        <div className="mt-4 p-3 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4 text-yellow-300 animate-spin" />
+                            <span className="text-yellow-200 text-sm">
+                              Waiting for USDC approval confirmation, then swap will execute automatically...
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Network Warning */}
                       {selectedChain !== 'base' && (
@@ -4660,10 +4778,11 @@ function App() {
                         <div>
                           <h5 className="text-white font-semibold mb-2">Important Notice</h5>
                           <ul className="text-purple-100 text-sm space-y-1">
-                            <li>• You'll be redirected to Uniswap for the actual swap</li>
+                            <li>• Swaps are executed directly in your wallet (Farcaster compatible)</li>
                             <li>• Always verify the token contract address before trading</li>
-                            <li>• Prices may vary due to market conditions</li>
+                            <li>• Prices may vary due to market conditions and slippage</li>
                             <li>• Ensure you have sufficient gas for the transaction</li>
+                            <li>• 5% slippage tolerance is applied for price protection</li>
                           </ul>
                         </div>
                       </div>
