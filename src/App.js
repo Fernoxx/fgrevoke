@@ -2936,7 +2936,7 @@ function App() {
           <div className="flex items-center justify-between h-16">
             {/* Brand Logo */}
             <div className="flex items-center space-x-3">
-              <img src="/farguard-logo.png" alt="FarGuard" className="h-10 w-10 rounded-lg shadow-sm" />
+              <img src="/farguard-logo.png" alt="FarGuard" className="h-12 w-12" />
               <div className="flex flex-col">
                 <h1 className="text-xl font-bold text-gray-900 leading-tight">FarGuard</h1>
                 <span className="text-xs text-gray-500 font-medium">Secure Token Management</span>
