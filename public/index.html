@@ -29,7 +29,23 @@
     <meta name="twitter:image" content="https://fgrevoke.vercel.app/og-image.png" />
     
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Bootstrap 5 CSS -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    />
+    
+    <!-- Font Awesome Icons -->
+    <link
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        rel="stylesheet"
+    />
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Prevent any splash screen display issues -->
     <style>
@@ -51,6 +67,173 @@
       #root {
         min-height: 100vh;
         width: 100%;
+      }
+
+      /* Modern Header Styles */
+      .header-modern{
+        position: sticky; top: 0; z-index: 1030;
+        background: rgba(255,255,255,0.8);
+        -webkit-backdrop-filter: saturate(150%) blur(10px);
+        backdrop-filter: saturate(150%) blur(10px);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        padding-top: 14px; padding-bottom: 14px;
+      }
+      
+      /* Modern Menu Items Styling */
+      .header-modern .nav-link {
+        color: #334155;
+        font-weight: 500;
+        padding: 10px 16px;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        position: relative;
+        margin: 0 4px;
+        background: transparent;
+        border: 1px solid transparent;
+      }
+      
+      .header-modern .nav-link:hover {
+        color: #344e80;
+        background: rgba(52, 78, 128, 0.08);
+        border-color: rgba(52, 78, 128, 0.15);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(52, 78, 128, 0.1);
+      }
+      
+      .header-modern .nav-link.active {
+        color: white;
+        background: #344e80;
+        border-color: #344e80;
+        box-shadow: 0 4px 15px rgba(52, 78, 128, 0.3);
+      }
+      
+      .header-modern .nav-link.active:hover {
+        background: #344e80;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(52, 78, 128, 0.4);
+      }
+      
+      /* Modern Dropdown Styling */
+      .header-modern .dropdown-menu {
+        border: none;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        border-radius: 12px;
+        padding: 8px;
+        margin-top: 8px;
+      }
+      
+      .header-modern .dropdown-item {
+        border-radius: 8px;
+        padding: 10px 16px;
+        transition: all 0.2s ease;
+        font-weight: 500;
+      }
+      
+      .header-modern .dropdown-item:hover {
+        background: rgba(52, 78, 128, 0.08);
+        color: var(--bs-primary);
+        transform: translateX(4px);
+      }
+
+      /* Chevron in pill toggle */
+      .navbar-toggler.chevronpill{ 
+        position:relative; display:flex; align-items:center; justify-content:center; 
+        width:40px; height:40px; border:none; padding:0; outline:none; margin-right: 10px; 
+        border-radius:12px; background: rgba(255,255,255,0.6); 
+        -webkit-backdrop-filter: saturate(160%) blur(6px); backdrop-filter: saturate(160%) blur(6px); 
+        border:1px solid rgba(2,6,23,0.08); box-shadow: 0 4px 12px rgba(2,6,23,0.08); 
+        transition: background .2s ease, transform .2s ease, box-shadow .2s ease; 
+      }
+      .navbar-toggler.chevronpill:hover{ 
+        transform: translateY(-1px); box-shadow: 0 6px 16px rgba(2,6,23,0.12); 
+      }
+      .navbar-toggler.chevronpill:focus{ 
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.25); 
+      }
+      .navbar-toggler.chevronpill .chev{ 
+        color:#334155; font-size: 0.95rem; 
+        transition: opacity .2s ease, transform .25s ease; 
+      }
+      .navbar-toggler.chevronpill::before, .navbar-toggler.chevronpill::after{ 
+        content:""; position:absolute; width:22px; height:2.5px; background:#334155; 
+        border-radius:3px; opacity:0; transition: opacity .2s ease, transform .25s ease; 
+      }
+      .navbar-toggler.chevronpill[aria-expanded="true"] .chev{ 
+        opacity:0; transform: rotate(0deg) translateY(4px) scale(0.9); 
+      }
+      .navbar-toggler.chevronpill[aria-expanded="true"]::before{ 
+        opacity:1; transform: rotate(45deg); 
+      }
+      .navbar-toggler.chevronpill[aria-expanded="true"]::after{ 
+        opacity:1; transform: rotate(-45deg); 
+      }
+
+      .navbar-brand{
+        display: inline-flex; flex-direction: column; align-items: center; 
+        line-height: 1.1; margin-left: 0;
+      }
+      .navbar-brand .brand-line{ 
+        display: inline-block; margin-left: 0; 
+      }
+      .navbar-brand .brand-subtitle{ 
+        font-size: 0.86rem; color: #475569; margin-top: 2px; margin-left: 0; 
+        max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+      }
+
+      /* Responsive Menu Items */
+      @media (min-width: 992px){ 
+        .navbar-toggler.chevronpill{ display:none !important; } 
+      }
+      
+      @media (max-width: 991.98px){
+        .header-modern .navbar-collapse{ margin-top: 20px; }
+        .navbar-brand{ margin-left: 8px; }
+        .navbar-brand .brand-line{ margin-left: 6px; }
+        .navbar-brand .brand-subtitle{ margin-left: 6px; }
+        
+        /* Mobile/Tablet Menu Items */
+        .header-modern .nav-link {
+          padding: 12px 20px;
+          margin: 4px 0;
+          border-radius: 10px;
+          font-size: 1rem;
+        }
+        
+        .header-modern .nav-link:hover {
+          background: rgba(52, 78, 128, 0.1);
+          transform: translateX(8px);
+          box-shadow: 0 2px 8px rgba(52, 78, 128, 0.15);
+        }
+        
+        .header-modern .nav-link.active {
+          background: #344e80;
+          color: white;
+          box-shadow: 0 4px 12px rgba(52, 78, 128, 0.25);
+        }
+        
+        .header-modern .dropdown-menu {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(52, 78, 128, 0.1);
+        }
+      }
+      
+      /* Small Mobile Optimization */
+      @media (max-width: 576px) {
+        .header-modern .nav-link {
+          padding: 14px 16px;
+          font-size: 0.95rem;
+        }
+        
+        .header-modern .nav-link i {
+          width: 20px;
+          text-align: center;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce){ 
+        .navbar-toggler.chevronpill, .navbar-toggler.chevronpill .chev{ transition: none; } 
       }
     </style>
   </head>
