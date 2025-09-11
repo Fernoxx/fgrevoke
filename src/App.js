@@ -12,7 +12,8 @@ function App() {
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState('approvals'); // 'approvals', 'activity', or 'spy'
+  const [currentPage, setCurrentPage] = useState('approvals');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // 'approvals', 'activity', or 'spy'
   const [activityPageNumber, setActivityPageNumber] = useState(1);
   const transactionsPerPage = 10;
 
@@ -2880,90 +2881,195 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
-      {/* Modern Bootstrap Header */}
-      <header className="header-modern">
-        <nav className="navbar navbar-expand-lg navbar-light">
-          <div className="container-fluid">
-            {/* Brand */}
-            <a className="navbar-brand" href="#" style={{textDecoration: 'none'}}>
-              <div className="brand-line d-flex align-items-center">
-                <img src="/farguard-logo.png" alt="FarGuard Logo" className="me-2" style={{width: '32px', height: '32px'}} />
-                <span style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#334155'}}>FarGuard</span>
+      {/* Professional Modern Header */}
+      <header className="modern-header sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b border-gray-200/20 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Brand Logo */}
+            <div className="flex items-center space-x-3">
+              <img src="/farguard-logo.png" alt="FarGuard" className="h-10 w-10 rounded-lg shadow-sm" />
+              <div className="flex flex-col">
+                <h1 className="text-xl font-bold text-gray-900 leading-tight">FarGuard</h1>
+                <span className="text-xs text-gray-500 font-medium">Secure Token Management</span>
               </div>
-              <div className="brand-subtitle">Secure Token Management</div>
-            </a>
+            </div>
 
-            {/* Mobile Menu Toggle */}
-            <button 
-              className="navbar-toggler chevronpill" 
-              type="button" 
-              data-bs-toggle="collapse" 
-              data-bs-target="#navbarNav" 
-              aria-controls="navbarNav" 
-              aria-expanded="false" 
-              aria-label="Toggle navigation"
+            {/* Desktop Navigation */}
+            <div className="hidden lg:flex items-center space-x-1">
+              {isConnected && (
+                <>
+                  <button
+                    onClick={() => setCurrentPage('approvals')}
+                    className={`nav-btn ${currentPage === 'approvals' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span>Revoke</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage('scanner')}
+                    className={`nav-btn ${currentPage === 'scanner' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
+                  >
+                    <Activity className="w-4 h-4" />
+                    <span>Scanner</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage('faucet')}
+                    className={`nav-btn ${currentPage === 'faucet' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>Faucet</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage('buy')}
+                    className={`nav-btn ${currentPage === 'buy' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                    <span>Buy</span>
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Desktop Controls */}
+            <div className="hidden lg:flex items-center space-x-4">
+              {/* Chain Selector */}
+              <select
+                value={selectedChain}
+                onChange={(e) => setSelectedChain(e.target.value)}
+                className="chain-selector bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 px-3 py-2 shadow-sm"
+              >
+                {chains.map((chain) => (
+                  <option key={chain.value} value={chain.value}>
+                    {chain.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* User Section */}
+              {isConnected ? (
+                <div className="flex items-center space-x-3">
+                  {/* User Profile */}
+                  <div className="flex items-center space-x-2 bg-gray-50 rounded-full px-3 py-2 border border-gray-200">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm font-medium text-gray-700">
+                      {currentUser?.username ? `@${currentUser.username}` : 
+                       currentUser?.displayName || 
+                       formatAddress(address)}
+                    </span>
+                    {currentUser?.fid && (
+                      <span className="text-xs text-gray-500">FID: {currentUser.fid}</span>
+                    )}
+                  </div>
+                  
+                  {/* Address Selector */}
+                  {userAddresses.length > 1 && (
+                    <select
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      className="text-xs bg-white border border-gray-300 text-gray-700 rounded-md px-2 py-1"
+                    >
+                      {userAddresses.map((addr, idx) => (
+                        <option key={addr} value={addr.toLowerCase()}>
+                          Address {idx + 1}: {formatAddress(addr)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  
+                  <button
+                    onClick={disconnect}
+                    className="disconnect-btn bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={connectWallet}
+                  disabled={isConnecting || !sdkReady}
+                  className="connect-btn bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg font-medium flex items-center space-x-2 transition-all duration-200 shadow-md hover:shadow-lg"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>{isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden mobile-menu-btn bg-gray-100 hover:bg-gray-200 p-2 rounded-lg transition-colors duration-200"
+              aria-label="Toggle menu"
             >
-              <i className="fas fa-chevron-down chev"></i>
+              {mobileMenuOpen ? (
+                <div className="w-6 h-6 relative">
+                  <span className="absolute top-3 left-0 w-6 h-0.5 bg-gray-600 transform rotate-45 transition-transform"></span>
+                  <span className="absolute top-3 left-0 w-6 h-0.5 bg-gray-600 transform -rotate-45 transition-transform"></span>
+                </div>
+              ) : (
+                <Menu className="w-6 h-6 text-gray-600" />
+              )}
             </button>
+          </div>
 
-            {/* Navigation Menu */}
-            <div className="collapse navbar-collapse" id="navbarNav">
-              <ul className="navbar-nav ms-auto me-3">
-                {isConnected && (
-                  <>
-                    <li className="nav-item">
-                      <button
-                        onClick={() => setCurrentPage('approvals')}
-                        className={`nav-link btn ${currentPage === 'approvals' ? 'active' : ''}`}
-                        style={{border: 'none', background: 'transparent'}}
-                      >
-                        <Shield className="w-4 h-4 me-2 d-inline" />
-                        Revoke
-                      </button>
-                    </li>
-                    <li className="nav-item">
-                      <button
-                        onClick={() => setCurrentPage('scanner')}
-                        className={`nav-link btn ${currentPage === 'scanner' ? 'active' : ''}`}
-                        style={{border: 'none', background: 'transparent'}}
-                      >
-                        <Activity className="w-4 h-4 me-2 d-inline" />
-                        Scanner
-                      </button>
-                    </li>
-                    <li className="nav-item">
-                      <button
-                        onClick={() => setCurrentPage('faucet')}
-                        className={`nav-link btn ${currentPage === 'faucet' ? 'active' : ''}`}
-                        style={{border: 'none', background: 'transparent'}}
-                      >
-                        <Zap className="w-4 h-4 me-2 d-inline" />
-                        Faucet
-                      </button>
-                    </li>
-                    <li className="nav-item">
-                      <button
-                        onClick={() => setCurrentPage('buy')}
-                        className={`nav-link btn ${currentPage === 'buy' ? 'active' : ''}`}
-                        style={{border: 'none', background: 'transparent'}}
-                      >
-                        <ShoppingCart className="w-4 h-4 me-2 d-inline" />
-                        Buy
-                      </button>
-                    </li>
-                  </>
-                )}
-              </ul>
+          {/* Mobile Menu */}
+          <div className={`lg:hidden mobile-menu ${mobileMenuOpen ? 'mobile-menu-open' : 'mobile-menu-closed'}`}>
+            <div className="px-4 py-6 bg-white border-t border-gray-200 shadow-lg">
+              {/* Mobile Navigation */}
+              {isConnected && (
+                <div className="space-y-2 mb-6">
+                  <button
+                    onClick={() => {
+                      setCurrentPage('approvals');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`mobile-nav-btn ${currentPage === 'approvals' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
+                  >
+                    <Shield className="w-5 h-5" />
+                    <span>Revoke</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCurrentPage('scanner');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`mobile-nav-btn ${currentPage === 'scanner' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
+                  >
+                    <Activity className="w-5 h-5" />
+                    <span>Scanner</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCurrentPage('faucet');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`mobile-nav-btn ${currentPage === 'faucet' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
+                  >
+                    <Zap className="w-5 h-5" />
+                    <span>Faucet</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCurrentPage('buy');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`mobile-nav-btn ${currentPage === 'buy' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    <span>Buy</span>
+                  </button>
+                </div>
+              )}
 
-              {/* User Controls */}
-              <div className="d-flex align-items-center gap-2">
-                {/* Chain Selection */}
-                <div className="dropdown me-2">
+              {/* Mobile Controls */}
+              <div className="space-y-4">
+                {/* Chain Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Chain</label>
                   <select
-                    className="form-select form-select-sm"
                     value={selectedChain}
                     onChange={(e) => setSelectedChain(e.target.value)}
-                    style={{minWidth: '120px'}}
+                    className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-2"
                   >
                     {chains.map((chain) => (
                       <option key={chain.value} value={chain.value}>
@@ -2973,67 +3079,64 @@ function App() {
                   </select>
                 </div>
 
-                {/* User Profile & Connection */}
+                {/* User Section */}
                 {isConnected ? (
-                  <div className="d-flex align-items-center gap-2">
-                    {/* User Profile Display */}
-                    <div className="bg-light px-3 py-2 rounded-3 text-dark d-flex align-items-center gap-2" style={{fontSize: '0.875rem'}}>
-                      <div className="bg-success rounded-circle" style={{width: '8px', height: '8px'}}></div>
-                      <div className="d-flex flex-column">
-                        <span className="fw-medium">
-                          {currentUser?.username ? `@${currentUser.username}` : 
-                           currentUser?.displayName || 
-                           formatAddress(address)}
-                          {currentUser?.fid && (
-                            <span className="text-muted ms-2" style={{fontSize: '0.75rem'}}>
-                              FID: {currentUser.fid}
-                            </span>
-                          )}
-                        </span>
-                        {currentUser?.displayName && currentUser?.username && (
-                          <span className="text-muted" style={{fontSize: '0.75rem'}}>{currentUser.displayName}</span>
-                        )}
+                  <div className="space-y-3">
+                    {/* User Profile */}
+                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <span className="font-medium text-gray-900">Connected</span>
                       </div>
+                      <p className="text-sm text-gray-600">
+                        {currentUser?.username ? `@${currentUser.username}` : 
+                         currentUser?.displayName || 
+                         formatAddress(address)}
+                      </p>
+                      {currentUser?.fid && (
+                        <p className="text-xs text-gray-500 mt-1">FID: {currentUser.fid}</p>
+                      )}
                     </div>
                     
-                    {/* Address Selector for multiple addresses */}
+                    {/* Address Selector */}
                     {userAddresses.length > 1 && (
-                      <select
-                        className="form-select form-select-sm"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        style={{maxWidth: '150px', fontSize: '0.875rem'}}
-                      >
-                        {userAddresses.map((addr, idx) => (
-                          <option key={addr} value={addr.toLowerCase()}>
-                            Address {idx + 1}: {formatAddress(addr)}
-                          </option>
-                        ))}
-                      </select>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Address</label>
+                        <select
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          className="w-full bg-white border border-gray-300 text-gray-700 rounded-lg px-3 py-2"
+                        >
+                          {userAddresses.map((addr, idx) => (
+                            <option key={addr} value={addr.toLowerCase()}>
+                              Address {idx + 1}: {formatAddress(addr)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     )}
                     
                     <button
                       onClick={disconnect}
-                      className="btn btn-outline-danger btn-sm"
+                      className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-3 rounded-lg font-medium transition-colors duration-200"
                     >
-                      Disconnect
+                      Disconnect Wallet
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={connectWallet}
                     disabled={isConnecting || !sdkReady}
-                    className="btn btn-primary d-flex align-items-center"
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors duration-200"
                   >
-                    <Wallet className="w-4 h-4 me-2" />
-                    {isConnecting ? 'Connecting...' : 
-                     userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}
+                    <Wallet className="w-5 h-5" />
+                    <span>{isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}</span>
                   </button>
                 )}
               </div>
             </div>
           </div>
-        </nav>
+        </div>
       </header>
 
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
