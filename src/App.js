@@ -2974,6 +2974,12 @@ function App() {
   };
 
   const handleBuyTokens = async () => {
+    // TEMPORARILY DISABLED - INCORRECT IMPLEMENTATION
+    setBuyError('⚠️ BUY FUNCTIONALITY TEMPORARILY DISABLED - Please contact support for correct purchase method. The previous implementation was incorrect and may have caused fund loss.');
+    return;
+    
+    // Original code commented out for safety
+    /*
     if (!isConnected || !address || !buyAmount) {
       setBuyError('Please connect wallet and enter amount');
       return;
@@ -3065,6 +3071,7 @@ function App() {
     } finally {
       setBuyLoading(false);
     }
+    */
   };
 
   // Handle transaction status
@@ -4617,6 +4624,20 @@ function App() {
                       <p className="text-xs text-purple-200 mt-2">
                         Contract: {TOKEN_CONTRACT_ADDRESS}
                       </p>
+                      
+                      {/* CRITICAL WARNING */}
+                      <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-300 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-red-200 text-sm font-bold">⚠️ CRITICAL WARNING</p>
+                            <p className="text-red-200/80 text-xs mt-1">
+                              The previous buy implementation was incorrect and may have caused fund loss. 
+                              This functionality is temporarily disabled until the correct Clanker v4 purchase method is implemented.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     
                     {/* Buy Box */}
@@ -4697,33 +4718,14 @@ function App() {
                         </div>
                       )}
 
-                      {/* Buy Button */}
+                      {/* Buy Button - DISABLED */}
                       <button
                         onClick={handleBuyTokens}
-                        disabled={!isConnected || !buyAmount || isPending || isConfirming || loadingPrice}
-                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                        disabled={true}
+                        className="w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg cursor-not-allowed flex items-center justify-center space-x-2"
                       >
-                        {isPending ? (
-                          <>
-                            <RefreshCw className="w-5 h-5 animate-spin" />
-                            <span>{buyCurrency === 'USDC' && pendingSwap ? 'Approving USDC...' : 'Confirming Transaction...'}</span>
-                          </>
-                        ) : isConfirming ? (
-                          <>
-                            <RefreshCw className="w-5 h-5 animate-spin" />
-                            <span>{buyCurrency === 'USDC' && pendingSwap ? 'Executing Swap...' : 'Transaction Pending...'}</span>
-                          </>
-                        ) : !isConnected ? (
-                          <>
-                            <Wallet className="w-5 h-5" />
-                            <span>Connect Wallet First</span>
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingCart className="w-5 h-5" />
-                            <span>Buy Tokens Directly</span>
-                          </>
-                        )}
+                        <AlertTriangle className="w-5 h-5" />
+                        <span>FUNCTIONALITY DISABLED - Contact Support</span>
                       </button>
 
                       {/* Transaction Hash Display */}
