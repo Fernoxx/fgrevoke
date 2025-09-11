@@ -150,15 +150,17 @@
       }
 
       .mobile-nav-btn-inactive {
-        color: #64748b;
-        background: rgba(241, 245, 249, 0.5);
-        border: 1px solid rgba(226, 232, 240, 0.8);
+        color: rgba(255, 255, 255, 0.8);
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
       }
 
       .mobile-nav-btn-inactive:hover {
-        color: #334155;
-        background: rgba(59, 130, 246, 0.05);
-        border-color: rgba(59, 130, 246, 0.2);
+        color: white;
+        background: rgba(59, 130, 246, 0.2);
+        border-color: rgba(59, 130, 246, 0.4);
         transform: translateX(4px);
       }
 
@@ -244,7 +246,6 @@
 
       .mobile-menu-btn:hover {
         transform: scale(1.05);
-        background-color: #f3f4f6;
       }
 
       /* Professional Loading States */

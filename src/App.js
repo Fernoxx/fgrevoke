@@ -2998,23 +2998,20 @@ function App() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden mobile-menu-btn bg-gray-100 hover:bg-gray-200 p-2 rounded-lg transition-colors duration-200"
+              className="lg:hidden p-2 transition-colors duration-200"
               aria-label="Toggle menu"
             >
               {mobileMenuOpen ? (
-                <div className="w-6 h-6 relative">
-                  <span className="absolute top-3 left-0 w-6 h-0.5 bg-gray-600 transform rotate-45 transition-transform"></span>
-                  <span className="absolute top-3 left-0 w-6 h-0.5 bg-gray-600 transform -rotate-45 transition-transform"></span>
-                </div>
+                <ChevronDown className="w-6 h-6 text-gray-600 transform rotate-180 transition-transform duration-200" />
               ) : (
-                <Menu className="w-6 h-6 text-gray-600" />
+                <ChevronDown className="w-6 h-6 text-gray-600 transition-transform duration-200" />
               )}
             </button>
           </div>
 
           {/* Mobile Menu */}
           <div className={`lg:hidden mobile-menu ${mobileMenuOpen ? 'mobile-menu-open' : 'mobile-menu-closed'}`}>
-            <div className="px-4 py-6 bg-white border-t border-gray-200 shadow-lg">
+            <div className="px-4 py-6">
               {/* Mobile Navigation */}
               {isConnected && (
                 <div className="space-y-2 mb-6">
@@ -3065,14 +3062,14 @@ function App() {
               <div className="space-y-4">
                 {/* Chain Selector */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Chain</label>
+                  <label className="block text-sm font-medium text-white mb-2">Select Chain</label>
                   <select
                     value={selectedChain}
                     onChange={(e) => setSelectedChain(e.target.value)}
-                    className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-2"
+                    className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 backdrop-blur-sm"
                   >
                     {chains.map((chain) => (
-                      <option key={chain.value} value={chain.value}>
+                      <option key={chain.value} value={chain.value} className="text-gray-900">
                         {chain.name}
                       </option>
                     ))}
@@ -3083,32 +3080,32 @@ function App() {
                 {isConnected ? (
                   <div className="space-y-3">
                     {/* User Profile */}
-                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
                       <div className="flex items-center space-x-2 mb-2">
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                        <span className="font-medium text-gray-900">Connected</span>
+                        <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                        <span className="font-medium text-white">Connected</span>
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-white/80">
                         {currentUser?.username ? `@${currentUser.username}` : 
                          currentUser?.displayName || 
                          formatAddress(address)}
                       </p>
                       {currentUser?.fid && (
-                        <p className="text-xs text-gray-500 mt-1">FID: {currentUser.fid}</p>
+                        <p className="text-xs text-white/60 mt-1">FID: {currentUser.fid}</p>
                       )}
                     </div>
                     
                     {/* Address Selector */}
                     {userAddresses.length > 1 && (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Address</label>
+                        <label className="block text-sm font-medium text-white mb-2">Select Address</label>
                         <select
                           value={address}
                           onChange={(e) => setAddress(e.target.value)}
-                          className="w-full bg-white border border-gray-300 text-gray-700 rounded-lg px-3 py-2"
+                          className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 backdrop-blur-sm"
                         >
                           {userAddresses.map((addr, idx) => (
-                            <option key={addr} value={addr.toLowerCase()}>
+                            <option key={addr} value={addr.toLowerCase()} className="text-gray-900">
                               Address {idx + 1}: {formatAddress(addr)}
                             </option>
                           ))}
@@ -3118,7 +3115,7 @@ function App() {
                     
                     <button
                       onClick={disconnect}
-                      className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-3 rounded-lg font-medium transition-colors duration-200"
+                      className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-400/30 py-3 rounded-lg font-medium transition-colors duration-200 backdrop-blur-sm"
                     >
                       Disconnect Wallet
                     </button>
@@ -3127,7 +3124,7 @@ function App() {
                   <button
                     onClick={connectWallet}
                     disabled={isConnecting || !sdkReady}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors duration-200"
+                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 disabled:bg-blue-500/10 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors duration-200 backdrop-blur-sm border border-blue-400/30"
                   >
                     <Wallet className="w-5 h-5" />
                     <span>{isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}</span>
