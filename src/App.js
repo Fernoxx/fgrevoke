@@ -13,7 +13,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState('approvals');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // 'approvals', 'activity', or 'spy'
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showWalletSelection, setShowWalletSelection] = useState(false); // 'approvals', 'activity', or 'spy'
   const [activityPageNumber, setActivityPageNumber] = useState(1);
   const transactionsPerPage = 10;
 
@@ -650,8 +651,9 @@ function App() {
   }, []);
 
   // Enhanced Wallet Connection - handles both verified addresses and manual connections
-  const connectWallet = async () => {
-    console.log('🔌 Starting wallet connection...');
+  // Connect with Farcaster
+  const connectFarcaster = async () => {
+    console.log('🔌 Starting Farcaster connection...');
     setIsConnecting(true);
     setError(null);
 
@@ -670,28 +672,13 @@ function App() {
         return;
       }
 
-      // Try to get wallet provider (miniapp SDK first, then fallback to web3)
-      console.log('🌐 Getting Ethereum provider...');
-      let ethProvider = null;
-      
-      try {
-        // Try miniapp SDK first (for Farcaster/Base App)
-        ethProvider = await sdk.wallet.getEthereumProvider();
-        console.log('✅ Got provider from miniapp SDK');
-      } catch (sdkError) {
-        console.log('⚠️ Miniapp provider failed, trying web3 fallback...');
-        
-        // Fallback to window.ethereum for web browsers
-        if (typeof window !== 'undefined' && window.ethereum) {
-          ethProvider = window.ethereum;
-          console.log('✅ Got provider from window.ethereum');
-        } else {
-          throw new Error('No wallet available. Please install MetaMask or use this app in Farcaster/Base App.');
-        }
-      }
+      // Try to get wallet provider from miniapp SDK
+      console.log('🌐 Getting Ethereum provider from Farcaster...');
+      const ethProvider = await sdk.wallet.getEthereumProvider();
+      console.log('✅ Got provider from miniapp SDK');
       
       if (!ethProvider) {
-        throw new Error('No wallet provider available. Please ensure you have verified addresses in your Farcaster profile or connect a wallet.');
+        throw new Error('No wallet provider available from Farcaster.');
       }
 
       console.log('✅ Provider obtained, requesting accounts...');
@@ -707,7 +694,7 @@ function App() {
       }
 
       const walletAddress = accounts[0].toLowerCase();
-      console.log('👛 Manual wallet connected:', walletAddress);
+      console.log('👛 Farcaster wallet connected:', walletAddress);
 
       // Get current chain
       const chainId = await ethProvider.request({ method: 'eth_chainId' });
@@ -724,15 +711,77 @@ function App() {
 
       setAddress(walletAddress);
       setIsConnected(true);
+      setCurrentUser({ ...currentUser, walletType: 'farcaster' });
 
-      console.log('🎉 Manual wallet connection successful! Ready to fetch real data...');
+      console.log('🎉 Farcaster connection successful!');
 
     } catch (error) {
-      console.error('❌ Wallet connection failed:', error);
-      setError(`Failed to connect wallet: ${error.message}`);
+      console.error('❌ Farcaster connection failed:', error);
+      setError(`Failed to connect with Farcaster: ${error.message}`);
     } finally {
       setIsConnecting(false);
+      setShowWalletSelection(false);
     }
+  };
+
+  // Connect with Rabby wallet
+  const connectRabby = async () => {
+    console.log('🐰 Starting Rabby wallet connection...');
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      // Check if Rabby is installed
+      if (!window.ethereum || !window.ethereum.isRabby) {
+        throw new Error('Rabby wallet is not installed. Please install Rabby from https://rabby.io');
+      }
+
+      console.log('✅ Rabby wallet detected, requesting accounts...');
+      setProvider(window.ethereum);
+
+      // Request account access
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts returned from Rabby wallet');
+      }
+
+      const walletAddress = accounts[0].toLowerCase();
+      console.log('👛 Rabby wallet connected:', walletAddress);
+
+      // Get current chain
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      console.log('🔗 Current chain ID:', chainId);
+
+      // Map chainId to our supported chains
+      const chainIdNum = parseInt(chainId, 16);
+      let detectedChain = 'ethereum'; // default
+      if (chainIdNum === 8453) detectedChain = 'base';
+      if (chainIdNum === 42161) detectedChain = 'arbitrum';
+      
+      console.log(`🔗 Detected chain: ${detectedChain} (${chainIdNum})`);
+      setSelectedChain(detectedChain);
+
+      setAddress(walletAddress);
+      setIsConnected(true);
+      setCurrentUser({ displayName: 'Rabby User', walletType: 'rabby' });
+
+      console.log('🎉 Rabby connection successful!');
+
+    } catch (error) {
+      console.error('❌ Rabby connection failed:', error);
+      setError(`Failed to connect with Rabby: ${error.message}`);
+    } finally {
+      setIsConnecting(false);
+      setShowWalletSelection(false);
+    }
+  };
+
+  // Main connect wallet function - shows selection dialog
+  const connectWallet = () => {
+    setShowWalletSelection(true);
   };
 
 
@@ -4620,6 +4669,91 @@ function App() {
       </div>
 
       {/* Footer - Reduced margin for miniapp compatibility */}
+
+      {/* Wallet Selection Modal */}
+      {showWalletSelection && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 text-center">
+              <h2 className="text-2xl font-bold mb-2">Connect Wallet</h2>
+              <p className="text-blue-100">Choose your preferred wallet to connect</p>
+            </div>
+
+            {/* Wallet Options */}
+            <div className="p-6 space-y-4">
+              {/* Farcaster Option */}
+              <button
+                onClick={connectFarcaster}
+                disabled={isConnecting}
+                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 disabled:opacity-50 text-white p-4 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-between shadow-lg"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <span className="text-2xl">🎭</span>
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-bold text-lg">Farcaster</h3>
+                    <p className="text-purple-100 text-sm">Connect with Farcaster miniapp</p>
+                  </div>
+                </div>
+                <ChevronDown className="w-6 h-6 transform -rotate-90" />
+              </button>
+
+              {/* Rabby Option */}
+              <button
+                onClick={connectRabby}
+                disabled={isConnecting}
+                className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:opacity-50 text-white p-4 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-between shadow-lg"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <span className="text-2xl">🐰</span>
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-bold text-lg">Rabby Wallet</h3>
+                    <p className="text-orange-100 text-sm">Connect with Rabby browser extension</p>
+                  </div>
+                </div>
+                <ChevronDown className="w-6 h-6 transform -rotate-90" />
+              </button>
+
+              {/* Loading State */}
+              {isConnecting && (
+                <div className="text-center py-4">
+                  <div className="inline-flex items-center space-x-2 text-gray-600">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Connecting...</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Display */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="flex items-start space-x-2">
+                    <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center">
+              <button
+                onClick={() => setShowWalletSelection(false)}
+                className="text-gray-500 hover:text-gray-700 font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <p className="text-xs text-gray-400">
+                Choose the wallet that works best for you
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
