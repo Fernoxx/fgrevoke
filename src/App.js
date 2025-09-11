@@ -3051,9 +3051,9 @@ function App() {
               aria-label="Toggle menu"
             >
               {mobileMenuOpen ? (
-                <ChevronDown className="w-6 h-6 text-gray-600 transform rotate-180 transition-transform duration-200" />
+                <ChevronDown className="w-8 h-8 text-black transform rotate-180 transition-transform duration-200" />
               ) : (
-                <ChevronDown className="w-6 h-6 text-gray-600 transition-transform duration-200" />
+                <ChevronDown className="w-8 h-8 text-black transition-transform duration-200" />
               )}
             </button>
           </div>
@@ -3111,11 +3111,11 @@ function App() {
               <div className="space-y-4">
                 {/* Chain Selector */}
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">Select Chain</label>
+                  <label className="block text-sm font-medium text-gray-800 mb-2">Select Chain</label>
                   <select
                     value={selectedChain}
                     onChange={(e) => setSelectedChain(e.target.value)}
-                    className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 backdrop-blur-sm"
+                    className="w-full bg-white/90 border border-gray-300 text-gray-900 rounded-lg px-3 py-2 backdrop-blur-sm shadow-sm"
                   >
                     {chains.map((chain) => (
                       <option key={chain.value} value={chain.value} className="text-gray-900">
@@ -3129,29 +3129,29 @@ function App() {
                 {isConnected ? (
                   <div className="space-y-3">
                     {/* User Profile */}
-                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+                    <div className="bg-white/90 backdrop-blur-sm rounded-lg p-3 border border-gray-300 shadow-sm">
                       <div className="flex items-center space-x-2 mb-2">
-                        <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                        <span className="font-medium text-white">Connected</span>
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <span className="font-medium text-gray-800">Connected</span>
                       </div>
-                      <p className="text-sm text-white/80">
+                      <p className="text-sm text-gray-700">
                         {currentUser?.username ? `@${currentUser.username}` : 
                          currentUser?.displayName || 
                          formatAddress(address)}
                       </p>
                       {currentUser?.fid && (
-                        <p className="text-xs text-white/60 mt-1">FID: {currentUser.fid}</p>
+                        <p className="text-xs text-gray-600 mt-1">FID: {currentUser.fid}</p>
                       )}
                     </div>
                     
                     {/* Address Selector */}
                     {userAddresses.length > 1 && (
                       <div>
-                        <label className="block text-sm font-medium text-white mb-2">Select Address</label>
+                        <label className="block text-sm font-medium text-gray-800 mb-2">Select Address</label>
                         <select
                           value={address}
                           onChange={(e) => setAddress(e.target.value)}
-                          className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 backdrop-blur-sm"
+                          className="w-full bg-white/90 border border-gray-300 text-gray-900 rounded-lg px-3 py-2 backdrop-blur-sm shadow-sm"
                         >
                           {userAddresses.map((addr, idx) => (
                             <option key={addr} value={addr.toLowerCase()} className="text-gray-900">
@@ -3164,7 +3164,7 @@ function App() {
                     
                     <button
                       onClick={disconnect}
-                      className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-400/30 py-3 rounded-lg font-medium transition-colors duration-200 backdrop-blur-sm"
+                      className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-300 py-3 rounded-lg font-medium transition-colors duration-200 shadow-sm"
                     >
                       Disconnect Wallet
                     </button>
@@ -3173,7 +3173,7 @@ function App() {
                   <button
                     onClick={connectWallet}
                     disabled={isConnecting || !sdkReady}
-                    className="w-full bg-blue-500/20 hover:bg-blue-500/30 disabled:bg-blue-500/10 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors duration-200 backdrop-blur-sm border border-blue-400/30"
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors duration-200 shadow-sm"
                   >
                     <Wallet className="w-5 h-5" />
                     <span>{isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}</span>
