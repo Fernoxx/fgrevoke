@@ -2929,7 +2929,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 to-indigo-900 text-white font-sans flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-purple-100 text-gray-900 flex flex-col" style={{fontFamily: 'Maven Pro, sans-serif'}}>
       {/* Professional Modern Header */}
       <header className="modern-header sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b border-gray-200/20 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -2938,8 +2938,8 @@ function App() {
             <div className="flex items-center space-x-3">
               <img src="/farguard-logo.png" alt="FarGuard" className="h-12 w-12" />
               <div className="flex flex-col">
-                <h1 className="text-xl font-bold text-gray-900 leading-tight">FarGuard</h1>
-                <span className="text-xs text-gray-500 font-medium">Secure Token Management</span>
+                <h1 className="text-xl text-gray-900 leading-tight" style={{fontWeight: 600, fontFamily: 'Maven Pro, sans-serif'}}>FARGUARD</h1>
+                <span className="text-xs text-gray-500 font-medium" style={{fontFamily: 'Maven Pro, sans-serif'}}>Your Wallet Protector</span>
               </div>
             </div>
 
@@ -3188,7 +3188,7 @@ function App() {
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
 
         {/* Main Content */}
-        <main className="w-full max-w-4xl bg-purple-800 rounded-xl shadow-lg p-6 flex-1">
+        <main className="w-full max-w-4xl bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 flex-1 border border-gray-200/50">
           {!isConnected ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-16 h-16 mx-auto mb-4" />
@@ -3197,7 +3197,7 @@ function App() {
               {currentUser ? (
                 <div className="mb-6">
                   <div className="text-center mb-3">
-                    <h2 className="text-2xl font-bold text-purple-200">
+                    <h2 className="text-2xl font-bold text-gray-800">
                       Welcome, {currentUser.displayName || `@${currentUser.username}`}!
                     </h2>
                     <p className="text-sm text-purple-400">
@@ -3436,8 +3436,8 @@ function App() {
                 </div>
               ) : (
                 <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-purple-200 mb-2">Secure Your Wallet</h2>
-                  <p className="text-xl text-purple-300 mb-4">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Secure Your Wallet</h2>
+                  <p className="text-xl text-gray-600 mb-4">
                     View your REAL token approvals and revoke risky permissions
                   </p>
                 </div>
@@ -3479,7 +3479,7 @@ function App() {
             <div>
               {/* Connected View */}
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-purple-200">
+                <h2 className="text-2xl font-bold text-gray-800">
                   {currentPage === 'approvals' 
                     ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
                     : currentPage === 'scanner'
@@ -3491,7 +3491,7 @@ function App() {
                     : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
                   }
                 </h2>
-                <p className="text-sm text-purple-400 mt-1">
+                <p className="text-sm text-gray-500 mt-1">
                   Connected: {formatAddress(address)}
                 </p>
                 <div className="flex gap-2 mt-3">
