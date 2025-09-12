@@ -1105,11 +1105,15 @@ function App() {
   useEffect(() => {
     if (address && isConnected) {
       console.log('🔄 Data fetch triggered:', { currentPage, address, selectedChain });
-      if (currentPage === 'approvals') {
-        console.log('📋 Fetching approvals...');
-        fetchRealApprovals(address);
+      
+      // Always fetch approvals when wallet connects (needed for home page stats)
+      console.log('📋 Fetching approvals...');
+      fetchRealApprovals(address);
+      
+      // Add other data fetching for specific pages as needed
+      if (currentPage === 'scanner') {
+        // Fetch scanner data if needed
       }
-      // Add other data fetching for scanner, etc. as needed
     }
   }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals]);
 
