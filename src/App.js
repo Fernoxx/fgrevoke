@@ -318,9 +318,13 @@ function App() {
           
           const approval = {
             id: key,
-            name: tokenInfo.name || 'Unknown Token',
-            symbol: tokenInfo.symbol || 'UNK',
-            contract: tokenContract,
+            token: {
+              name: tokenInfo.name || 'Unknown Token',
+              symbol: tokenInfo.symbol || 'UNK',
+              logo: `https://tokens.1inch.io/${tokenContract.toLowerCase()}.png`, // Default token logo URL
+              decimals: tokenInfo.decimals || 18,
+              contract: tokenContract
+            },
             spender: spenderAddress,
             spenderName: getSpenderName(spenderAddress),
             amount: formatAllowance(allowance, tokenInfo.decimals),
@@ -333,7 +337,7 @@ function App() {
           approvalMap.set(key, approval);
           processedCount++;
           
-          console.log(`📝 Added approval: ${approval.name} (${approval.symbol}) -> ${approval.spenderName}`);
+          console.log(`📝 Added approval: ${approval.token.name} (${approval.token.symbol}) -> ${approval.spenderName}`);
         }
         
         // Small delay
@@ -498,9 +502,13 @@ function App() {
           
           const approval = {
             id: key,
-            name: tokenInfo.name || 'Unknown Token',
-            symbol: tokenInfo.symbol || 'UNK',
-            contract: tokenContract,
+            token: {
+              name: tokenInfo.name || 'Unknown Token',
+              symbol: tokenInfo.symbol || 'UNK',
+              logo: `https://tokens.1inch.io/${tokenContract.toLowerCase()}.png`, // Default token logo URL
+              decimals: tokenInfo.decimals || 18,
+              contract: tokenContract
+            },
             spender: spenderAddress,
             spenderName: getSpenderName(spenderAddress),
             amount: formatAllowance(allowance, tokenInfo.decimals),
@@ -513,7 +521,7 @@ function App() {
           approvalMap.set(key, approval);
           processedCount++;
           
-          console.log(`📝 Added approval: ${approval.name} (${approval.symbol}) -> ${approval.spenderName}`);
+          console.log(`📝 Added approval: ${approval.token.name} (${approval.token.symbol}) -> ${approval.spenderName}`);
         }
         
         // Small delay
