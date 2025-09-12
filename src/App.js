@@ -1248,9 +1248,11 @@ function App() {
       // Request account access if needed
       await provider.request({ method: 'eth_requestAccounts' });
 
-      // Encode the function call
-      const iface = new ethers.utils.Interface(approveABI);
-      const data = iface.encodeFunctionData('approve', [approval.spender, '0x0']);
+      // Simple approve function call (approve spender to 0)
+      const approveFunctionSignature = '0x095ea7b3'; // approve(address,uint256)
+      const spenderAddress = approval.spender.slice(2).padStart(64, '0');
+      const amount = '0'.padStart(64, '0');
+      const data = approveFunctionSignature + spenderAddress + amount;
 
       // Send the transaction
       const txHash = await provider.request({
@@ -1264,11 +1266,11 @@ function App() {
 
       console.log('Transaction sent:', txHash);
       
-      // Update local approvals list
-      setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      
-      // Mark as revoked in localStorage
+      // Mark as revoked in localStorage first
       localStorage.setItem('hasRevoked', 'true');
+      
+      // Update local approvals list after successful transaction
+      setApprovals(prev => prev.filter(a => a.id !== approval.id));
       
       alert('Approval revoked successfully!');
     } catch (error) {
@@ -3463,7 +3465,7 @@ function App() {
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
                 <div className="text-center">
                   <div className="flex justify-center mb-8">
-                    <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-60 h-60" />
+                    <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-32 h-32" />
                   </div>
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
                     Secure Your <span className="text-purple-600">Crypto Wallet</span>
