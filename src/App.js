@@ -3402,11 +3402,10 @@ function App() {
                     Secure Your <span className="text-purple-600">Crypto Wallet</span>
                   </h1>
                   <p className="text-xl sm:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
-                    View your REAL token approvals and revoke risky permissions. 
-                    Protect your assets with FarGuard's advanced security tools.
+                    FarGuard is a security-focused miniapp that helps users protect their wallets by revoking risky approvals with a single click. As part of our community-first design, users earn $FG tokens for every approval revoked, and long-term holders are rewarded daily for securing the ecosystem.
                   </p>
                   
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+                  <div className="flex justify-center items-center mb-12">
                     <button
                       onClick={() => setShowWalletSelection(true)}
                       disabled={!sdkReady || isConnecting}
@@ -3423,12 +3422,6 @@ function App() {
                           Connect Wallet
                         </>
                       )}
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage('scanner')}
-                      className="bg-white/80 backdrop-blur-sm hover:bg-white/90 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 border border-purple-200 shadow-lg"
-                    >
-                      View Demo
                     </button>
                   </div>
                 </div>
