@@ -3696,7 +3696,7 @@ function App() {
 
                   {/* Approvals Content */}
                   {loadingApprovals ? (
-                    <div className="text-center py-12">
+                    <div className="flex justify-center items-center py-12">
                       <FGLoadingBox />
                     </div>
                   ) : approvals.length === 0 ? (
