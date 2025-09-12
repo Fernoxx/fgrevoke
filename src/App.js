@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target, ShoppingCart, Menu, Droplets } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target, ShoppingCart, Menu, Droplets, Home } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -3113,6 +3113,13 @@ function App() {
             {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center space-x-1">
               <button
+                onClick={() => setCurrentPage('home')}
+                className={`nav-btn ${currentPage === 'home' ? 'nav-btn-active' : 'nav-btn-inactive'} hover:bg-white/20`}
+              >
+                <Home className="w-4 h-4" />
+                <span>Home</span>
+              </button>
+              <button
                 onClick={() => isConnected && setCurrentPage('approvals')}
                 disabled={!isConnected}
                 className={`nav-btn ${currentPage === 'approvals' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
@@ -3125,15 +3132,8 @@ function App() {
                 disabled={!isConnected}
                 className={`nav-btn ${currentPage === 'scanner' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
               >
-                <Activity className="w-4 h-4" />
+                <Radar className="w-4 h-4" />
                 <span>Scanner</span>
-              </button>
-              <button
-                onClick={() => setCurrentPage('home')}
-                className={`nav-btn ${currentPage === 'home' ? 'nav-btn-active' : 'nav-btn-inactive'} hover:bg-white/20`}
-              >
-                <Activity className="w-4 h-4" />
-                <span>Home</span>
               </button>
               <button
                 onClick={() => isConnected && setCurrentPage('buy')}
@@ -3239,6 +3239,16 @@ function App() {
               <div className="space-y-2 mb-6">
                 <button
                   onClick={() => {
+                    setCurrentPage('home');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`mobile-nav-btn ${currentPage === 'home' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
+                >
+                  <Home className="w-5 h-5" />
+                  <span>Home</span>
+                </button>
+                <button
+                  onClick={() => {
                     if (isConnected) {
                       setCurrentPage('approvals');
                       setMobileMenuOpen(false);
@@ -3260,18 +3270,8 @@ function App() {
                   disabled={!isConnected}
                   className={`mobile-nav-btn ${currentPage === 'scanner' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <Activity className="w-5 h-5" />
+                  <Radar className="w-5 h-5" />
                   <span>Scanner</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setCurrentPage('home');
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`mobile-nav-btn ${currentPage === 'home' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
-                >
-                  <Activity className="w-5 h-5" />
-                  <span>Home</span>
                 </button>
                 <button
                   onClick={() => {
@@ -3582,7 +3582,7 @@ function App() {
                        : 'bg-white/50 text-gray-700 hover:bg-white/70'
                    }`}
                  >
-                   <Activity className="w-4 h-4 inline mr-2" />
+                   <Home className="w-4 h-4 inline mr-2" />
                    Home
                  </button>
                  <button
