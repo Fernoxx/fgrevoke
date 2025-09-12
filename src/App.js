@@ -3303,16 +3303,7 @@ function App() {
                     Disconnect
                   </button>
                 </div>
-              ) : (
-                <button
-                  onClick={connectWallet}
-                  disabled={isConnecting || !sdkReady}
-                  className="connect-btn bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-all duration-200 shadow-md hover:shadow-lg text-sm"
-                >
-                  <Wallet className="w-4 h-4" />
-                  <span>{isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}</span>
-                </button>
-              )}
+              ) : null}
             </div>
 
             {/* Mobile Menu Button */}
@@ -3472,7 +3463,7 @@ function App() {
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
                 <div className="text-center">
                   <div className="flex justify-center mb-8">
-                    <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-20 h-20" />
+                    <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-60 h-60" />
                   </div>
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
                     Secure Your <span className="text-purple-600">Crypto Wallet</span>
@@ -4004,49 +3995,63 @@ function App() {
 
       {showWalletSelection && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowWalletSelection(false)}
+              className="absolute top-4 right-4 z-10 p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 text-center">
-              <h2 className="text-2xl font-bold mb-2">Connect Wallet</h2>
-              <p className="text-blue-100">Choose your preferred wallet to connect</p>
+            <div className="bg-white border-b border-gray-200 p-6 text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect Wallet</h2>
+              <p className="text-gray-600">Choose your preferred wallet to connect</p>
             </div>
 
             {/* Wallet Options */}
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-3">
               {/* Farcaster Option */}
               <button
                 onClick={connectFarcaster}
                 disabled={isConnecting}
-                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 disabled:opacity-50 text-white p-4 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-between shadow-lg"
+                className="w-full bg-white border-2 border-gray-200 hover:border-purple-500 hover:bg-purple-50 disabled:opacity-50 text-gray-900 p-4 rounded-xl transition-all duration-200 flex items-center justify-between shadow-sm hover:shadow-md"
               >
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                    <span className="text-2xl">🎭</span>
+                  <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <svg className="w-6 h-6 text-purple-600" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
                   </div>
                   <div className="text-left">
-                    <h3 className="font-bold text-lg">Farcaster</h3>
-                    <p className="text-purple-100 text-sm">Connect with Farcaster miniapp</p>
+                    <h3 className="font-semibold text-lg">Farcaster</h3>
+                    <p className="text-gray-500 text-sm">Connect with Farcaster miniapp</p>
                   </div>
                 </div>
-                <ChevronDown className="w-6 h-6 transform -rotate-90" />
+                <ChevronDown className="w-5 h-5 text-gray-400 transform -rotate-90" />
               </button>
 
               {/* Rabby Option */}
               <button
                 onClick={connectRabby}
                 disabled={isConnecting}
-                className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:opacity-50 text-white p-4 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-between shadow-lg"
+                className="w-full bg-white border-2 border-gray-200 hover:border-orange-500 hover:bg-orange-50 disabled:opacity-50 text-gray-900 p-4 rounded-xl transition-all duration-200 flex items-center justify-between shadow-sm hover:shadow-md"
               >
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                    <span className="text-2xl">🐰</span>
+                  <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <svg className="w-6 h-6 text-orange-600" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
                   </div>
                   <div className="text-left">
-                    <h3 className="font-bold text-lg">Rabby Wallet</h3>
-                    <p className="text-orange-100 text-sm">Connect with Rabby browser extension</p>
+                    <h3 className="font-semibold text-lg">Rabby Wallet</h3>
+                    <p className="text-gray-500 text-sm">Connect with Rabby browser extension</p>
                   </div>
                 </div>
-                <ChevronDown className="w-6 h-6 transform -rotate-90" />
+                <ChevronDown className="w-5 h-5 text-gray-400 transform -rotate-90" />
               </button>
 
               {/* Loading State */}
@@ -4068,19 +4073,6 @@ function App() {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Footer */}
-            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center">
-              <button
-                onClick={() => setShowWalletSelection(false)}
-                className="text-gray-500 hover:text-gray-700 font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <p className="text-xs text-gray-400">
-                Choose the wallet that works best for you
-              </p>
             </div>
           </div>
         </div>
