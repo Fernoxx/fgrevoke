@@ -3471,7 +3471,7 @@ function App() {
                     Secure Your <span className="text-purple-600">Crypto Wallet</span>
                   </h1>
                   <p className="text-xl sm:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
-                    FarGuard is a security-focused miniapp that helps users protect their wallets by revoking risky approvals with a single click. As part of our community-first design, users earn $FG tokens for every approval revoked, and long-term holders are rewarded daily for securing the ecosystem.
+                    FarGuard is a RevokeToEarn miniapp where you secure your wallet by revoking risky approvals and earn $FG, while long-term holders are rewarded daily for securing the ecosystem.
                   </p>
                   
                   <div className="flex justify-center items-center mb-12">
