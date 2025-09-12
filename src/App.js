@@ -3204,19 +3204,19 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 text-gray-900 flex flex-col" style={{fontFamily: 'Ubuntu Mono, monospace'}}>
       {/* Professional Modern Header */}
       <header className={`modern-header sticky top-4 z-50 mx-4 sm:mx-6 lg:mx-8 bg-white/70 backdrop-blur-xl border border-gray-200/20 shadow-lg ${mobileMenuOpen ? 'rounded-2xl' : 'rounded-full'}`}>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Brand Logo */}
-            <div className="flex items-center space-x-3">
-              <img src="/farguard-logo.png" alt="FarGuard" className="h-12 w-12" />
+            <div className="flex items-center space-x-3 flex-shrink-0">
+              <img src="/farguard-logo.png" alt="FarGuard" className="h-10 w-10 lg:h-12 lg:w-12" />
               <div className="flex flex-col">
-                <h1 className="text-xl text-gray-900 leading-tight" style={{fontWeight: 600, fontFamily: 'Ubuntu Mono, monospace'}}>FARGUARD</h1>
-                <span className="text-xs text-gray-500 font-medium" style={{fontFamily: 'Ubuntu Mono, monospace'}}>Your Wallet Protector</span>
+                <h1 className="text-lg lg:text-xl text-gray-900 leading-tight" style={{fontWeight: 600, fontFamily: 'Ubuntu Mono, monospace'}}>FARGUARD</h1>
+                <span className="text-xs text-gray-500 font-medium hidden lg:block" style={{fontFamily: 'Ubuntu Mono, monospace'}}>Your Wallet Protector</span>
               </div>
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center space-x-1">
+            <div className="hidden lg:flex items-center space-x-1 ml-8">
               <button
                 onClick={() => setCurrentPage('home')}
                 className={`nav-btn ${currentPage === 'home' ? 'nav-btn-active' : 'nav-btn-inactive'} hover:bg-white/20`}
