@@ -1,6 +1,8 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target, ShoppingCart, Menu, Droplets, Home } from 'lucide-react';
+import { ethers } from 'ethers';
+import FGTokenBox from './components/FGTokenBox';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -1204,9 +1206,81 @@ function App() {
   };
 
   const revokeApproval = async (approval) => {
-    // Placeholder function for revoking approvals
-    console.log('Revoking approval:', approval);
-    // TODO: Implement actual revocation logic
+    if (!isConnected || !address) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    try {
+      setRevokingApprovals(prev => [...prev, approval.id]);
+      
+      // Create the approve transaction data
+      const approveABI = [{
+        "constant": false,
+        "inputs": [
+          {
+            "name": "_spender",
+            "type": "address"
+          },
+          {
+            "name": "_value",
+            "type": "uint256"
+          }
+        ],
+        "name": "approve",
+        "outputs": [
+          {
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "payable": false,
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }];
+
+      // Use the provider to send the transaction
+      const provider = window.ethereum;
+      if (!provider) {
+        throw new Error('No wallet provider found');
+      }
+
+      // Request account access if needed
+      await provider.request({ method: 'eth_requestAccounts' });
+
+      // Encode the function call
+      const iface = new ethers.utils.Interface(approveABI);
+      const data = iface.encodeFunctionData('approve', [approval.spender, '0x0']);
+
+      // Send the transaction
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: approval.token.contract,
+          data: data,
+        }],
+      });
+
+      console.log('Transaction sent:', txHash);
+      
+      // Update local approvals list
+      setApprovals(prev => prev.filter(a => a.id !== approval.id));
+      
+      // Mark as revoked in localStorage
+      localStorage.setItem('hasRevoked', 'true');
+      
+      alert('Approval revoked successfully!');
+    } catch (error) {
+      console.error('Error revoking approval:', error);
+      if (error.code === 4001) {
+        alert('Transaction was rejected by user');
+      } else {
+        alert('Failed to revoke approval. Please try again.');
+      }
+    } finally {
+      setRevokingApprovals(prev => prev.filter(id => id !== approval.id));
+    }
   };
 
   // Track revoke and claim status with localStorage
@@ -3125,12 +3199,6 @@ function App() {
     }
   }, [swapError]);
 
-  // Fetch token price when component mounts or when connected
-  useEffect(() => {
-    if (isConnected && currentPage === 'buy') {
-      fetchTokenPrice();
-    }
-  }, [isConnected, currentPage]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 text-gray-900 flex flex-col" style={{fontFamily: 'Ubuntu Mono, monospace'}}>
@@ -3171,14 +3239,6 @@ function App() {
               >
                 <Radar className="w-4 h-4" />
                 <span>Scanner</span>
-              </button>
-              <button
-                onClick={() => isConnected && setCurrentPage('buy')}
-                disabled={!isConnected}
-                className={`nav-btn ${currentPage === 'buy' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
-              >
-                <ShoppingCart className="w-4 h-4" />
-                <span>Buy</span>
               </button>
               <button
                 onClick={() => isConnected && setCurrentPage('faucet')}
@@ -3309,19 +3369,6 @@ function App() {
                 >
                   <Radar className="w-5 h-5" />
                   <span>Scanner</span>
-                </button>
-                <button
-                  onClick={() => {
-                    if (isConnected) {
-                      setCurrentPage('buy');
-                      setMobileMenuOpen(false);
-                    }
-                  }}
-                  disabled={!isConnected}
-                  className={`mobile-nav-btn ${currentPage === 'buy' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <ShoppingCart className="w-5 h-5" />
-                  <span>Buy</span>
                 </button>
                 <button
                   onClick={() => {
@@ -3512,6 +3559,9 @@ function App() {
               </div>
             </section>
 
+            {/* Token Box Section */}
+            <FGTokenBox />
+
             {/* Stats Section */}
             <section className="py-16">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -3576,34 +3626,17 @@ function App() {
                     ? 'Token Approvals' 
                     : currentPage === 'scanner' 
                       ? 'Wallet Scanner' 
-                      : currentPage === 'buy' 
-                        ? 'Buy Tokens' 
-                        : 'Faucet'}
+                      : 'Faucet'}
                 </h2>
                 <p className="text-gray-600 mt-1">
                   {currentPage === 'approvals' 
                     ? 'Review and manage your token approvals' 
                     : currentPage === 'scanner' 
                       ? 'Scan your wallet for security risks' 
-                      : currentPage === 'buy' 
-                        ? 'Purchase tokens directly' 
-                        : 'Get test tokens'}
+                      : 'Get test tokens'}
                 </p>
               </div>
               
-              <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
-                <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                </div>
-                <h3 className="text-lg font-semibold text-green-800 mb-2">Wallet Connected!</h3>
-                <p className="text-green-600 text-sm">
-                  {currentUser ? `Welcome, ${currentUser.displayName || `@${currentUser.username}`}!` : 'Ready to secure your wallet'}
-                </p>
-              </div>
 
                {/* Navigation Tabs */}
                <div className="flex flex-wrap gap-2 mb-6">
@@ -3628,17 +3661,6 @@ function App() {
                  >
                    <Radar className="w-4 h-4 inline mr-2" />
                    Scanner
-                 </button>
-                 <button
-                   onClick={() => setCurrentPage('buy')}
-                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                     currentPage === 'buy' 
-                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                   }`}
-                 >
-                   <ShoppingCart className="w-4 h-4 inline mr-2" />
-                   Buy
                  </button>
                  <button
                    onClick={() => setCurrentPage('faucet')}
@@ -3898,134 +3920,6 @@ function App() {
                       )}
                     </div>
                   )}
-                </div>
-              ) : currentPage === 'buy' ? (
-                // Buy Page - Token Purchase Box
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl p-6 shadow-lg">
-                    <div className="text-center mb-6">
-                      <ShoppingCart className="w-12 h-12 text-white mx-auto mb-4" />
-                      <h3 className="text-2xl font-bold text-white mb-2">Buy FarGuard Token</h3>
-                      <p className="text-purple-100">Purchase tokens with ETH or USDC on Base network</p>
-                      <p className="text-xs text-purple-200 mt-2">
-                        Contract: {TOKEN_CONTRACT_ADDRESS}
-                      </p>
-                      
-                      {/* Clanker v4 + Uniswap v4 Info */}
-                      <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <CheckCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-blue-200 text-sm font-bold">✅ Clanker v4 + Uniswap v4</p>
-                            <p className="text-blue-200/80 text-xs mt-1">
-                              This token uses Clanker v4 with Uniswap v4 Universal Router for direct swaps.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Buy Box */}
-                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-                      {buyError && (
-                        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
-                          <p className="text-red-200 text-sm">{buyError}</p>
-                        </div>
-                      )}
-                      
-                      {/* Currency Selection */}
-                      <div className="mb-4">
-                        <label className="block text-white font-medium mb-2">Pay with</label>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => setBuyCurrency('ETH')}
-                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                              buyCurrency === 'ETH' 
-                                ? 'bg-white text-purple-600' 
-                                : 'bg-white/20 text-white hover:bg-white/30'
-                            }`}
-                          >
-                            ETH
-                          </button>
-                          <button
-                            onClick={() => setBuyCurrency('USDC')}
-                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                              buyCurrency === 'USDC' 
-                                ? 'bg-white text-purple-600' 
-                                : 'bg-white/20 text-white hover:bg-white/30'
-                            }`}
-                          >
-                            USDC
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Amount Input */}
-                      <div className="mb-4">
-                        <label className="block text-white font-medium mb-2">
-                          Amount ({buyCurrency})
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            value={buyAmount}
-                            onChange={(e) => setBuyAmount(e.target.value)}
-                            placeholder={`Enter ${buyCurrency} amount`}
-                            className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-3 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent"
-                            step="0.0001"
-                            min="0"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Token Amount Display */}
-                      {buyAmount && tokenPrice > 0 && (
-                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
-                          <div className="flex justify-between items-center">
-                            <span className="text-white font-medium">You'll receive:</span>
-                            <span className="text-green-300 font-bold text-lg">
-                              {calculateTokenAmount(buyAmount).toLocaleString()} tokens
-                            </span>
-                          </div>
-                          <div className="text-xs text-purple-200 mt-1">
-                            Rate: 1 {buyCurrency} = {(1 / tokenPrice).toLocaleString()} tokens
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Price Loading */}
-                      {loadingPrice && (
-                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
-                          <div className="flex items-center justify-center">
-                            <RefreshCw className="w-4 h-4 text-white animate-spin mr-2" />
-                            <span className="text-white text-sm">Loading token price...</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Buy Button */}
-                      <button
-                        onClick={handleBuyTokens}
-                        disabled={!isConnected || !buyAmount || loadingPrice || isPending || isConfirming}
-                        className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100 disabled:cursor-not-allowed shadow-lg"
-                      >
-                        {isPending || isConfirming ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            {isPending ? 'Confirming...' : 'Processing...'}
-                          </div>
-                        ) : (
-                          `Buy ${calculateTokenAmount(buyAmount).toLocaleString()} tokens`
-                        )}
-                      </button>
-                      
-                      <div className="mt-4 text-center">
-                        <p className="text-purple-200 text-xs">
-                          Powered by Uniswap v4 Universal Router
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">

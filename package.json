@@ -12,6 +12,7 @@
     "@wagmi/core": "^2.18.0",
     "ajv": "^8.17.1",
     "ethers": "^5.8.0",
+    "framer-motion": "^12.23.12",
     "lucide-react": "^0.263.1",
     "node-fetch": "^3.3.2",
     "react": "^18.2.0",
