@@ -3345,10 +3345,10 @@ function App() {
       <div className="flex-1 flex flex-col items-center p-4 sm:p-6 mt-6">
 
         {/* Main Content */}
-        <main className="w-full max-w-4xl bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 flex-1 border border-gray-200/50">
+        <main className="w-full max-w-4xl bg-white/80 rounded-xl shadow-lg p-6 flex-1 border border-gray-200/50 relative z-10">
           {!isConnected ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-16 h-16 mx-auto mb-4" />
+            <div className="flex flex-col items-center justify-center h-64 text-center relative z-20">
+              <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-16 h-16 mx-auto mb-4 relative z-20" />
               
               {/* Personalized Welcome for Farcaster Users */}
               {currentUser ? (
