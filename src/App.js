@@ -3342,7 +3342,7 @@ function App() {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col items-center p-4 sm:p-6">
+      <div className="flex-1 flex flex-col items-center p-4 sm:p-6 mt-6">
 
         {/* Main Content */}
         <main className="w-full max-w-4xl bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 flex-1 border border-gray-200/50">
