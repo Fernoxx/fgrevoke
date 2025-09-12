@@ -3307,7 +3307,7 @@ function App() {
                 <button
                   onClick={connectWallet}
                   disabled={isConnecting || !sdkReady}
-                  className="connect-btn bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg font-medium flex items-center space-x-2 transition-all duration-200 shadow-md hover:shadow-lg"
+                  className="connect-btn bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-all duration-200 shadow-md hover:shadow-lg text-sm"
                 >
                   <Wallet className="w-4 h-4" />
                   <span>{isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}</span>
@@ -3485,7 +3485,7 @@ function App() {
                     <button
                       onClick={() => setShowWalletSelection(true)}
                       disabled={!sdkReady || isConnecting}
-                      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
+                      className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
                     >
                       {isConnecting ? (
                         <>
@@ -3587,7 +3587,7 @@ function App() {
             </section>
 
             {/* CTA Section */}
-            <section className="py-16 bg-gradient-to-r from-purple-600 to-indigo-600">
+            <section className="py-16 bg-gradient-to-r from-purple-700 to-indigo-700">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
                 <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
                   Ready to Secure Your Wallet?
