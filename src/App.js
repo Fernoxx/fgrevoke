@@ -3756,10 +3756,9 @@ function App() {
                         Scan your wallet for potential security risks and vulnerabilities
                       </p>
                       <button
-                        onClick={() => setCurrentPage('approvals')}
-                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed"
                       >
-                        Start Security Scan
+                        Coming Soon
                       </button>
                     </div>
                   </div>
@@ -3775,10 +3774,9 @@ function App() {
                         Purchase tokens directly through our secure platform
                       </p>
                       <button
-                        onClick={() => setCurrentPage('approvals')}
-                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed"
                       >
-                        Browse Tokens
+                        Coming Soon
                       </button>
                     </div>
                   </div>
@@ -3794,10 +3792,9 @@ function App() {
                         Get test tokens for development and testing
                       </p>
                       <button
-                        onClick={() => setCurrentPage('approvals')}
-                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed"
                       >
-                        Request Test Tokens
+                        Coming Soon
                       </button>
                     </div>
                   </div>
