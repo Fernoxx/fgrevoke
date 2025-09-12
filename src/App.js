@@ -12,7 +12,7 @@ import { encodeAbiParameters, parseAbiParameters } from 'viem';
 
 function App() {
 
-  const [selectedChain, setSelectedChain] = useState('ethereum');
+  const [selectedChain, setSelectedChain] = useState('base');
   const [approvals, setApprovals] = useState([]);
   const [loadingApprovals, setLoadingApprovals] = useState(false);
   const [loading, setLoading] = useState(false);
