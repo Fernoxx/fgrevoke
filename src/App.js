@@ -3686,53 +3686,53 @@ function App() {
               {/* Stats */}
               {currentPage === 'approvals' ? (
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-white">{approvals.length}</p>
-                    <p className="text-sm text-purple-200">Active Approvals</p>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-gray-800">{approvals.length}</p>
+                    <p className="text-sm text-gray-600">Active Approvals</p>
                   </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-red-400">
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-red-500">
                       {approvals.filter(a => a.riskLevel === 'high').length}
                     </p>
-                    <p className="text-sm text-purple-200">High Risk</p>
+                    <p className="text-sm text-gray-600">High Risk</p>
                   </div>
                 </div>
               ) : currentPage === 'activity' ? (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-white">{activityStats.totalTransactions}</p>
-                    <p className="text-sm text-purple-200">Transactions</p>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-gray-800">{activityStats.totalTransactions}</p>
+                    <p className="text-sm text-gray-600">Transactions</p>
                   </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-400">{activityStats.dappsUsed}</p>
-                    <p className="text-sm text-purple-200">dApps Used</p>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-blue-600">{activityStats.dappsUsed}</p>
+                    <p className="text-sm text-gray-600">dApps Used</p>
                   </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-green-400">{activityStats.totalValue.toFixed(3)}</p>
-                    <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Transferred</p>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-green-600">{activityStats.totalValue.toFixed(3)}</p>
+                    <p className="text-sm text-gray-600">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Transferred</p>
                   </div>
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-orange-400">{activityStats.totalGasFees.toFixed(4)}</p>
-                    <p className="text-sm text-purple-200">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-orange-600">{activityStats.totalGasFees.toFixed(4)}</p>
+                    <p className="text-sm text-gray-600">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
                   </div>
                 </div>
               ) : currentPage === 'scanner' && scannerData ? (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-purple-700 rounded-lg p-4 text-center">
-                                          <p className="text-2xl font-bold text-white">{scannerData.stats.totalTransactions}</p>
-                      <p className="text-sm text-purple-200">Total Transactions</p>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                                          <p className="text-2xl font-bold text-gray-800">{scannerData.stats.totalTransactions}</p>
+                      <p className="text-sm text-gray-600">Total Transactions</p>
                     </div>
-                    <div className="bg-purple-700 rounded-lg p-4 text-center">
-                      <p className="text-2xl font-bold text-blue-400">{scannerData.tokenHoldings.length}</p>
-                      <p className="text-sm text-purple-200">Tokens Held</p>
+                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-bold text-blue-600">{scannerData.tokenHoldings.length}</p>
+                      <p className="text-sm text-gray-600">Tokens Held</p>
                     </div>
-                    <div className="bg-purple-700 rounded-lg p-4 text-center">
-                      <p className="text-2xl font-bold text-green-400">{scannerData.profitLoss.total > 0 ? '+' : ''}{scannerData.profitLoss.total.toFixed(3)}</p>
-                      <p className="text-sm text-purple-200">ETH P&L</p>
+                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-bold text-green-600">{scannerData.profitLoss.total > 0 ? '+' : ''}{scannerData.profitLoss.total.toFixed(3)}</p>
+                      <p className="text-sm text-gray-600">ETH P&L</p>
                     </div>
-                    <div className="bg-purple-700 rounded-lg p-4 text-center">
-                      <p className="text-2xl font-bold text-orange-400">{scannerData.stats.dappsUsed}</p>
-                      <p className="text-sm text-purple-200">dApps Used</p>
+                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-bold text-orange-600">{scannerData.stats.dappsUsed}</p>
+                      <p className="text-sm text-gray-600">dApps Used</p>
                     </div>
                 </div>
               ) : null}
@@ -3799,12 +3799,12 @@ function App() {
                 // Scanner Interface
                 <div className="space-y-6">
                   {/* Address Input Section */}
-                  <div className="bg-purple-700 rounded-lg p-6">
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                     <div className="flex items-center gap-3 mb-4">
-                      <Eye className="w-6 h-6 text-purple-300" />
-                      <h3 className="text-xl font-bold text-white">Enter Address to Analyze</h3>
+                      <Eye className="w-6 h-6 text-gray-600" />
+                      <h3 className="text-xl font-bold text-gray-800">Enter Address to Analyze</h3>
                     </div>
-                    <p className="text-purple-300 text-sm mb-4">
+                    <p className="text-gray-600 text-sm mb-4">
                       Paste any Ethereum address below to get comprehensive analysis
                     </p>
                     <div className="space-y-3">
@@ -3813,7 +3813,7 @@ function App() {
                         value={scannerAddress}
                         onChange={(e) => setScannerAddress(e.target.value)}
                         placeholder="0x1234567890abcdef1234567890abcdef12345678"
-                        className="w-full px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                       <button
                         onClick={() => searchScannerAddress(1)}
@@ -3835,14 +3835,14 @@ function App() {
                   {/* Loading State */}
                   {loadingScanner && (
                     <div className="space-y-4">
-                      <div className="bg-purple-700 rounded-lg p-6">
+                      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center gap-3 mb-4">
-                          <div className="w-6 h-6 bg-purple-600 rounded animate-pulse"></div>
-                          <div className="h-6 bg-purple-600 rounded w-48 animate-pulse"></div>
+                          <div className="w-6 h-6 bg-gray-300 rounded animate-pulse"></div>
+                          <div className="h-6 bg-gray-300 rounded w-48 animate-pulse"></div>
                         </div>
                         <div className="space-y-2">
-                          <div className="h-4 bg-purple-600 rounded w-3/4 animate-pulse"></div>
-                          <div className="h-4 bg-purple-600 rounded w-1/2 animate-pulse"></div>
+                          <div className="h-4 bg-gray-300 rounded w-3/4 animate-pulse"></div>
+                          <div className="h-4 bg-gray-300 rounded w-1/2 animate-pulse"></div>
                         </div>
                       </div>
                     </div>
@@ -3853,22 +3853,22 @@ function App() {
                     <div className="space-y-6">
                       {/* Profile Section */}
                                               {scannerData.farcasterProfile && (
-                        <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                           <div className="flex items-center gap-3 mb-4">
-                            <User className="w-6 h-6 text-purple-300" />
-                            <h3 className="text-xl font-bold text-white">Farcaster Profile</h3>
+                            <User className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Farcaster Profile</h3>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <p className="text-white font-semibold">@{scannerData.farcasterProfile.username}</p>
-                              <p className="text-purple-300">{scannerData.farcasterProfile.displayName}</p>
-                              <p className="text-purple-400 text-sm mt-2">FID: {scannerData.farcasterProfile.fid}</p>
+                              <p className="text-gray-800 font-semibold">@{scannerData.farcasterProfile.username}</p>
+                              <p className="text-gray-600">{scannerData.farcasterProfile.displayName}</p>
+                              <p className="text-gray-500 text-sm mt-2">FID: {scannerData.farcasterProfile.fid}</p>
                               {scannerData.farcasterProfile.bio && (
-                                <p className="text-purple-200 text-sm mt-2">{scannerData.farcasterProfile.bio}</p>
+                                <p className="text-gray-600 text-sm mt-2">{scannerData.farcasterProfile.bio}</p>
                               )}
                             </div>
                             <div className="text-right">
-                              <p className="text-purple-300 text-sm">
+                              <p className="text-gray-600 text-sm">
                                 {scannerData.farcasterProfile.followerCount} followers • {scannerData.farcasterProfile.followingCount} following
                               </p>
                               {scannerData.farcasterProfile.verifiedAddresses.length > 0 && (
@@ -3883,26 +3883,26 @@ function App() {
 
                       {/* Social Profiles */}
                       {(scannerData.socialProfiles.ens || scannerData.socialProfiles.lens) && (
-                        <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                           <div className="flex items-center gap-3 mb-4">
-                            <ExternalLink className="w-6 h-6 text-purple-300" />
-                            <h3 className="text-xl font-bold text-white">Social Profiles</h3>
+                            <ExternalLink className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Social Profiles</h3>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {scannerData.socialProfiles.ens && (
-                              <div className="bg-purple-800 rounded-lg p-4">
-                                <h4 className="text-white font-semibold mb-2">ENS</h4>
-                                <p className="text-purple-200">{scannerData.socialProfiles.ens.name}</p>
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <h4 className="text-gray-800 font-semibold mb-2">ENS</h4>
+                                <p className="text-gray-600">{scannerData.socialProfiles.ens.name}</p>
                                 {scannerData.socialProfiles.ens.description && (
-                                  <p className="text-purple-400 text-sm mt-1">{scannerData.socialProfiles.ens.description}</p>
+                                  <p className="text-gray-500 text-sm mt-1">{scannerData.socialProfiles.ens.description}</p>
                                 )}
                               </div>
                             )}
                             {scannerData.socialProfiles.lens && (
-                              <div className="bg-purple-800 rounded-lg p-4">
-                                <h4 className="text-white font-semibold mb-2">Lens Protocol</h4>
-                                <p className="text-purple-200">{scannerData.socialProfiles.lens.handle}</p>
-                                <p className="text-purple-400 text-sm">{scannerData.socialProfiles.lens.followers} followers</p>
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <h4 className="text-gray-800 font-semibold mb-2">Lens Protocol</h4>
+                                <p className="text-gray-600">{scannerData.socialProfiles.lens.handle}</p>
+                                <p className="text-gray-500 text-sm">{scannerData.socialProfiles.lens.followers} followers</p>
                               </div>
                             )}
                           </div>
@@ -3911,28 +3911,28 @@ function App() {
 
                       {/* Token Holdings */}
                       {scannerData.tokenHoldings.length > 0 && (
-                        <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                           <div className="flex items-center gap-3 mb-4">
-                            <TrendingUp className="w-6 h-6 text-purple-300" />
-                            <h3 className="text-xl font-bold text-white">Token Holdings</h3>
+                            <TrendingUp className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Token Holdings</h3>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {scannerData.tokenHoldings.slice(0, 12).map((token, index) => (
-                              <div key={index} className="bg-purple-800 rounded-lg p-3">
+                              <div key={index} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                                 <div className="flex items-center justify-between">
                                   <div>
-                                    <p className="text-white font-semibold text-sm">{token.symbol}</p>
-                                    <p className="text-purple-400 text-xs">{token.name}</p>
+                                    <p className="text-gray-800 font-semibold text-sm">{token.symbol}</p>
+                                    <p className="text-gray-600 text-xs">{token.name}</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-purple-200 text-sm">{token.balance.toFixed(4)}</p>
+                                    <p className="text-gray-700 text-sm">{token.balance.toFixed(4)}</p>
                                   </div>
                                 </div>
                               </div>
                             ))}
                           </div>
                           {scannerData.tokenHoldings.length > 12 && (
-                            <p className="text-purple-400 text-sm mt-3 text-center">
+                            <p className="text-gray-500 text-sm mt-3 text-center">
                               +{scannerData.tokenHoldings.length - 12} more tokens
                             </p>
                           )}
@@ -3941,10 +3941,10 @@ function App() {
 
                       {/* Profit/Loss Heatmap */}
                       {scannerData.profitLoss.heatmapData.length > 0 && (
-                        <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                           <div className="flex items-center gap-3 mb-4">
-                            <BarChart3 className="w-6 h-6 text-purple-300" />
-                            <h3 className="text-xl font-bold text-white">Activity Heatmap (Last 30 Days)</h3>
+                            <BarChart3 className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Activity Heatmap (Last 30 Days)</h3>
                           </div>
                                                       <div className="grid grid-cols-10 gap-1">
                               {scannerData.profitLoss.heatmapData.map((day, index) => {
@@ -3992,19 +3992,19 @@ function App() {
 
                       {/* Wallet Activity */}
                       {scannerData.walletActivity.length > 0 && (
-                        <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                           <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
-                              <Activity className="w-6 h-6 text-purple-300" />
-                              <h3 className="text-xl font-bold text-white">Transaction History</h3>
+                              <Activity className="w-6 h-6 text-gray-600" />
+                              <h3 className="text-xl font-bold text-gray-800">Transaction History</h3>
                             </div>
-                            <span className="bg-purple-600 px-3 py-1 rounded-lg text-sm text-purple-200">
+                            <span className="bg-gray-100 px-3 py-1 rounded-lg text-sm text-gray-700 border border-gray-200">
                               {scannerData.walletActivity.length} loaded
                             </span>
                           </div>
                           <div className="space-y-3">
                             {scannerData.walletActivity.map((tx, index) => (
-                              <div key={`${tx.hash}-${index}`} className="bg-purple-800 rounded-lg p-4 hover:bg-purple-750 transition-colors">
+                              <div key={`${tx.hash}-${index}`} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors border border-gray-200">
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-2">
@@ -4031,43 +4031,43 @@ function App() {
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                                       <div>
-                                        <p className="text-purple-400">
-                                          <span className="text-purple-300">From:</span> {formatAddress(tx.from)}
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">From:</span> {formatAddress(tx.from)}
                                         </p>
-                                        <p className="text-purple-400">
-                                          <span className="text-purple-300">To:</span> {formatAddress(tx.to)}
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">To:</span> {formatAddress(tx.to)}
                                         </p>
                                       </div>
                                       <div>
-                                        <p className="text-purple-400">
-                                          <span className="text-purple-300">Gas:</span> {tx.gasFee.toFixed(6)} ETH
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">Gas:</span> {tx.gasFee.toFixed(6)} ETH
                                         </p>
-                                        <p className="text-purple-400">
-                                          <span className="text-purple-300">Block:</span> #{tx.blockNumber.toLocaleString()}
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">Block:</span> #{tx.blockNumber.toLocaleString()}
                                         </p>
                                       </div>
                                     </div>
                                     
                                     <div className="mt-2 flex items-center justify-between">
                                       <div className="text-xs">
-                                        <p className="text-purple-400">
+                                        <p className="text-gray-500">
                                           {new Date(tx.date).toLocaleDateString()} at {new Date(tx.date).toLocaleTimeString()}
                                         </p>
                                         {tx.methodName !== 'Transfer' && (
-                                          <p className="text-purple-500">
+                                          <p className="text-gray-600">
                                             Method: {tx.methodName}
                                           </p>
                                         )}
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs text-purple-400">
+                                        <span className="text-xs text-gray-500">
                                           {tx.confirmations > 0 ? `${tx.confirmations} confirmations` : 'Unconfirmed'}
                                         </span>
                                         <a
                                           href={`${tx.explorerUrl}/tx/${tx.hash}`}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="text-purple-300 hover:text-white transition-colors"
+                                          className="text-gray-500 hover:text-gray-700 transition-colors"
                                         >
                                           <ExternalLink className="w-4 h-4" />
                                         </a>
@@ -4154,12 +4154,12 @@ function App() {
 
                   {/* Contract Search Interface */}
                   {contractData !== null && !contractData.address && (
-                    <div className="bg-purple-700 rounded-lg p-6">
+                    <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                       <div className="flex items-center gap-3 mb-4">
-                        <FileText className="w-6 h-6 text-purple-300" />
-                        <h3 className="text-xl font-bold text-white">Contract Checker</h3>
+                        <FileText className="w-6 h-6 text-gray-600" />
+                        <h3 className="text-xl font-bold text-gray-800">Contract Checker</h3>
                       </div>
-                      <p className="text-purple-300 text-sm mb-4">
+                      <p className="text-gray-600 text-sm mb-4">
                         Enter any smart contract address to analyze its type, creator, and see live activity feed with buy/sell radar.
                       </p>
                       <div className="flex gap-3">
@@ -4199,14 +4199,14 @@ function App() {
                   {/* Loading State */}
                   {loadingContract && (
                     <div className="space-y-4">
-                      <div className="bg-purple-700 rounded-lg p-6">
+                      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center gap-3 mb-4">
-                          <div className="w-6 h-6 bg-purple-600 rounded animate-pulse"></div>
-                          <div className="h-6 bg-purple-600 rounded w-48 animate-pulse"></div>
+                          <div className="w-6 h-6 bg-gray-300 rounded animate-pulse"></div>
+                          <div className="h-6 bg-gray-300 rounded w-48 animate-pulse"></div>
                         </div>
                         <div className="space-y-2">
-                          <div className="h-4 bg-purple-600 rounded w-3/4 animate-pulse"></div>
-                          <div className="h-4 bg-purple-600 rounded w-1/2 animate-pulse"></div>
+                          <div className="h-4 bg-gray-300 rounded w-3/4 animate-pulse"></div>
+                          <div className="h-4 bg-gray-300 rounded w-1/2 animate-pulse"></div>
                         </div>
                       </div>
                     </div>
@@ -4216,15 +4216,15 @@ function App() {
                   {contractData && contractData.address && (
                     <div className="space-y-6">
                       {/* Contract Info */}
-                      <div className="bg-purple-700 rounded-lg p-6">
+                      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <FileText className="w-6 h-6 text-purple-300" />
-                            <h3 className="text-xl font-bold text-white">Contract Analysis</h3>
+                            <FileText className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Contract Analysis</h3>
                           </div>
                           <button
                             onClick={() => setContractData({})}
-                            className="text-purple-400 hover:text-white text-sm transition-colors"
+                            className="text-gray-500 hover:text-gray-700 text-sm transition-colors"
                           >
                             Search Another →
                           </button>
@@ -4365,24 +4365,24 @@ function App() {
 
                       {/* Live Activity Radar */}
                       {showActivityRadar && (
-                        <div className="bg-purple-700 rounded-lg p-6">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                           <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
-                              <Radar className="w-6 h-6 text-purple-300" />
-                              <h3 className="text-xl font-bold text-white">Live Activity Feed</h3>
+                              <Radar className="w-6 h-6 text-gray-600" />
+                              <h3 className="text-xl font-bold text-gray-800">Live Activity Feed</h3>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
                               <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                                <span className="text-green-300">Buyers</span>
+                                <span className="text-green-700">Buyers</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                                <span className="text-red-300">Sellers</span>
+                                <span className="text-red-700">Sellers</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                                <span className="text-blue-300">Interactions</span>
+                                <span className="text-blue-700">Interactions</span>
                               </div>
                             </div>
                           </div>
@@ -4463,33 +4463,33 @@ function App() {
                 ) : (
                   <div className="space-y-3">
                     {approvals.map((approval) => (
-                      <div key={approval.id} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
+                      <div key={approval.id} className="bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors shadow-sm border border-gray-100">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center flex-1">
                             <CheckCircle className="w-5 h-5 mr-3 text-blue-400 flex-shrink-0" />
                             <div className="flex-1">
-                              <h3 className="font-semibold text-white text-sm">
+                              <h3 className="font-semibold text-gray-800 text-sm">
                                 {approval.name} ({approval.symbol})
                               </h3>
-                              <p className="text-xs text-purple-300 mt-1">
+                              <p className="text-xs text-gray-600 mt-1">
                                 Approved to: {approval.spenderName}
                               </p>
-                              <p className="text-xs text-purple-400">
+                              <p className="text-xs text-gray-500">
                                 Contract: {formatAddress(approval.contract)}
                               </p>
                             </div>
                           </div>
-                          <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-opacity-20 ${
-                            approval.riskLevel === 'high' ? 'bg-red-500 text-red-300' :
-                            approval.riskLevel === 'medium' ? 'bg-yellow-500 text-yellow-300' :
-                            'bg-green-500 text-green-300'
+                          <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                            approval.riskLevel === 'high' ? 'bg-red-100 text-red-700 border border-red-200' :
+                            approval.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                            'bg-green-100 text-green-700 border border-green-200'
                           }`}>
                             {approval.riskLevel === 'high' && <AlertTriangle className="w-3 h-3" />}
                             {approval.riskLevel}
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
+                        <div className="flex items-center justify-between text-xs text-gray-600 mb-3">
                           <span>Amount: {approval.amount}</span>
                           <span>Block: {approval.blockNumber}</span>
                         </div>
@@ -4506,7 +4506,7 @@ function App() {
                               const chainConfig = chains.find(c => c.value === selectedChain);
                               window.open(`${chainConfig.explorerUrl}/tx/${approval.txHash}`, '_blank');
                             }}
-                            className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
+                            className="px-3 py-2 text-gray-500 hover:text-gray-700 transition-colors"
                             title="View Transaction"
                           >
                             <ExternalLink className="w-4 h-4" />
