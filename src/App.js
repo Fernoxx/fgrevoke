@@ -835,9 +835,9 @@ function App() {
 
   // Fetch approvals with Alchemy first, then Etherscan V2 fallback
   const fetchRealApprovals = useCallback(async (userAddress) => {
+    console.log('🚀 Starting fetchRealApprovals for:', userAddress, 'on chain:', selectedChain);
     setLoadingApprovals(true);
     setError(null);
-    console.log('🔍 Fetching approvals for:', userAddress, 'on chain:', selectedChain);
     
     try {
       // Try Alchemy first (preferred method)
@@ -1082,9 +1082,16 @@ function App() {
   // Auto-fetch data when conditions change
   useEffect(() => {
     if (address && isConnected) {
+      console.log('🔄 Data fetch triggered:', { currentPage, address, selectedChain });
       if (currentPage === 'approvals') {
+        console.log('📋 Fetching approvals...');
+        fetchRealApprovals(address);
+      } else if (currentPage === 'home') {
+        // Also fetch approvals for home page to show stats
+        console.log('🏠 Fetching approvals for home page...');
         fetchRealApprovals(address);
       }
+      // Add other data fetching for scanner, etc. as needed
     }
   }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals]);
 
