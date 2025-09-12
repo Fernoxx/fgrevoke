@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target, ShoppingCart, Menu, Droplets, Home } from 'lucide-react';
 import { ethers } from 'ethers';
 import FGTokenBox from './components/FGTokenBox';
+import FGLoadingBox from './components/FGLoadingBox';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -3696,8 +3697,7 @@ function App() {
                   {/* Approvals Content */}
                   {loadingApprovals ? (
                     <div className="text-center py-12">
-                      <RefreshCw className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-4" />
-                      <p className="text-purple-300">Loading approvals...</p>
+                      <FGLoadingBox />
                     </div>
                   ) : approvals.length === 0 ? (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
