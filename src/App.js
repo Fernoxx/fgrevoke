@@ -3205,7 +3205,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 text-gray-900 flex flex-col" style={{fontFamily: 'Ubuntu Mono, monospace'}}>
       {/* Professional Modern Header */}
-      <header className={`modern-header sticky top-4 z-50 mx-4 sm:mx-6 lg:mx-8 bg-white/70 backdrop-blur-xl border border-gray-200/20 shadow-lg ${mobileMenuOpen ? 'rounded-2xl' : 'rounded-full'}`}>
+      <header className={`modern-header sticky top-4 z-50 mx-4 sm:mx-6 lg:mx-8 bg-white/40 backdrop-blur-xl border border-gray-200/30 shadow-lg ${mobileMenuOpen ? 'rounded-2xl' : 'rounded-full'}`}>
         <div className="max-w-4xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Brand Logo */}
