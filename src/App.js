@@ -1212,7 +1212,7 @@ function App() {
     }
 
     try {
-      setRevokingApprovals(prev => [...prev, approval.id]);
+      setRevokingApprovals(prev => new Set(prev).add(approval.id));
       
       // Create the approve transaction data
       const approveABI = [{
@@ -1281,7 +1281,11 @@ function App() {
         alert('Failed to revoke approval. Please try again.');
       }
     } finally {
-      setRevokingApprovals(prev => prev.filter(id => id !== approval.id));
+      setRevokingApprovals(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(approval.id);
+        return newSet;
+      });
     }
   };
 
