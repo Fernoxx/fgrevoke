@@ -3746,57 +3746,360 @@ function App() {
                   )}
                 </div>
               ) : currentPage === 'scanner' ? (
-                <div className="space-y-4">
-                  {/* Scanner Content */}
+                // Scanner Interface
+                <div className="space-y-6">
+                  {/* Address Input Section */}
                   <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
-                    <div className="text-center">
-                      <Radar className="w-12 h-12 text-purple-500 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Wallet Security Scanner</h3>
-                      <p className="text-gray-600 mb-4">
-                        Scan your wallet for potential security risks and vulnerabilities
-                      </p>
+                    <div className="flex items-center gap-3 mb-4">
+                      <Eye className="w-6 h-6 text-purple-500" />
+                      <h3 className="text-xl font-bold text-gray-900">Enter Address to Analyze</h3>
+                    </div>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Paste any Ethereum address below to get comprehensive analysis
+                    </p>
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={scannerAddress}
+                        onChange={(e) => setScannerAddress(e.target.value)}
+                        placeholder="0x1234567890abcdef1234567890abcdef12345678"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
                       <button
-                        className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed"
+                        onClick={() => searchScannerAddress(1)}
+                        disabled={loadingScanner || !scannerAddress}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Coming Soon
+                        <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
+                        {loadingScanner ? 'Analyzing...' : 'Search'}
                       </button>
                     </div>
+                    {scannerError && (
+                      <div className="mt-4 bg-red-50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-500" />
+                        <p className="text-red-700 text-sm">{scannerError}</p>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Loading State */}
+                  {loadingScanner && (
+                    <div className="space-y-4">
+                      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-6 h-6 bg-purple-200 rounded animate-pulse"></div>
+                          <div className="h-6 bg-purple-200 rounded w-48 animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-purple-200 rounded w-3/4 animate-pulse"></div>
+                          <div className="h-4 bg-purple-200 rounded w-1/2 animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scanner Results */}
+                  {scannerData && !loadingScanner && (
+                    <div className="space-y-6">
+                      {/* Profile Section */}
+                      {scannerData.farcasterProfile && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-3 mb-4">
+                            <User className="w-6 h-6 text-purple-500" />
+                            <h3 className="text-xl font-bold text-gray-900">Farcaster Profile</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-gray-900 font-semibold">@{scannerData.farcasterProfile.username}</p>
+                              <p className="text-gray-600">{scannerData.farcasterProfile.displayName}</p>
+                              <p className="text-gray-500 text-sm mt-2">FID: {scannerData.farcasterProfile.fid}</p>
+                              {scannerData.farcasterProfile.bio && (
+                                <p className="text-gray-700 text-sm mt-2">{scannerData.farcasterProfile.bio}</p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-gray-600 text-sm">
+                                {scannerData.farcasterProfile.followerCount} followers • {scannerData.farcasterProfile.followingCount} following
+                              </p>
+                              {scannerData.farcasterProfile.verifiedAddresses.length > 0 && (
+                                <p className="text-green-600 text-sm mt-2">
+                                  ✅ {scannerData.farcasterProfile.verifiedAddresses.length} verified address{scannerData.farcasterProfile.verifiedAddresses.length > 1 ? 'es' : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Token Holdings */}
+                      {scannerData.tokenHoldings && scannerData.tokenHoldings.length > 0 && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-3 mb-4">
+                            <TrendingUp className="w-6 h-6 text-purple-500" />
+                            <h3 className="text-xl font-bold text-gray-900">Token Holdings</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {scannerData.tokenHoldings.slice(0, 12).map((token, index) => (
+                              <div key={index} className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-gray-900 font-semibold text-sm">{token.symbol}</p>
+                                    <p className="text-gray-600 text-xs">{token.name}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-gray-900 text-sm">{token.balance.toFixed(4)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {scannerData.tokenHoldings.length > 12 && (
+                            <p className="text-gray-500 text-sm mt-3 text-center">
+                              +{scannerData.tokenHoldings.length - 12} more tokens
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Wallet Activity */}
+                      {scannerData.walletActivity && scannerData.walletActivity.length > 0 && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <Activity className="w-6 h-6 text-purple-500" />
+                              <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
+                            </div>
+                            <button
+                              onClick={() => searchScannerAddress((scannerData.currentPage || 1) + 1)}
+                              disabled={loadingScanner}
+                              className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                              Load More
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            {scannerData.walletActivity.slice(0, 10).map((tx, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2 h-2 rounded-full ${tx.type === 'in' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                  <div>
+                                    <p className="text-gray-900 font-medium text-sm">{tx.type === 'in' ? 'Received' : 'Sent'} {tx.tokenSymbol}</p>
+                                    <p className="text-gray-500 text-xs">{tx.value} {tx.tokenSymbol}</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-gray-600 text-xs">{new Date(tx.timestamp * 1000).toLocaleDateString()}</p>
+                                  <p className="text-gray-500 text-xs">{tx.hash.slice(0, 8)}...</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : currentPage === 'buy' ? (
-                <div className="space-y-4">
-                  {/* Buy Content */}
-                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
-                    <div className="text-center">
-                      <ShoppingCart className="w-12 h-12 text-purple-500 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Buy Tokens</h3>
-                      <p className="text-gray-600 mb-4">
-                        Purchase tokens directly through our secure platform
+                // Buy Page - Token Purchase Box
+                <div className="space-y-6">
+                  <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl p-6 shadow-lg">
+                    <div className="text-center mb-6">
+                      <ShoppingCart className="w-12 h-12 text-white mx-auto mb-4" />
+                      <h3 className="text-2xl font-bold text-white mb-2">Buy FarGuard Token</h3>
+                      <p className="text-purple-100">Purchase tokens with ETH or USDC on Base network</p>
+                      <p className="text-xs text-purple-200 mt-2">
+                        Contract: {TOKEN_CONTRACT_ADDRESS}
                       </p>
+                      
+                      {/* Clanker v4 + Uniswap v4 Info */}
+                      <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-blue-200 text-sm font-bold">✅ Clanker v4 + Uniswap v4</p>
+                            <p className="text-blue-200/80 text-xs mt-1">
+                              This token uses Clanker v4 with Uniswap v4 Universal Router for direct swaps.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Buy Box */}
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+                      {buyError && (
+                        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                          <p className="text-red-200 text-sm">{buyError}</p>
+                        </div>
+                      )}
+                      
+                      {/* Currency Selection */}
+                      <div className="mb-4">
+                        <label className="block text-white font-medium mb-2">Pay with</label>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => setBuyCurrency('ETH')}
+                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                              buyCurrency === 'ETH' 
+                                ? 'bg-white text-purple-600' 
+                                : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                          >
+                            ETH
+                          </button>
+                          <button
+                            onClick={() => setBuyCurrency('USDC')}
+                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                              buyCurrency === 'USDC' 
+                                ? 'bg-white text-purple-600' 
+                                : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                          >
+                            USDC
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Amount Input */}
+                      <div className="mb-4">
+                        <label className="block text-white font-medium mb-2">
+                          Amount ({buyCurrency})
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={buyAmount}
+                            onChange={(e) => setBuyAmount(e.target.value)}
+                            placeholder={`Enter ${buyCurrency} amount`}
+                            className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-3 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent"
+                            step="0.0001"
+                            min="0"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Token Amount Display */}
+                      {buyAmount && tokenPrice > 0 && (
+                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white font-medium">You'll receive:</span>
+                            <span className="text-green-300 font-bold text-lg">
+                              {calculateTokenAmount(buyAmount).toLocaleString()} tokens
+                            </span>
+                          </div>
+                          <div className="text-xs text-purple-200 mt-1">
+                            Rate: 1 {buyCurrency} = {(1 / tokenPrice).toLocaleString()} tokens
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Price Loading */}
+                      {loadingPrice && (
+                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
+                          <div className="flex items-center justify-center">
+                            <RefreshCw className="w-4 h-4 text-white animate-spin mr-2" />
+                            <span className="text-white text-sm">Loading token price...</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Buy Button */}
                       <button
-                        className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed"
+                        onClick={handleBuyTokens}
+                        disabled={!isConnected || !buyAmount || loadingPrice || isPending || isConfirming}
+                        className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100 disabled:cursor-not-allowed shadow-lg"
                       >
-                        Coming Soon
+                        {isPending || isConfirming ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            {isPending ? 'Confirming...' : 'Processing...'}
+                          </div>
+                        ) : (
+                          `Buy ${calculateTokenAmount(buyAmount).toLocaleString()} tokens`
+                        )}
                       </button>
+                      
+                      <div className="mt-4 text-center">
+                        <p className="text-purple-200 text-xs">
+                          Powered by Uniswap v4 Universal Router
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Faucet Content */}
+                <div className="space-y-3">
                   <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
-                    <div className="text-center">
+                    <div className="text-center mb-6">
                       <Droplets className="w-12 h-12 text-purple-500 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">Test Token Faucet</h3>
                       <p className="text-gray-600 mb-4">
                         Get test tokens for development and testing
                       </p>
+                    </div>
+                    
+                    <div className="space-y-2">
                       <button
-                        className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed"
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('base')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-3 rounded-lg font-medium transition-colors"
                       >
-                        Coming Soon
+                        {faucetBusy === 'base' ? 'Claiming ETH...' : 'Claim ETH'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('mon')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-3 rounded-lg font-medium transition-colors"
+                      >
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('celo')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-3 rounded-lg font-medium transition-colors"
+                      >
+                        {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
                       </button>
                     </div>
+                    
+                    {hasClaimedFaucet && claimedTokenInfo && (
+                      <div className="mt-4 text-center">
+                        <div className="text-green-600 text-sm mb-2">
+                          ✅ {claimedTokenInfo.displayAmount} claimed!
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:`;
+                            const url = "https://fgrevoke.vercel.app";
+                            
+                            try {
+                              if (sdk?.actions?.composeCast) {
+                                console.log('📝 Composing cast via SDK...');
+                                await sdk.actions.composeCast({ 
+                                  text: text.trim(),
+                                  embeds: [url]
+                                });
+                                console.log('✅ Shared to Farcaster');
+                              } else {
+                                // Fallback to window.open
+                                const fullText = `${text}\n${url}`;
+                                const encoded = encodeURIComponent(fullText);
+                                window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+                              }
+                            } catch (error) {
+                              console.error('Share error:', error);
+                              // Fallback to clipboard
+                              const fullText = `${text}\n${url}`;
+                              await navigator.clipboard.writeText(fullText);
+                              alert('✅ Share text copied to clipboard!');
+                            }
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" /> Share
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
