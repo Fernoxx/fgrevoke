@@ -1086,10 +1086,6 @@ function App() {
       if (currentPage === 'approvals') {
         console.log('📋 Fetching approvals...');
         fetchRealApprovals(address);
-      } else if (currentPage === 'home') {
-        // Also fetch approvals for home page to show stats
-        console.log('🏠 Fetching approvals for home page...');
-        fetchRealApprovals(address);
       }
       // Add other data fetching for scanner, etc. as needed
     }
@@ -3388,7 +3384,7 @@ function App() {
 
       {/* Professional Landing Page */}
       <main className="flex-1 relative z-10">
-        {!isConnected ? (
+        {!isConnected || currentPage === 'home' ? (
           <>
             {/* Hero Section */}
             <section className="relative overflow-hidden">
@@ -3542,26 +3538,22 @@ function App() {
             <div className="w-full max-w-4xl bg-white/80 rounded-xl shadow-lg p-6 flex-1 border border-gray-200/50 relative z-10">
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">
-                  {currentPage === 'home'
-                    ? 'Welcome to FarGuard'
-                    : currentPage === 'approvals' 
-                      ? 'Token Approvals' 
-                      : currentPage === 'scanner' 
-                        ? 'Wallet Scanner' 
-                        : currentPage === 'buy' 
-                          ? 'Buy Tokens' 
-                          : 'Faucet'}
+                  {currentPage === 'approvals' 
+                    ? 'Token Approvals' 
+                    : currentPage === 'scanner' 
+                      ? 'Wallet Scanner' 
+                      : currentPage === 'buy' 
+                        ? 'Buy Tokens' 
+                        : 'Faucet'}
                 </h2>
                 <p className="text-gray-600 mt-1">
-                  {currentPage === 'home'
-                    ? 'Secure your wallet and earn $FG tokens'
-                    : currentPage === 'approvals' 
-                      ? 'Review and manage your token approvals' 
-                      : currentPage === 'scanner' 
-                        ? 'Scan your wallet for security risks' 
-                        : currentPage === 'buy' 
-                          ? 'Purchase tokens directly' 
-                          : 'Get test tokens'}
+                  {currentPage === 'approvals' 
+                    ? 'Review and manage your token approvals' 
+                    : currentPage === 'scanner' 
+                      ? 'Scan your wallet for security risks' 
+                      : currentPage === 'buy' 
+                        ? 'Purchase tokens directly' 
+                        : 'Get test tokens'}
                 </p>
               </div>
               
@@ -3581,17 +3573,6 @@ function App() {
 
                {/* Navigation Tabs */}
                <div className="flex flex-wrap gap-2 mb-6">
-                 <button
-                   onClick={() => setCurrentPage('home')}
-                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                     currentPage === 'home' 
-                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                   }`}
-                 >
-                   <Home className="w-4 h-4 inline mr-2" />
-                   Home
-                 </button>
                  <button
                    onClick={() => setCurrentPage('approvals')}
                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
@@ -3639,77 +3620,7 @@ function App() {
                </div>
 
                {/* Page Content */}
-               {currentPage === 'home' ? (
-                 <div className="space-y-6">
-                   {/* Welcome Section */}
-                   <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-8 border border-purple-100">
-                     <div className="text-center">
-                       <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                         <Shield className="w-8 h-8 text-white" />
-                       </div>
-                       <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to FarGuard!</h3>
-                       <p className="text-gray-600 mb-6">
-                         Your wallet is connected and secure. Start by reviewing your token approvals or explore our security tools.
-                       </p>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <button
-                           onClick={() => setCurrentPage('approvals')}
-                           className="bg-white hover:bg-gray-50 text-purple-600 px-6 py-3 rounded-lg font-semibold transition-all duration-200 border border-purple-200 shadow-sm"
-                         >
-                           <Shield className="w-4 h-4 inline mr-2" />
-                           Review Approvals
-                         </button>
-                         <button
-                           onClick={() => setCurrentPage('scanner')}
-                           className="bg-white hover:bg-gray-50 text-purple-600 px-6 py-3 rounded-lg font-semibold transition-all duration-200 border border-purple-200 shadow-sm"
-                         >
-                           <Radar className="w-4 h-4 inline mr-2" />
-                           Scan Wallet
-                         </button>
-                       </div>
-                     </div>
-                   </div>
-
-                   {/* Quick Stats */}
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                       <div className="flex items-center mb-3">
-                         <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                           <Shield className="w-5 h-5 text-green-600" />
-                         </div>
-                         <h4 className="font-semibold text-gray-900">Security Status</h4>
-                       </div>
-                       <p className="text-gray-600 text-sm">
-                         {approvals.length === 0 ? 'Your wallet is secure!' : `${approvals.length} approvals to review`}
-                       </p>
-                     </div>
-                     
-                     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                       <div className="flex items-center mb-3">
-                         <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                           <Droplets className="w-5 h-5 text-blue-600" />
-                         </div>
-                         <h4 className="font-semibold text-gray-900">$FG Rewards</h4>
-                       </div>
-                       <p className="text-gray-600 text-sm">
-                         Earn tokens for securing your wallet
-                       </p>
-                     </div>
-                     
-                     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                       <div className="flex items-center mb-3">
-                         <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                           <ShoppingCart className="w-5 h-5 text-purple-600" />
-                         </div>
-                         <h4 className="font-semibold text-gray-900">Buy Tokens</h4>
-                       </div>
-                       <p className="text-gray-600 text-sm">
-                         Purchase $FG tokens directly
-                       </p>
-                     </div>
-                   </div>
-                 </div>
-               ) : currentPage === 'approvals' ? (
+               {currentPage === 'approvals' ? (
                 <div className="space-y-4">
                   {/* Chain Selection */}
                   <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
