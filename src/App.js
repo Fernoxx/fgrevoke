@@ -242,11 +242,17 @@ function App() {
       console.log('🔍 Fallback: Fetching approvals using Etherscan V2 for:', userAddress);
       
       const chainConfig = chains.find(chain => chain.value === selectedChain);
+      if (!chainConfig) {
+        throw new Error(`No chain config found for ${selectedChain}`);
+      }
+      
       const approvalTopic = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
       const paddedAddress = userAddress.slice(2).toLowerCase().padStart(64, '0');
       
       // Use Etherscan V2 API with correct format
       const url = `${chainConfig.apiUrl}&module=logs&action=getLogs&fromBlock=0&toBlock=latest&topic0=${approvalTopic}&topic1=0x${paddedAddress}&apikey=${ETHERSCAN_API_KEY}`;
+      
+      console.log('🌐 Etherscan V2 URL:', url.replace(ETHERSCAN_API_KEY, 'API_KEY_HIDDEN'));
       
       console.log('📋 Using Etherscan V2 API format:');
       console.log(`- Chain: ${selectedChain} (chainid=${chainConfig.chainId})`);
@@ -836,6 +842,18 @@ function App() {
   // Fetch approvals with Alchemy first, then Etherscan V2 fallback
   const fetchRealApprovals = useCallback(async (userAddress) => {
     console.log('🚀 Starting fetchRealApprovals for:', userAddress, 'on chain:', selectedChain);
+    console.log('🔧 Available chains:', chains.map(c => ({ name: c.name, value: c.value, chainId: c.chainId })));
+    
+    const chainConfig = chains.find(chain => chain.value === selectedChain);
+    console.log('🎯 Selected chain config:', chainConfig);
+    
+    if (!chainConfig) {
+      console.error('❌ No chain config found for:', selectedChain);
+      setError(`Unsupported chain: ${selectedChain}`);
+      setLoadingApprovals(false);
+      return;
+    }
+    
     setLoadingApprovals(true);
     setError(null);
     
@@ -856,15 +874,19 @@ function App() {
         console.warn('⚠️ Alchemy failed, trying Etherscan V2 fallback:', alchemyError.message);
         
         // Fallback to Etherscan V2 API
-        const chainConfig = chains.find(chain => chain.value === selectedChain);
         console.log(`🔄 Fallback to Etherscan V2 for ${selectedChain}:`, {
           apiUrl: chainConfig.apiUrl,
           chainId: chainConfig.chainId,
           etherscanKey: ETHERSCAN_API_KEY ? `${ETHERSCAN_API_KEY.substring(0, 8)}...` : 'missing'
         });
         
-        await fetchApprovalsWithEtherscanV2(userAddress);
-        console.log('✅ Successfully fetched approvals using Etherscan V2 fallback');
+        try {
+          await fetchApprovalsWithEtherscanV2(userAddress);
+          console.log('✅ Successfully fetched approvals using Etherscan V2 fallback');
+        } catch (etherscanError) {
+          console.error('❌ Etherscan V2 also failed:', etherscanError);
+          throw new Error(`Both Alchemy and Etherscan V2 failed. Alchemy: ${alchemyError.message}, Etherscan: ${etherscanError.message}`);
+        }
       }
       
     } catch (error) {
