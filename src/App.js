@@ -16,7 +16,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [revokingApprovals, setRevokingApprovals] = useState(new Set());
-  const [currentPage, setCurrentPage] = useState('approvals');
+  const [currentPage, setCurrentPage] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showWalletSelection, setShowWalletSelection] = useState(false); // 'approvals', 'activity', or 'spy'
   const [activityPageNumber, setActivityPageNumber] = useState(1);
@@ -835,7 +835,7 @@ function App() {
 
   // Fetch approvals with Alchemy first, then Etherscan V2 fallback
   const fetchRealApprovals = useCallback(async (userAddress) => {
-    setLoading(true);
+    setLoadingApprovals(true);
     setError(null);
     console.log('🔍 Fetching approvals for:', userAddress, 'on chain:', selectedChain);
     
@@ -871,7 +871,7 @@ function App() {
       console.error('❌ Both Alchemy and Etherscan V2 failed:', error);
       setError(`Failed to fetch approvals: ${error.message}`);
     } finally {
-      setLoading(false);
+      setLoadingApprovals(false);
     }
   }, [selectedChain]);
 
@@ -1084,11 +1084,9 @@ function App() {
     if (address && isConnected) {
       if (currentPage === 'approvals') {
         fetchRealApprovals(address);
-      } else if (currentPage === 'activity') {
-        fetchChainActivity(address);
       }
     }
-  }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals, fetchChainActivity]);
+  }, [address, isConnected, selectedChain, currentPage, fetchRealApprovals]);
 
   // Helper functions for token data (using Alchemy)
   const checkCurrentAllowance = async (tokenContract, owner, spender) => {
@@ -1367,9 +1365,7 @@ function App() {
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
-    const shareTextContent = currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:`
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:`;
+    const shareTextContent = `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:`;
     
     const url = "https://fgrevoke.vercel.app";
 
@@ -3133,12 +3129,11 @@ function App() {
                 <span>Scanner</span>
               </button>
               <button
-                onClick={() => isConnected && setCurrentPage('activity')}
-                disabled={!isConnected}
-                className={`nav-btn ${currentPage === 'activity' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
+                onClick={() => setCurrentPage('home')}
+                className={`nav-btn ${currentPage === 'home' ? 'nav-btn-active' : 'nav-btn-inactive'} hover:bg-white/20`}
               >
-                <Eye className="w-4 h-4" />
-                <span>Activity</span>
+                <Activity className="w-4 h-4" />
+                <span>Home</span>
               </button>
               <button
                 onClick={() => isConnected && setCurrentPage('buy')}
@@ -3270,16 +3265,13 @@ function App() {
                 </button>
                 <button
                   onClick={() => {
-                    if (isConnected) {
-                      setCurrentPage('activity');
-                      setMobileMenuOpen(false);
-                    }
+                    setCurrentPage('home');
+                    setMobileMenuOpen(false);
                   }}
-                  disabled={!isConnected}
-                  className={`mobile-nav-btn ${currentPage === 'activity' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`mobile-nav-btn ${currentPage === 'home' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
                 >
-                  <Eye className="w-5 h-5" />
-                  <span>Activity</span>
+                  <Activity className="w-5 h-5" />
+                  <span>Home</span>
                 </button>
                 <button
                   onClick={() => {
@@ -3543,25 +3535,25 @@ function App() {
             <div className="w-full max-w-4xl bg-white/80 rounded-xl shadow-lg p-6 flex-1 border border-gray-200/50 relative z-10">
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">
-                  {currentPage === 'approvals' 
-                    ? 'Token Approvals' 
-                    : currentPage === 'scanner' 
-                      ? 'Wallet Scanner' 
-                      : currentPage === 'buy' 
-                        ? 'Buy Tokens' 
-                        : currentPage === 'activity' 
-                          ? 'Wallet Activity' 
+                  {currentPage === 'home'
+                    ? 'Welcome to FarGuard'
+                    : currentPage === 'approvals' 
+                      ? 'Token Approvals' 
+                      : currentPage === 'scanner' 
+                        ? 'Wallet Scanner' 
+                        : currentPage === 'buy' 
+                          ? 'Buy Tokens' 
                           : 'Faucet'}
                 </h2>
                 <p className="text-gray-600 mt-1">
-                  {currentPage === 'approvals' 
-                    ? 'Review and manage your token approvals' 
-                    : currentPage === 'scanner' 
-                      ? 'Scan your wallet for security risks' 
-                      : currentPage === 'buy' 
-                        ? 'Purchase tokens directly' 
-                        : currentPage === 'activity' 
-                          ? 'View your transaction history' 
+                  {currentPage === 'home'
+                    ? 'Secure your wallet and earn $FG tokens'
+                    : currentPage === 'approvals' 
+                      ? 'Review and manage your token approvals' 
+                      : currentPage === 'scanner' 
+                        ? 'Scan your wallet for security risks' 
+                        : currentPage === 'buy' 
+                          ? 'Purchase tokens directly' 
                           : 'Get test tokens'}
                 </p>
               </div>
@@ -3580,67 +3572,137 @@ function App() {
                 </p>
               </div>
 
-              {/* Navigation Tabs */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                <button
-                  onClick={() => setCurrentPage('approvals')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    currentPage === 'approvals' 
-                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                  }`}
-                >
-                  <Shield className="w-4 h-4 inline mr-2" />
-                  Approvals
-                </button>
-                <button
-                  onClick={() => setCurrentPage('scanner')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    currentPage === 'scanner' 
-                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                  }`}
-                >
-                  <Radar className="w-4 h-4 inline mr-2" />
-                  Scanner
-                </button>
-                <button
-                  onClick={() => setCurrentPage('activity')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    currentPage === 'activity' 
-                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                  }`}
-                >
-                  <Activity className="w-4 h-4 inline mr-2" />
-                  Activity
-                </button>
-                <button
-                  onClick={() => setCurrentPage('buy')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    currentPage === 'buy' 
-                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                  }`}
-                >
-                  <ShoppingCart className="w-4 h-4 inline mr-2" />
-                  Buy
-                </button>
-                <button
-                  onClick={() => setCurrentPage('faucet')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    currentPage === 'faucet' 
-                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                  }`}
-                >
-                  <Droplets className="w-4 h-4 inline mr-2" />
-                  Faucet
-                </button>
-              </div>
+               {/* Navigation Tabs */}
+               <div className="flex flex-wrap gap-2 mb-6">
+                 <button
+                   onClick={() => setCurrentPage('home')}
+                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                     currentPage === 'home' 
+                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                   }`}
+                 >
+                   <Activity className="w-4 h-4 inline mr-2" />
+                   Home
+                 </button>
+                 <button
+                   onClick={() => setCurrentPage('approvals')}
+                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                     currentPage === 'approvals' 
+                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                   }`}
+                 >
+                   <Shield className="w-4 h-4 inline mr-2" />
+                   Approvals
+                 </button>
+                 <button
+                   onClick={() => setCurrentPage('scanner')}
+                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                     currentPage === 'scanner' 
+                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                   }`}
+                 >
+                   <Radar className="w-4 h-4 inline mr-2" />
+                   Scanner
+                 </button>
+                 <button
+                   onClick={() => setCurrentPage('buy')}
+                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                     currentPage === 'buy' 
+                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                   }`}
+                 >
+                   <ShoppingCart className="w-4 h-4 inline mr-2" />
+                   Buy
+                 </button>
+                 <button
+                   onClick={() => setCurrentPage('faucet')}
+                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                     currentPage === 'faucet' 
+                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                   }`}
+                 >
+                   <Droplets className="w-4 h-4 inline mr-2" />
+                   Faucet
+                 </button>
+               </div>
 
-              {/* Page Content */}
-              {currentPage === 'approvals' ? (
+               {/* Page Content */}
+               {currentPage === 'home' ? (
+                 <div className="space-y-6">
+                   {/* Welcome Section */}
+                   <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-8 border border-purple-100">
+                     <div className="text-center">
+                       <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                         <Shield className="w-8 h-8 text-white" />
+                       </div>
+                       <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to FarGuard!</h3>
+                       <p className="text-gray-600 mb-6">
+                         Your wallet is connected and secure. Start by reviewing your token approvals or explore our security tools.
+                       </p>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <button
+                           onClick={() => setCurrentPage('approvals')}
+                           className="bg-white hover:bg-gray-50 text-purple-600 px-6 py-3 rounded-lg font-semibold transition-all duration-200 border border-purple-200 shadow-sm"
+                         >
+                           <Shield className="w-4 h-4 inline mr-2" />
+                           Review Approvals
+                         </button>
+                         <button
+                           onClick={() => setCurrentPage('scanner')}
+                           className="bg-white hover:bg-gray-50 text-purple-600 px-6 py-3 rounded-lg font-semibold transition-all duration-200 border border-purple-200 shadow-sm"
+                         >
+                           <Radar className="w-4 h-4 inline mr-2" />
+                           Scan Wallet
+                         </button>
+                       </div>
+                     </div>
+                   </div>
+
+                   {/* Quick Stats */}
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                       <div className="flex items-center mb-3">
+                         <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                           <Shield className="w-5 h-5 text-green-600" />
+                         </div>
+                         <h4 className="font-semibold text-gray-900">Security Status</h4>
+                       </div>
+                       <p className="text-gray-600 text-sm">
+                         {approvals.length === 0 ? 'Your wallet is secure!' : `${approvals.length} approvals to review`}
+                       </p>
+                     </div>
+                     
+                     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                       <div className="flex items-center mb-3">
+                         <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                           <Droplets className="w-5 h-5 text-blue-600" />
+                         </div>
+                         <h4 className="font-semibold text-gray-900">$FG Rewards</h4>
+                       </div>
+                       <p className="text-gray-600 text-sm">
+                         Earn tokens for securing your wallet
+                       </p>
+                     </div>
+                     
+                     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                       <div className="flex items-center mb-3">
+                         <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                           <ShoppingCart className="w-5 h-5 text-purple-600" />
+                         </div>
+                         <h4 className="font-semibold text-gray-900">Buy Tokens</h4>
+                       </div>
+                       <p className="text-gray-600 text-sm">
+                         Purchase $FG tokens directly
+                       </p>
+                     </div>
+                   </div>
+                 </div>
+               ) : currentPage === 'approvals' ? (
                 <div className="space-y-4">
                   {/* Chain Selection */}
                   <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
@@ -3765,25 +3827,6 @@ function App() {
                         className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
                       >
                         Browse Tokens
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : currentPage === 'activity' ? (
-                <div className="space-y-4">
-                  {/* Activity Content */}
-                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
-                    <div className="text-center">
-                      <Activity className="w-12 h-12 text-purple-500 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Wallet Activity</h3>
-                      <p className="text-gray-600 mb-4">
-                        View your transaction history and wallet activity
-                      </p>
-                      <button
-                        onClick={() => setCurrentPage('approvals')}
-                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
-                      >
-                        View Activity
                       </button>
                     </div>
                   </div>
