@@ -3344,220 +3344,1730 @@ function App() {
 
       {/* Professional Landing Page */}
       <main className="flex-1 relative z-10">
-        {!isConnected ? (
-          <>
-            {/* Hero Section */}
-            <section className="relative overflow-hidden">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
-                <div className="text-center">
-                  <div className="flex justify-center mb-8">
-                    <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-20 h-20" />
-                  </div>
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
-                    Secure Your <span className="text-purple-600">Crypto Wallet</span>
-                  </h1>
-                  <p className="text-xl sm:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
-                    View your REAL token approvals and revoke risky permissions. 
-                    Protect your assets with FarGuard's advanced security tools.
-                  </p>
-                  
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-                    <button
-                      onClick={() => setShowWalletSelection(true)}
-                      disabled={!sdkReady || isConnecting}
-                      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
-                    >
-                      {isConnecting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                          Connecting...
-                        </>
-                      ) : (
-                        <>
-                          <Wallet className="w-5 h-5 mr-3" />
-                          Connect Wallet
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage('scanner')}
-                      className="bg-white/80 backdrop-blur-sm hover:bg-white/90 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 border border-purple-200 shadow-lg"
-                    >
-                      View Demo
-                    </button>
-                  </div>
-                </div>
+        {/* Hero Section */}
+        <section className="relative overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
+            <div className="text-center">
+              <div className="flex justify-center mb-8">
+                <img src="/farguard-logo.png" alt="FarGuard Logo" className="w-20 h-20" />
               </div>
-            </section>
-
-            {/* Features Section */}
-            <section className="py-16 bg-white/50 backdrop-blur-sm">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="text-center mb-16">
-                  <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-                    Advanced Security Features
-                  </h2>
-                  <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                    Comprehensive tools to protect your crypto assets and maintain wallet security
-                  </p>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
+                Secure Your <span className="text-purple-600">Crypto Wallet</span>
+              </h1>
+              <p className="text-xl sm:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
+                View your REAL token approvals and revoke risky permissions. 
+                Protect your assets with FarGuard's advanced security tools.
+              </p>
+              
+              {!isConnected ? (
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+                  <button
+                    onClick={() => setShowWalletSelection(true)}
+                    disabled={!sdkReady || isConnecting}
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
+                  >
+                    {isConnecting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-5 h-5 mr-3" />
+                        Connect Wallet
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage('scanner')}
+                    className="bg-white/80 backdrop-blur-sm hover:bg-white/90 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 border border-purple-200 shadow-lg"
+                  >
+                    View Demo
+                  </button>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {/* Feature 1 */}
-                  <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-                    <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-6">
-                      <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
+              ) : (
+                <div className="mb-12">
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-6 max-w-md mx-auto">
+                    <div className="flex items-center justify-center mb-3">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Token Approval Scanner</h3>
-                    <p className="text-gray-600">
-                      Scan and analyze all token approvals across your wallet. Identify potential security risks and unauthorized access permissions.
-                    </p>
-                  </div>
-
-                  {/* Feature 2 */}
-                  <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-6">
-                      <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">One-Click Revoke</h3>
-                    <p className="text-gray-600">
-                      Instantly revoke risky token approvals with a single click. Protect your assets from unauthorized access and potential exploits.
-                    </p>
-                  </div>
-
-                  {/* Feature 3 */}
-                  <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
-                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Real-Time Monitoring</h3>
-                    <p className="text-gray-600">
-                      Monitor your wallet permissions in real-time. Get instant alerts for suspicious activities and new approval requests.
+                    <h3 className="text-lg font-semibold text-green-800 mb-2">Wallet Connected!</h3>
+                    <p className="text-green-600 text-sm">
+                      {currentUser ? `Welcome, ${currentUser.displayName || `@${currentUser.username}`}!` : 'Ready to secure your wallet'}
                     </p>
                   </div>
                 </div>
-              </div>
-            </section>
+              )}
+            </div>
+          </div>
+        </section>
 
-            {/* Stats Section */}
-            <section className="py-16">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">10K+</div>
-                    <div className="text-gray-600">Wallets Secured</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">50M+</div>
-                    <div className="text-gray-600">Tokens Protected</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">99.9%</div>
-                    <div className="text-gray-600">Security Rate</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">24/7</div>
-                    <div className="text-gray-600">Monitoring</div>
-                  </div>
+        {/* Features Section */}
+        <section className="py-16 bg-white/50 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+                Advanced Security Features
+              </h2>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Comprehensive tools to protect your crypto assets and maintain wallet security
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Feature 1 */}
+              <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-6">
+                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
                 </div>
-              </div>
-            </section>
-
-            {/* CTA Section */}
-            <section className="py-16 bg-gradient-to-r from-purple-600 to-indigo-600">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                  Ready to Secure Your Wallet?
-                </h2>
-                <p className="text-xl text-purple-100 mb-8 max-w-2xl mx-auto">
-                  Join thousands of users who trust FarGuard to protect their crypto assets. 
-                  Start securing your wallet today.
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Token Approval Scanner</h3>
+                <p className="text-gray-600">
+                  Scan and analyze all token approvals across your wallet. Identify potential security risks and unauthorized access permissions.
                 </p>
-                <button
-                  onClick={() => setShowWalletSelection(true)}
-                  disabled={!sdkReady || isConnecting}
-                  className="bg-white hover:bg-gray-50 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
-                >
-                  {isConnecting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="w-5 h-5 mr-3" />
-                      Get Started Now
-                    </>
-                  )}
-                </button>
               </div>
-            </section>
-          </>
-        ) : (
-          /* Connected User - Show App Interface */
+
+              {/* Feature 2 */}
+              <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-6">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">One-Click Revoke</h3>
+                <p className="text-gray-600">
+                  Instantly revoke risky token approvals with a single click. Protect your assets from unauthorized access and potential exploits.
+                </p>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Real-Time Monitoring</h3>
+                <p className="text-gray-600">
+                  Monitor your wallet permissions in real-time. Get instant alerts for suspicious activities and new approval requests.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Stats Section */}
+        <section className="py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-purple-600 mb-2">10K+</div>
+                <div className="text-gray-600">Wallets Secured</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-purple-600 mb-2">50M+</div>
+                <div className="text-gray-600">Tokens Protected</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-purple-600 mb-2">99.9%</div>
+                <div className="text-gray-600">Security Rate</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-purple-600 mb-2">24/7</div>
+                <div className="text-gray-600">Monitoring</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="py-16 bg-gradient-to-r from-purple-600 to-indigo-600">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+              Ready to Secure Your Wallet?
+            </h2>
+            <p className="text-xl text-purple-100 mb-8 max-w-2xl mx-auto">
+              Join thousands of users who trust FarGuard to protect their crypto assets. 
+              Start securing your wallet today.
+            </p>
+            {!isConnected && (
+              <button
+                onClick={() => setShowWalletSelection(true)}
+                disabled={!sdkReady || isConnecting}
+                className="bg-white hover:bg-gray-50 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
+              >
+                {isConnecting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="w-5 h-5 mr-3" />
+                    Get Started Now
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* Main App Content - Only show when connected */}
+        {isConnected && (
           <div className="flex-1 flex flex-col items-center p-4 sm:p-6 mt-6">
             <div className="w-full max-w-4xl bg-white/80 rounded-xl shadow-lg p-6 flex-1 border border-gray-200/50 relative z-10">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">
-                  {currentPage === 'approvals' 
-                    ? 'Token Approvals' 
-                    : currentPage === 'scanner' 
-                      ? 'Wallet Scanner' 
-                      : currentPage === 'buy' 
-                        ? 'Buy Tokens' 
-                        : currentPage === 'activity' 
-                          ? 'Wallet Activity' 
-                          : 'Faucet'}
-                </h2>
-                <p className="text-gray-600 mt-1">
-                  {currentPage === 'approvals' 
-                    ? 'Review and manage your token approvals' 
-                    : currentPage === 'scanner' 
-                      ? 'Scan your wallet for security risks' 
-                      : currentPage === 'buy' 
-                        ? 'Purchase tokens directly' 
-                        : currentPage === 'activity' 
-                          ? 'View your transaction history' 
-                          : 'Get test tokens'}
-                </p>
-              </div>
-              
-              <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
-                <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
+              <div>
+                {/* Connected App Content */}
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    {currentPage === 'approvals' 
+                      ? 'Token Approvals' 
+                      : currentPage === 'scanner' 
+                        ? 'Wallet Scanner' 
+                        : currentPage === 'buy' 
+                          ? 'Buy Tokens' 
+                          : currentPage === 'activity' 
+                            ? 'Wallet Activity' 
+                            : 'Faucet'}
+                  </h2>
+                  <p className="text-gray-600 mt-1">
+                    {currentPage === 'approvals' 
+                      ? 'Review and manage your token approvals' 
+                      : currentPage === 'scanner' 
+                        ? 'Scan your wallet for security risks' 
+                        : currentPage === 'buy' 
+                          ? 'Purchase tokens directly' 
+                          : currentPage === 'activity' 
+                            ? 'View your transaction history' 
+                            : 'Get test tokens'}
+                  </p>
                 </div>
-                <h3 className="text-lg font-semibold text-green-800 mb-2">Wallet Connected!</h3>
-                <p className="text-green-600 text-sm">
-                  {currentUser ? `Welcome, ${currentUser.displayName || `@${currentUser.username}`}!` : 'Ready to secure your wallet'}
-                </p>
-              </div>
-
-              {/* App functionality placeholder */}
-              <div className="text-center py-12">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">App Functionality</h3>
-                <p className="text-gray-600 mb-6">Your connected app features will be available here.</p>
-                <button
-                  onClick={() => setCurrentPage('approvals')}
-                  className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
-                >
-                  Start Using FarGuard
-                </button>
+              
+                {/* Connected App Content - All the existing functionality */}
+                {currentPage === 'approvals' ? (
+                  // Approvals content will be here
+                  <div>Approvals functionality</div>
+                ) : currentPage === 'scanner' ? (
+                  // Scanner content will be here  
+                  <div>Scanner functionality</div>
+                ) : currentPage === 'buy' ? (
+                  // Buy content will be here
+                  <div>Buy functionality</div>
+                ) : currentPage === 'activity' ? (
+                  // Activity content will be here
+                  <div>Activity functionality</div>
+                ) : (
+                  // Faucet content will be here
+                  <div>Faucet functionality</div>
+                )}
               </div>
             </div>
           </div>
         )}
       </main>
 
+      {/* Wallet Selection Modal */}
+
+                      {/* Error State */}
+                      {trendingWalletsError && (
+                        <div className="bg-red-900 border border-red-700 rounded-lg p-4">
+                          <div className="flex items-center gap-3">
+                            <AlertTriangle className="w-6 h-6 text-red-400" />
+                            <div>
+                              <p className="text-red-300 font-medium">Analysis Failed</p>
+                              <p className="text-red-400 text-sm">{trendingWalletsError}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Trending Wallets Results */}
+                      {!loadingTrendingWallets && trendingWallets.length > 0 && (
+                        <div className="space-y-4">
+                          <div className="bg-gradient-to-r from-yellow-900/30 to-orange-900/30 border border-yellow-600/30 rounded-lg p-4">
+                            <h3 className="text-yellow-300 font-bold text-lg mb-2">🔥 Most Active Degens</h3>
+                            <p className="text-yellow-400 text-sm">
+                              Based on: New token buys today • Profitable sells this week • Rugs survived • Portfolio diversity
+                            </p>
+                          </div>
+
+                          {trendingWallets.map((wallet, index) => (
+                            <div key={wallet.address} className="bg-purple-800 rounded-lg p-6 border border-purple-600">
+                              {/* Wallet Header */}
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="bg-yellow-600 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold">
+                                    #{index + 1}
+                                  </div>
+                                  <div>
+                                    <p className="text-white font-mono text-sm break-all">{wallet.address}</p>
+                                    <p className="text-purple-300 text-xs">
+                                      Score: {Math.round(wallet.totalScore)} • Last active: {wallet.lastActivity ? new Date(wallet.lastActivity).toLocaleDateString() : 'Unknown'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(wallet.address);
+                                    // Could add toast notification here
+                                  }}
+                                  className="text-purple-300 hover:text-white p-2"
+                                  title="Copy address"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* Metrics Grid */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                <div className="bg-green-900/30 border border-green-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Target className="w-4 h-4 text-green-400" />
+                                    <span className="text-green-300 text-xs font-medium">New Buys Today</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{wallet.newTokenBuysToday}</p>
+                                </div>
+
+                                <div className="bg-blue-900/30 border border-blue-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <DollarSign className="w-4 h-4 text-blue-400" />
+                                    <span className="text-blue-300 text-xs font-medium">Profitable Sells</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{wallet.profitableSellsWeek}</p>
+                                </div>
+
+                                <div className="bg-purple-900/30 border border-purple-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Shield className="w-4 h-4 text-purple-400" />
+                                    <span className="text-purple-300 text-xs font-medium">Rugs Survived</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{Math.round(wallet.rugsActiveSurvived)}</p>
+                                </div>
+
+                                <div className="bg-orange-900/30 border border-orange-600/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <BarChart3 className="w-4 h-4 text-orange-400" />
+                                    <span className="text-orange-300 text-xs font-medium">Win Rate</span>
+                                  </div>
+                                  <p className="text-white font-bold text-lg">{Math.round(wallet.winRate)}%</p>
+                                </div>
+                              </div>
+
+                              {/* Additional Stats */}
+                              <div className="grid grid-cols-3 gap-4 mb-4 text-center">
+                                <div>
+                                  <p className="text-purple-300 text-xs">Tokens Held</p>
+                                  <p className="text-white font-semibold">{wallet.totalTokensHeld}</p>
+                                </div>
+                                <div>
+                                  <p className="text-purple-300 text-xs">Risk Score</p>
+                                  <p className="text-white font-semibold">{Math.round(wallet.riskScore)}/100</p>
+                                </div>
+                                <div>
+                                  <p className="text-purple-300 text-xs">Total Trades</p>
+                                  <p className="text-white font-semibold">{wallet.totalTrades}</p>
+                                </div>
+                              </div>
+
+                              {/* Top Tokens */}
+                              {wallet.topTokens.length > 0 && (
+                                <div className="border-t border-purple-600 pt-4">
+                                  <p className="text-purple-300 text-sm font-medium mb-2">Top Holdings:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {wallet.topTokens.slice(0, 5).map((token, tokenIndex) => (
+                                      <span
+                                        key={tokenIndex}
+                                        className="bg-purple-700 px-3 py-1 rounded-full text-white text-xs"
+                                      >
+                                        {token.symbol} ({token.network})
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Copy Trading CTA */}
+                              <div className="border-t border-purple-600 pt-4 mt-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Eye className="w-4 h-4 text-purple-300" />
+                                    <span className="text-purple-300 text-sm">Copy their trades 👀</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => {
+                                        // Set scanner address and switch to scanner tab
+                                        setScannerAddress(wallet.address);
+                                        setCurrentPage('scanner');
+                                      }}
+                                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                                    >
+                                      Analyze
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(wallet.address);
+                                      }}
+                                      className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors"
+                                    >
+                                      Copy
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Disclaimer */}
+                          <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4">
+                            <p className="text-yellow-300 text-sm">
+                              ⚠️ <strong>Disclaimer:</strong> This analysis is for educational purposes. Past performance doesn't guarantee future results. 
+                              Always DYOR before copying any trades. Crypto trading involves significant risk.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No Results */}
+                      {!loadingTrendingWallets && !trendingWalletsError && trendingWallets.length === 0 && (
+                        <div className="text-center py-12">
+                          <AlertTriangle className="w-12 h-12 text-purple-400 mx-auto mb-4" />
+                          <p className="text-purple-300">No trending wallets found</p>
+                          <p className="text-purple-400 text-sm">Try analyzing again in a few moments</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Secure Your Wallet</h2>
+                  <p className="text-xl text-gray-600 mb-4">
+                    View your REAL token approvals and revoke risky permissions
+                  </p>
+                </div>
+              )}
+              
+              {!sdkReady && (
+                <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 mb-4">
+                  <p className="text-blue-300 text-sm">
+                    🔄 Initializing Farcaster SDK...
+                  </p>
+                </div>
+              )}
+
+              {error && (
+                <div className="bg-red-900/50 border border-red-500 rounded-lg p-3 mb-4">
+                  <p className="text-red-200 text-sm">{error}</p>
+                </div>
+              )}
+
+
+
+
+
+
+
+
+
+              <button
+                onClick={connectWallet}
+                disabled={isConnecting || !sdkReady}
+                className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              >
+                {!sdkReady ? 'Initializing...' : 
+                 isConnecting ? 'Connecting...' : 
+                 userAddresses.length > 0 ? '🔗 Use Verified Addresses' : '🔗 Connect Wallet'}
+              </button>
+            </div>
+          ) : (
+            <div>
+              {/* Connected View */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {currentPage === 'approvals' 
+                    ? `Active Token Approvals (${chains.find(c => c.value === selectedChain)?.name})`
+                    : currentPage === 'scanner'
+                    ? 'Wallet Scanner - Comprehensive Analysis'
+                    : currentPage === 'faucet'
+                    ? 'No gas fee for transactions ?'
+                    : currentPage === 'buy'
+                    ? 'Buy Tokens'
+                    : `Wallet Activity (${chains.find(c => c.value === selectedChain)?.name})`
+                  }
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Connected: {formatAddress(address)}
+                </p>
+                <div className="flex gap-2 mt-3">
+                  {currentPage !== 'scanner' && currentPage !== 'faucet' && (
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share {currentPage === 'activity' ? 'Activity' : 'Success'}
+                    </button>
+                  )}
+                  {currentPage === 'approvals' ? (
+                    <button
+                      onClick={() => fetchRealApprovals(address)}
+                      disabled={loading}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  ) : currentPage === 'activity' ? (
+                    <button
+                      onClick={() => fetchChainActivity(address)}
+                      disabled={loadingActivity}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loadingActivity ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Stats */}
+              {currentPage === 'approvals' ? (
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-gray-800">{approvals.length}</p>
+                    <p className="text-sm text-gray-600">Active Approvals</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-red-500">
+                      {approvals.filter(a => a.riskLevel === 'high').length}
+                    </p>
+                    <p className="text-sm text-gray-600">High Risk</p>
+                  </div>
+                </div>
+              ) : currentPage === 'activity' ? (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-gray-800">{activityStats.totalTransactions}</p>
+                    <p className="text-sm text-gray-600">Transactions</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-blue-600">{activityStats.dappsUsed}</p>
+                    <p className="text-sm text-gray-600">dApps Used</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-green-600">{activityStats.totalValue.toFixed(3)}</p>
+                    <p className="text-sm text-gray-600">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Transferred</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                    <p className="text-2xl font-bold text-orange-600">{activityStats.totalGasFees.toFixed(4)}</p>
+                    <p className="text-sm text-gray-600">{chains.find(c => c.value === selectedChain)?.nativeCurrency} Gas Fees</p>
+                  </div>
+                </div>
+              ) : currentPage === 'scanner' && scannerData ? (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                                          <p className="text-2xl font-bold text-gray-800">{scannerData.stats.totalTransactions}</p>
+                      <p className="text-sm text-gray-600">Total Transactions</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-bold text-blue-600">{scannerData.tokenHoldings.length}</p>
+                      <p className="text-sm text-gray-600">Tokens Held</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-bold text-green-600">{scannerData.profitLoss.total > 0 ? '+' : ''}{scannerData.profitLoss.total.toFixed(3)}</p>
+                      <p className="text-sm text-gray-600">ETH P&L</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-gray-100">
+                      <p className="text-2xl font-bold text-orange-600">{scannerData.stats.dappsUsed}</p>
+                      <p className="text-sm text-gray-600">dApps Used</p>
+                    </div>
+                </div>
+              ) : null}
+
+
+
+              {/* Error Display */}
+              {error && (
+                <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                  <p className="text-red-200">{error}</p>
+                </div>
+              )}
+
+              {/* Reward Claimer Section */}
+              {isConnected && address && (
+                <div className="mb-6">
+                  {showClaim && totalClaims < 50 && (
+                    <div className="mb-4">
+                      <button
+                        onClick={handleClaim}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-colors"
+                      >
+                        🎁 Claim 0.5 USDC
+                      </button>
+                    </div>
+                  )}
+
+                  {showShare && (
+                    <div className="bg-gradient-to-r from-green-600 to-blue-600 border border-green-500 rounded-lg p-4 mb-4">
+                      <h3 className="text-white font-bold text-lg mb-3 text-center">Success. Thanks for using Farguard</h3>
+                      
+                      <div className="space-y-3">
+                        <button
+                          onClick={shareCast}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          Share
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setCurrentPage('approvals');
+                            setShowShare(false);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Revoke More
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+
+
+
+                </div>
+              )}
+
+              {/* Content */}
+              {currentPage === 'scanner' ? (
+                // Scanner Interface
+                <div className="space-y-6">
+                  {/* Address Input Section */}
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Eye className="w-6 h-6 text-gray-600" />
+                      <h3 className="text-xl font-bold text-gray-800">Enter Address to Analyze</h3>
+                    </div>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Paste any Ethereum address below to get comprehensive analysis
+                    </p>
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={scannerAddress}
+                        onChange={(e) => setScannerAddress(e.target.value)}
+                        placeholder="0x1234567890abcdef1234567890abcdef12345678"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <button
+                        onClick={() => searchScannerAddress(1)}
+                        disabled={loadingScanner || !scannerAddress}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Search className={`w-4 h-4 ${loadingScanner ? 'animate-spin' : ''}`} />
+                        {loadingScanner ? 'Analyzing...' : 'Search'}
+                      </button>
+                    </div>
+                    {scannerError && (
+                      <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-400" />
+                        <p className="text-red-200 text-sm">{scannerError}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Loading State */}
+                  {loadingScanner && (
+                    <div className="space-y-4">
+                      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-6 h-6 bg-gray-300 rounded animate-pulse"></div>
+                          <div className="h-6 bg-gray-300 rounded w-48 animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-gray-300 rounded w-3/4 animate-pulse"></div>
+                          <div className="h-4 bg-gray-300 rounded w-1/2 animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scanner Results */}
+                  {scannerData && !loadingScanner && (
+                    <div className="space-y-6">
+                      {/* Profile Section */}
+                                              {scannerData.farcasterProfile && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-3 mb-4">
+                            <User className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Farcaster Profile</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-gray-800 font-semibold">@{scannerData.farcasterProfile.username}</p>
+                              <p className="text-gray-600">{scannerData.farcasterProfile.displayName}</p>
+                              <p className="text-gray-500 text-sm mt-2">FID: {scannerData.farcasterProfile.fid}</p>
+                              {scannerData.farcasterProfile.bio && (
+                                <p className="text-gray-600 text-sm mt-2">{scannerData.farcasterProfile.bio}</p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-gray-600 text-sm">
+                                {scannerData.farcasterProfile.followerCount} followers • {scannerData.farcasterProfile.followingCount} following
+                              </p>
+                              {scannerData.farcasterProfile.verifiedAddresses.length > 0 && (
+                                <p className="text-green-400 text-sm mt-2">
+                                  ✅ {scannerData.farcasterProfile.verifiedAddresses.length} verified address{scannerData.farcasterProfile.verifiedAddresses.length > 1 ? 'es' : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Social Profiles */}
+                      {(scannerData.socialProfiles.ens || scannerData.socialProfiles.lens) && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-3 mb-4">
+                            <ExternalLink className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Social Profiles</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {scannerData.socialProfiles.ens && (
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <h4 className="text-gray-800 font-semibold mb-2">ENS</h4>
+                                <p className="text-gray-600">{scannerData.socialProfiles.ens.name}</p>
+                                {scannerData.socialProfiles.ens.description && (
+                                  <p className="text-gray-500 text-sm mt-1">{scannerData.socialProfiles.ens.description}</p>
+                                )}
+                              </div>
+                            )}
+                            {scannerData.socialProfiles.lens && (
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <h4 className="text-gray-800 font-semibold mb-2">Lens Protocol</h4>
+                                <p className="text-gray-600">{scannerData.socialProfiles.lens.handle}</p>
+                                <p className="text-gray-500 text-sm">{scannerData.socialProfiles.lens.followers} followers</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Token Holdings */}
+                      {scannerData.tokenHoldings.length > 0 && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-3 mb-4">
+                            <TrendingUp className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Token Holdings</h3>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {scannerData.tokenHoldings.slice(0, 12).map((token, index) => (
+                              <div key={index} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-gray-800 font-semibold text-sm">{token.symbol}</p>
+                                    <p className="text-gray-600 text-xs">{token.name}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-gray-700 text-sm">{token.balance.toFixed(4)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {scannerData.tokenHoldings.length > 12 && (
+                            <p className="text-gray-500 text-sm mt-3 text-center">
+                              +{scannerData.tokenHoldings.length - 12} more tokens
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Profit/Loss Heatmap */}
+                      {scannerData.profitLoss.heatmapData.length > 0 && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-3 mb-4">
+                            <BarChart3 className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Activity Heatmap (Last 30 Days)</h3>
+                          </div>
+                                                      <div className="grid grid-cols-10 gap-1">
+                              {scannerData.profitLoss.heatmapData.map((day, index) => {
+                              const intensity = day.activity;
+                              const colors = [
+                                'bg-purple-900', // 0 activity
+                                'bg-green-800', // 1 activity
+                                'bg-green-600', // 2 activity
+                                'bg-green-500', // 3 activity
+                                'bg-green-400'  // 4+ activity
+                              ];
+                              return (
+                                <div
+                                  key={index}
+                                  className={`w-3 h-3 rounded-sm ${colors[intensity] || colors[0]}`}
+                                  title={`${day.date}: ${day.activity} activity`}
+                                ></div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-4">
+                            <div className="bg-purple-800 rounded-lg p-4 text-center">
+                              <p className="text-white font-semibold text-lg">Last 30 Days Summary</p>
+                              <p className={`text-xl font-bold ${scannerData.profitLoss.last30Days.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {scannerData.profitLoss.last30Days.net >= 0 ? '+' : ''}{scannerData.profitLoss.last30Days.net.toFixed(4)} ETH
+                              </p>
+                              <div className="grid grid-cols-3 gap-4 mt-3 text-center">
+                                <div>
+                                  <p className="text-green-400 text-sm font-medium">Profit</p>
+                                  <p className="text-white text-xs">+{scannerData.profitLoss.last30Days.profit.toFixed(4)} ETH</p>
+                                </div>
+                                <div>
+                                  <p className="text-red-400 text-sm font-medium">Loss</p>
+                                  <p className="text-white text-xs">-{scannerData.profitLoss.last30Days.loss.toFixed(4)} ETH</p>
+                                </div>
+                                <div>
+                                  <p className="text-purple-400 text-sm font-medium">Transactions</p>
+                                  <p className="text-white text-xs">{scannerData.profitLoss.last30Days.transactions} txns</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Wallet Activity */}
+                      {scannerData.walletActivity.length > 0 && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <Activity className="w-6 h-6 text-gray-600" />
+                              <h3 className="text-xl font-bold text-gray-800">Transaction History</h3>
+                            </div>
+                            <span className="bg-gray-100 px-3 py-1 rounded-lg text-sm text-gray-700 border border-gray-200">
+                              {scannerData.walletActivity.length} loaded
+                            </span>
+                          </div>
+                          <div className="space-y-3">
+                            {scannerData.walletActivity.map((tx, index) => (
+                              <div key={`${tx.hash}-${index}`} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors border border-gray-200">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className={`w-3 h-3 rounded-full ${tx.status === 'success' ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                        tx.txType === 'DEX Swap' ? 'bg-blue-600 text-white' :
+                                        tx.txType === 'Token Transfer' ? 'bg-green-600 text-white' :
+                                        tx.txType === 'Token Approval' ? 'bg-yellow-600 text-white' :
+                                        tx.txType === 'NFT Mint' ? 'bg-purple-600 text-white' :
+                                        tx.txType === 'NFT Transfer' ? 'bg-pink-600 text-white' :
+                                        'bg-gray-600 text-white'
+                                      }`}>
+                                        {tx.txType}
+                                      </span>
+                                      <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
+                                        {tx.chain}
+                                      </span>
+                                      {tx.value > 0 && (
+                                        <span className="text-green-400 text-sm font-medium">
+                                          {tx.value.toFixed(4)} ETH
+                                        </span>
+                                      )}
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                                      <div>
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">From:</span> {formatAddress(tx.from)}
+                                        </p>
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">To:</span> {formatAddress(tx.to)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">Gas:</span> {tx.gasFee.toFixed(6)} ETH
+                                        </p>
+                                        <p className="text-gray-600">
+                                          <span className="text-gray-700 font-medium">Block:</span> #{tx.blockNumber.toLocaleString()}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="mt-2 flex items-center justify-between">
+                                      <div className="text-xs">
+                                        <p className="text-gray-500">
+                                          {new Date(tx.date).toLocaleDateString()} at {new Date(tx.date).toLocaleTimeString()}
+                                        </p>
+                                        {tx.methodName !== 'Transfer' && (
+                                          <p className="text-gray-600">
+                                            Method: {tx.methodName}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-500">
+                                          {tx.confirmations > 0 ? `${tx.confirmations} confirmations` : 'Unconfirmed'}
+                                        </span>
+                                        <a
+                                          href={`${tx.explorerUrl}/tx/${tx.hash}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-gray-500 hover:text-gray-700 transition-colors"
+                                        >
+                                          <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Pagination Controls */}
+                          <div className="mt-6 flex items-center justify-between">
+                            <div className="text-sm text-purple-400">
+                              Showing {scannerData.walletActivity.length} transactions • Page {scannerTxPage}
+                            </div>
+                            {hasMoreTxs && (
+                              <button
+                                onClick={loadMoreTransactions}
+                                disabled={loadingScanner}
+                                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {loadingScanner ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Activity className="w-4 h-4" />
+                                )}
+                                {loadingScanner ? 'Loading...' : 'Load More Transactions'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No Data Found */}
+                      {!scannerData.farcasterProfile && 
+                       !scannerData.socialProfiles.ens && 
+                       !scannerData.socialProfiles.lens && 
+                       scannerData.tokenHoldings.length === 0 && 
+                       scannerData.walletActivity.length === 0 && (
+                        <div className="text-center py-8">
+                          <Eye className="w-12 h-12 text-purple-400 mx-auto mb-3" />
+                          <p className="text-purple-300 text-lg font-semibold">No data found</p>
+                          <p className="text-purple-400 text-sm mt-2">
+                            This address has no visible activity or associated profiles
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : currentPage === 'degentools' ? (
+                // DegenTools Interface
+                <div className="space-y-6">
+                  {/* DegenTools Main Menu */}
+                  {!contractData && !showTrendingWallets && (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <div className="bg-purple-700 rounded-xl p-8 text-center max-w-md">
+                        <Zap className="w-16 h-16 text-purple-300 mx-auto mb-4" />
+                        <h3 className="text-2xl font-bold text-white mb-2">DegenTools</h3>
+                        <p className="text-purple-300 mb-6">
+                          Advanced blockchain intelligence and degen tracking tools
+                        </p>
+                        <div className="flex flex-col gap-3">
+                          <button
+                            onClick={() => setContractData({})} // Show search interface
+                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-colors"
+                          >
+                            <FileText className="w-5 h-5" />
+                            Contract Checker
+                          </button>
+                          
+                          <button
+                            onClick={analyzeTrendingWallets}
+                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white rounded-lg font-medium transition-colors"
+                          >
+                            <Crown className="w-5 h-5" />
+                            Trending Wallets
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contract Search Interface */}
+                  {contractData !== null && !contractData.address && (
+                    <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                      <div className="flex items-center gap-3 mb-4">
+                        <FileText className="w-6 h-6 text-gray-600" />
+                        <h3 className="text-xl font-bold text-gray-800">Contract Checker</h3>
+                      </div>
+                      <p className="text-gray-600 text-sm mb-4">
+                        Enter any smart contract address to analyze its type, creator, and see live activity feed with buy/sell radar.
+                      </p>
+                      <div className="flex gap-3">
+                        <input
+                          type="text"
+                          value={contractAddress}
+                          onChange={(e) => setContractAddress(e.target.value)}
+                          placeholder="0x1234567890abcdef1234567890abcdef12345678"
+                          className="flex-1 px-4 py-3 bg-purple-800 border border-purple-600 rounded-lg text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        <button
+                          onClick={analyzeContract}
+                          disabled={loadingContract || !contractAddress}
+                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Search className={`w-4 h-4 ${loadingContract ? 'animate-spin' : ''}`} />
+                          {loadingContract ? 'Analyzing...' : 'Analyze Contract'}
+                        </button>
+                      </div>
+                      {contractError && (
+                        <div className="mt-4 bg-red-900/50 border border-red-500 rounded-lg p-3 flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-400" />
+                          <p className="text-red-200 text-sm">{contractError}</p>
+                        </div>
+                      )}
+                      <div className="mt-4 flex justify-center">
+                        <button
+                          onClick={() => setContractData(null)}
+                          className="text-purple-400 hover:text-white text-sm transition-colors"
+                        >
+                          ← Back to DegenTools
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loading State */}
+                  {loadingContract && (
+                    <div className="space-y-4">
+                      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-6 h-6 bg-gray-300 rounded animate-pulse"></div>
+                          <div className="h-6 bg-gray-300 rounded w-48 animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-gray-300 rounded w-3/4 animate-pulse"></div>
+                          <div className="h-4 bg-gray-300 rounded w-1/2 animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contract Analysis Results */}
+                  {contractData && contractData.address && (
+                    <div className="space-y-6">
+                      {/* Contract Info */}
+                      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-6 h-6 text-gray-600" />
+                            <h3 className="text-xl font-bold text-gray-800">Contract Analysis</h3>
+                          </div>
+                          <button
+                            onClick={() => setContractData({})}
+                            className="text-gray-500 hover:text-gray-700 text-sm transition-colors"
+                          >
+                            Search Another →
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Contract Details */}
+                          <div>
+                            <div className="mb-4">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                contractData.isToken ? 'bg-green-600 text-white' :
+                                contractData.isNFT ? 'bg-purple-600 text-white' :
+                                'bg-blue-600 text-white'
+                              }`}>
+                                {contractData.contractType}
+                              </span>
+                              {contractData.verified && (
+                                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-800 text-green-200">
+                                  ✅ Verified
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="text-purple-300">Contract:</span>
+                                <p className="text-white font-mono text-xs break-all">{contractData.address}</p>
+                              </div>
+                              
+                              {contractData.name && (
+                                <div>
+                                  <span className="text-purple-300">Name:</span>
+                                  <p className="text-white">{contractData.name} {contractData.symbol && `(${contractData.symbol})`}</p>
+                                </div>
+                              )}
+                              
+                              {contractData.totalSupply && (
+                                <div>
+                                  <span className="text-purple-300">Total Supply:</span>
+                                  <p className="text-white">{contractData.totalSupply}</p>
+                                </div>
+                              )}
+                              
+                              {contractData.network && (
+                                <div>
+                                  <span className="text-purple-300">Network:</span>
+                                  <p className="text-white">{contractData.network}</p>
+                                </div>
+                              )}
+                              
+                              {contractData.deploymentBlock && (
+                                <div>
+                                  <span className="text-purple-300">Deployed at Block:</span>
+                                  <p className="text-white">#{contractData.deploymentBlock.toLocaleString()}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Creator Info */}
+                          <div>
+                            <h4 className="text-purple-300 text-sm mb-3">Contract Creator</h4>
+                            {contractData.creatorFarcaster ? (
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                  {contractData.creatorFarcaster.pfp ? (
+                                    <img 
+                                      src={contractData.creatorFarcaster.pfp} 
+                                      alt="Profile" 
+                                      className="w-10 h-10 rounded-full object-cover border-2 border-purple-600"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'block';
+                                      }}
+                                    />
+                                  ) : null}
+                                  <User className={`w-8 h-8 text-purple-300 ${contractData.creatorFarcaster.pfp ? 'hidden' : 'block'}`} />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-white font-semibold">@{contractData.creatorFarcaster.username}</p>
+                                      <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
+                                        Farcaster
+                                      </span>
+                                    </div>
+                                    <p className="text-purple-300 text-sm">{contractData.creatorFarcaster.displayName}</p>
+                                    <p className="text-purple-400 text-xs">FID: {contractData.creatorFarcaster.fid}</p>
+                                    {contractData.creatorFarcaster.bio && (
+                                      <p className="text-purple-400 text-xs mt-1 italic">"{contractData.creatorFarcaster.bio}"</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-purple-700">
+                                  <p className="text-purple-500 text-xs">Contract Creator Address:</p>
+                                  <p className="text-purple-400 text-xs font-mono">{contractData.creator}</p>
+                                </div>
+                              </div>
+                            ) : contractData.creator ? (
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                  <Wallet className="w-6 h-6 text-purple-300" />
+                                  <div>
+                                    <p className="text-purple-300 text-sm font-medium">Contract Creator</p>
+                                    <p className="text-white font-mono text-sm break-all">{contractData.creator}</p>
+                                    <p className="text-purple-400 text-xs mt-1">No Farcaster profile found</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-purple-800 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                  <AlertTriangle className="w-6 h-6 text-purple-400" />
+                                  <div>
+                                    <p className="text-purple-400 text-sm">Creator information not available</p>
+                                    <p className="text-purple-500 text-xs">Unable to determine contract deployer</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Activity Button */}
+                        <div className="mt-6 text-center">
+                          <button
+                            onClick={() => {
+                              setShowActivityRadar(!showActivityRadar);
+                              if (!showActivityRadar) {
+                                fetchLiveActivity();
+                              }
+                            }}
+                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-green-600 hover:from-red-700 hover:to-green-700 text-white rounded-lg font-medium transition-colors mx-auto"
+                          >
+                            <Radar className="w-5 h-5" />
+                            {showActivityRadar ? 'Hide Activity Radar' : 'Show Live Activity Radar'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live Activity Radar */}
+                      {showActivityRadar && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <Radar className="w-6 h-6 text-gray-600" />
+                              <h3 className="text-xl font-bold text-gray-800">Live Activity Feed</h3>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                                <span className="text-green-700">Buyers</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+                                <span className="text-red-700">Sellers</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                                <span className="text-blue-700">Interactions</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {loadingActivityRadar ? (
+                            <div className="text-center py-8">
+                              <Radar className="w-8 h-8 text-purple-400 mx-auto mb-2 animate-spin" />
+                              <p className="text-purple-300">Scanning blockchain activity...</p>
+                            </div>
+                          ) : liveActivity.length > 0 ? (
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                              {liveActivity.map((activity, index) => (
+                                <div key={`${activity.hash}-${index}`} className="bg-purple-800 rounded-lg p-3 hover:bg-purple-750 transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-3 h-3 rounded-full ${
+                                        activity.activityType === 'buy' ? 'bg-green-400' :
+                                        activity.activityType === 'sell' ? 'bg-red-400' :
+                                        'bg-blue-400'
+                                      }`}></div>
+                                      <div>
+                                        <p className="text-white text-sm font-medium">
+                                          {activity.activityType === 'buy' ? '🟢 BUY' :
+                                           activity.activityType === 'sell' ? '🔴 SELL' :
+                                           '🔵 INTERACTION'}
+                                        </p>
+                                        <p className="text-purple-400 text-xs">
+                                          {formatAddress(activity.from)} → {formatAddress(activity.to)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      {activity.value > 0 && (
+                                        <p className="text-purple-200 text-sm">{activity.value.toFixed(4)} ETH</p>
+                                      )}
+                                      <p className="text-purple-400 text-xs">
+                                        {new Date(activity.timestamp).toLocaleTimeString()}
+                                      </p>
+                                      <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
+                                        {activity.chain}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8">
+                              <Radar className="w-12 h-12 text-purple-400 mx-auto mb-3" />
+                              <p className="text-purple-300">No recent activity detected</p>
+                              <p className="text-purple-400 text-sm">Activity from the last 24 hours will appear here</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : currentPage === 'approvals' ? (
+                loading ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-purple-300">Loading your approvals...</p>
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
+                        <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-purple-600 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : approvals.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Shield className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                    <p className="text-green-300 text-lg font-semibold">Your wallet is secure! 🎉</p>
+                    <p className="text-purple-400 text-sm mt-2">
+                      No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {approvals.map((approval) => (
+                      <div key={approval.id} className="bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors shadow-sm border border-gray-100">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center flex-1">
+                            <CheckCircle className="w-5 h-5 mr-3 text-blue-400 flex-shrink-0" />
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-gray-800 text-sm">
+                                {approval.name} ({approval.symbol})
+                              </h3>
+                              <p className="text-xs text-gray-600 mt-1">
+                                Approved to: {approval.spenderName}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Contract: {formatAddress(approval.contract)}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                            approval.riskLevel === 'high' ? 'bg-red-100 text-red-700 border border-red-200' :
+                            approval.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                            'bg-green-100 text-green-700 border border-green-200'
+                          }`}>
+                            {approval.riskLevel === 'high' && <AlertTriangle className="w-3 h-3" />}
+                            {approval.riskLevel}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-gray-600 mb-3">
+                          <span>Amount: {approval.amount}</span>
+                          <span>Block: {approval.blockNumber}</span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => requestRevokeApproval(approval)}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-3 rounded-md transition-colors"
+                          >
+                            Revoke Approval
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const chainConfig = chains.find(c => c.value === selectedChain);
+                              window.open(`${chainConfig.explorerUrl}/tx/${approval.txHash}`, '_blank');
+                            }}
+                            className="px-3 py-2 text-gray-500 hover:text-gray-700 transition-colors"
+                            title="View Transaction"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : currentPage === 'faucet' ? (
+                <div className="space-y-3">
+                  <div className="bg-purple-700 rounded-lg p-4">
+                    <p className="text-purple-200 text-sm mb-2">No gas fee for transactions ?</p>
+                    <div className="space-y-2">
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('base')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'eth' ? 'Claiming ETH...' : 'Claim ETH'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('mon')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'mon' ? 'Claiming MON...' : 'Claim MON'}
+                      </button>
+                      <button
+                        disabled={!!faucetBusy}
+                        onClick={() => claimFaucet('celo')}
+                        className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white py-2 rounded-lg"
+                      >
+                        {faucetBusy === 'celo' ? 'Claiming CELO...' : 'Claim CELO'}
+                      </button>
+                    </div>
+                    {hasClaimedFaucet && claimedTokenInfo && (
+                      <div className="mt-3 text-center">
+                        <div className="text-green-400 text-sm mb-2">
+                          ✅ {claimedTokenInfo.displayAmount} claimed!
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const text = `Just claimed ${claimedTokenInfo.displayAmount} from FarGuard's daily faucet!\n\nSecure your wallet and get free gas tokens daily:`;
+                            const url = "https://fgrevoke.vercel.app";
+                            
+                            try {
+                              if (sdk?.actions?.composeCast) {
+                                console.log('📝 Composing cast via SDK...');
+                                await sdk.actions.composeCast({ 
+                                  text: text.trim(),
+                                  embeds: [url]
+                                });
+                                console.log('✅ Shared to Farcaster');
+                              } else {
+                                // Fallback to window.open
+                                const fullText = `${text}\n${url}`;
+                                const encoded = encodeURIComponent(fullText);
+                                window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+                              }
+                            } catch (error) {
+                              console.error('Share error:', error);
+                              // Fallback to clipboard
+                              const fullText = `${text}\n${url}`;
+                              await navigator.clipboard.writeText(fullText);
+                              alert('✅ Share text copied to clipboard!');
+                            }
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" /> Share
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : currentPage === 'buy' ? (
+                // Buy Page - Token Purchase Box
+                <div className="space-y-6">
+                  <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl p-6 shadow-lg">
+                    <div className="text-center mb-6">
+                      <ShoppingCart className="w-12 h-12 text-white mx-auto mb-4" />
+                      <h3 className="text-2xl font-bold text-white mb-2">Buy FarGuard Token</h3>
+                      <p className="text-purple-100">Purchase tokens with ETH or USDC on Base network</p>
+                      <p className="text-xs text-purple-200 mt-2">
+                        Contract: {TOKEN_CONTRACT_ADDRESS}
+                      </p>
+                      
+                      {/* Clanker v4 + Uniswap v4 Info */}
+                      <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-blue-200 text-sm font-bold">✅ Clanker v4 + Uniswap v4</p>
+                            <p className="text-blue-200/80 text-xs mt-1">
+                              This token uses Clanker v4 with Uniswap v4 Universal Router for direct swaps.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Buy Box */}
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+                      {buyError && (
+                        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                          <p className="text-red-200 text-sm">{buyError}</p>
+                        </div>
+                      )}
+                      
+                      {/* Currency Selection */}
+                      <div className="mb-4">
+                        <label className="block text-white font-medium mb-2">Pay with</label>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => setBuyCurrency('ETH')}
+                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                              buyCurrency === 'ETH' 
+                                ? 'bg-white text-purple-600' 
+                                : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                          >
+                            ETH
+                          </button>
+                          <button
+                            onClick={() => setBuyCurrency('USDC')}
+                            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                              buyCurrency === 'USDC' 
+                                ? 'bg-white text-purple-600' 
+                                : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                          >
+                            USDC
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Amount Input */}
+                      <div className="mb-4">
+                        <label className="block text-white font-medium mb-2">
+                          Amount ({buyCurrency})
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={buyAmount}
+                            onChange={(e) => setBuyAmount(e.target.value)}
+                            placeholder={`Enter ${buyCurrency} amount`}
+                            className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-3 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent"
+                            step="0.0001"
+                            min="0"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Token Amount Display */}
+                      {buyAmount && tokenPrice > 0 && (
+                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white font-medium">You'll receive:</span>
+                            <span className="text-green-300 font-bold text-lg">
+                              {calculateTokenAmount(buyAmount).toLocaleString()} tokens
+                            </span>
+                          </div>
+                          <div className="text-xs text-purple-200 mt-1">
+                            Rate: 1 {buyCurrency} = {(1 / tokenPrice).toLocaleString()} tokens
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Price Loading */}
+                      {loadingPrice && (
+                        <div className="mb-4 p-3 bg-white/10 rounded-lg border border-white/20">
+                          <div className="flex items-center justify-center">
+                            <RefreshCw className="w-4 h-4 text-white animate-spin mr-2" />
+                            <span className="text-white text-sm">Loading token price...</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Buy Button */}
+                      <button
+                        onClick={handleBuyTokens}
+                        disabled={!isConnected || !buyAmount || isPending || isConfirming || loadingPrice}
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-500 disabled:to-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                      >
+                        {isPending ? (
+                          <>
+                            <RefreshCw className="w-5 h-5 animate-spin" />
+                            <span>Confirming Transaction...</span>
+                          </>
+                        ) : isConfirming ? (
+                          <>
+                            <RefreshCw className="w-5 h-5 animate-spin" />
+                            <span>Transaction Pending...</span>
+                          </>
+                        ) : !isConnected ? (
+                          <>
+                            <Wallet className="w-5 h-5" />
+                            <span>Connect Wallet First</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-5 h-5" />
+                            <span>Buy Tokens Directly</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Transaction Hash Display */}
+                      {hash && (
+                        <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-blue-200 text-sm">Transaction Hash:</span>
+                            <button
+                              onClick={() => window.open(`https://basescan.org/tx/${hash}`, '_blank')}
+                              className="text-blue-300 hover:text-blue-100 text-xs underline"
+                            >
+                              {hash.slice(0, 10)}...{hash.slice(-8)}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+
+                      {/* Network Warning */}
+                      {selectedChain !== 'base' && (
+                        <div className="mt-4 p-3 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-yellow-300 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-yellow-200 text-sm font-medium">Switch to Base Network</p>
+                              <p className="text-yellow-200/80 text-xs mt-1">
+                                Token purchase is only available on Base network. Please switch your wallet to Base.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Safety Notice */}
+                    <div className="mt-6 p-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-300 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h5 className="text-white font-semibold mb-2">Uniswap v4 Universal Router</h5>
+                          <ul className="text-purple-100 text-sm space-y-1">
+                            <li>• Swaps execute through Uniswap v4 Universal Router</li>
+                            <li>• Always verify the token contract address: {TOKEN_CONTRACT_ADDRESS}</li>
+                            <li>• Ensure you're on Base network before trading</li>
+                            <li>• Uses SETTLE and TAKE commands for efficient swaps</li>
+                            <li>• Transaction executes directly in your Farcaster wallet</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Activity View
+                loadingActivity ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-purple-300">Loading wallet activity...</p>
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="bg-purple-700 rounded-lg p-4 animate-pulse">
+                        <div className="h-4 bg-purple-600 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-purple-600 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : chainActivity.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Activity className="w-12 h-12 text-blue-400 mx-auto mb-3" />
+                    <p className="text-blue-300 text-lg font-semibold">No activity found</p>
+                    <p className="text-purple-400 text-sm mt-2">
+                      No transactions found in complete wallet history across all chains
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activityStats.lastActivity && (
+                      <div className="bg-purple-700 rounded-lg p-4 mb-4">
+                        <p className="text-purple-200 text-sm">
+                          <strong>Last Activity:</strong> {new Date(activityStats.lastActivity).toLocaleDateString()} at {new Date(activityStats.lastActivity).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {(() => {
+                      const startIndex = (activityPageNumber - 1) * transactionsPerPage;
+                      const endIndex = startIndex + transactionsPerPage;
+                      const paginatedActivity = chainActivity.slice(startIndex, endIndex);
+                      const totalPages = Math.ceil(chainActivity.length / transactionsPerPage);
+
+                      return (
+                        <>
+                          {paginatedActivity.map((tx, index) => (
+                      <div key={`${tx.hash}-${index}`} className="bg-purple-700 rounded-lg p-4 hover:bg-purple-600 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center flex-1">
+                            <Activity className={`w-5 h-5 mr-3 flex-shrink-0 ${tx.isError ? 'text-red-400' : 'text-green-400'}`} />
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-white text-sm">
+                                {tx.functionName || 'Transaction'}
+                              </h3>
+                              <p className="text-xs text-purple-300 mt-1">
+                                To: {formatAddress(tx.to)}
+                              </p>
+                              <p className="text-xs text-purple-400">
+                                {new Date(tx.timeStamp).toLocaleDateString()} at {new Date(tx.timeStamp).toLocaleTimeString()}
+                              </p>
+                              {tx.chain && (
+                                <p className="text-xs text-blue-400 mt-1">
+                                  <span className="bg-blue-600 px-2 py-1 rounded text-white">{tx.chain.toUpperCase()}</span>
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-white">
+                              {tx.type === 'token_transfer' 
+                                ? `${tx.tokenValue?.toFixed(4) || '0'} ${tx.tokenSymbol}`
+                                : tx.value > 0 
+                                  ? `${tx.value.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency}`
+                                  : 'Contract Call'
+                              }
+                            </p>
+                            <p className="text-xs text-purple-300">
+                              Gas: {tx.gasFee?.toFixed(6) || '0'} {chains.find(c => c.value === selectedChain)?.nativeCurrency}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-purple-300 mb-3">
+                          <span>Block: {tx.blockNumber}</span>
+                          <span className={`px-2 py-1 rounded ${tx.isError ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>
+                            {tx.isError ? 'Failed' : 'Success'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <button 
+                            onClick={() => {
+                              const chainConfig = chains.find(c => c.value === selectedChain);
+                              window.open(`${chainConfig.explorerUrl}/tx/${tx.hash}`, '_blank');
+                            }}
+                            className="px-3 py-2 text-purple-300 hover:text-white transition-colors"
+                            title="View Transaction"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                          <div className="flex justify-center items-center gap-2 mt-6 pt-4 border-t border-purple-600">
+                            <button
+                              onClick={() => setActivityPageNumber(prev => Math.max(1, prev - 1))}
+                              disabled={activityPageNumber === 1}
+                              className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ←
+                            </button>
+                            
+                            {[...Array(totalPages)].map((_, i) => (
+                              <button
+                                key={i + 1}
+                                onClick={() => setActivityPageNumber(i + 1)}
+                                className={`px-3 py-1 rounded ${
+                                  activityPageNumber === i + 1 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-purple-600 text-white hover:bg-purple-500'
+                                }`}
+                              >
+                                {i + 1}
+                              </button>
+                            ))}
+                            
+                            <button
+                              onClick={() => setActivityPageNumber(prev => Math.min(totalPages, prev + 1))}
+                              disabled={activityPageNumber === totalPages}
+                              className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              →
+                            </button>
+                            
+                            <span className="text-purple-300 text-sm ml-2">
+                              Page {activityPageNumber} of {totalPages} ({chainActivity.length} transactions)
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Footer - Reduced margin for miniapp compatibility */}
+
+      {/* Wallet Selection Modal */}
       {showWalletSelection && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
