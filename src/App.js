@@ -1,6 +1,6 @@
 // Fixed App.js - FarGuard with PROPER Farcaster Miniapp SDK Integration
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target, ShoppingCart, Menu } from 'lucide-react';
+import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Shield, Share2, Activity, Search, User, TrendingUp, BarChart3, Calendar, Eye, Zap, FileText, Radar, Crown, Copy, DollarSign, Target, ShoppingCart, Menu, Droplets } from 'lucide-react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -12,8 +12,10 @@ function App() {
 
   const [selectedChain, setSelectedChain] = useState('ethereum');
   const [approvals, setApprovals] = useState([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [revokingApprovals, setRevokingApprovals] = useState(new Set());
   const [currentPage, setCurrentPage] = useState('approvals');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showWalletSelection, setShowWalletSelection] = useState(false); // 'approvals', 'activity', or 'spy'
@@ -1158,6 +1160,18 @@ function App() {
   const formatAddress = (addr) => {
     if (!addr) return '';
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+  };
+
+  const formatTokenAmount = (amount, decimals) => {
+    if (!amount || !decimals) return '0';
+    const formatted = (Number(amount) / Math.pow(10, decimals)).toFixed(6);
+    return parseFloat(formatted).toString();
+  };
+
+  const revokeApproval = async (approval) => {
+    // Placeholder function for revoking approvals
+    console.log('Revoking approval:', approval);
+    // TODO: Implement actual revocation logic
   };
 
   // Track revoke and claim status with localStorage
@@ -3102,38 +3116,46 @@ function App() {
 
             {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center space-x-1">
-              {isConnected && (
-                <>
-                  <button
-                    onClick={() => setCurrentPage('approvals')}
-                    className={`nav-btn ${currentPage === 'approvals' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
-                  >
-                    <Shield className="w-4 h-4" />
-                    <span>Revoke</span>
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage('scanner')}
-                    className={`nav-btn ${currentPage === 'scanner' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
-                  >
-                    <Activity className="w-4 h-4" />
-                    <span>Scanner</span>
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage('faucet')}
-                    className={`nav-btn ${currentPage === 'faucet' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
-                  >
-                    <Zap className="w-4 h-4" />
-                    <span>Faucet</span>
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage('buy')}
-                    className={`nav-btn ${currentPage === 'buy' ? 'nav-btn-active' : 'nav-btn-inactive'}`}
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    <span>Buy</span>
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => isConnected && setCurrentPage('approvals')}
+                disabled={!isConnected}
+                className={`nav-btn ${currentPage === 'approvals' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
+              >
+                <Shield className="w-4 h-4" />
+                <span>Revoke</span>
+              </button>
+              <button
+                onClick={() => isConnected && setCurrentPage('scanner')}
+                disabled={!isConnected}
+                className={`nav-btn ${currentPage === 'scanner' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
+              >
+                <Activity className="w-4 h-4" />
+                <span>Scanner</span>
+              </button>
+              <button
+                onClick={() => isConnected && setCurrentPage('activity')}
+                disabled={!isConnected}
+                className={`nav-btn ${currentPage === 'activity' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
+              >
+                <Eye className="w-4 h-4" />
+                <span>Activity</span>
+              </button>
+              <button
+                onClick={() => isConnected && setCurrentPage('buy')}
+                disabled={!isConnected}
+                className={`nav-btn ${currentPage === 'buy' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>Buy</span>
+              </button>
+              <button
+                onClick={() => isConnected && setCurrentPage('faucet')}
+                disabled={!isConnected}
+                className={`nav-btn ${currentPage === 'faucet' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
+              >
+                <Zap className="w-4 h-4" />
+                <span>Faucet</span>
+              </button>
             </div>
 
             {/* Desktop Controls */}
@@ -3219,50 +3241,73 @@ function App() {
           <div className={`lg:hidden mobile-menu ${mobileMenuOpen ? 'mobile-menu-open' : 'mobile-menu-closed'}`}>
             <div className="px-4 py-6">
               {/* Mobile Navigation */}
-              {isConnected && (
-                <div className="space-y-2 mb-6">
-                  <button
-                    onClick={() => {
+              <div className="space-y-2 mb-6">
+                <button
+                  onClick={() => {
+                    if (isConnected) {
                       setCurrentPage('approvals');
                       setMobileMenuOpen(false);
-                    }}
-                    className={`mobile-nav-btn ${currentPage === 'approvals' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
-                  >
-                    <Shield className="w-5 h-5" />
-                    <span>Revoke</span>
-                  </button>
-                  <button
-                    onClick={() => {
+                    }
+                  }}
+                  disabled={!isConnected}
+                  className={`mobile-nav-btn ${currentPage === 'approvals' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <Shield className="w-5 h-5" />
+                  <span>Revoke</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (isConnected) {
                       setCurrentPage('scanner');
                       setMobileMenuOpen(false);
-                    }}
-                    className={`mobile-nav-btn ${currentPage === 'scanner' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
-                  >
-                    <Activity className="w-5 h-5" />
-                    <span>Scanner</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCurrentPage('faucet');
+                    }
+                  }}
+                  disabled={!isConnected}
+                  className={`mobile-nav-btn ${currentPage === 'scanner' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <Activity className="w-5 h-5" />
+                  <span>Scanner</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (isConnected) {
+                      setCurrentPage('activity');
                       setMobileMenuOpen(false);
-                    }}
-                    className={`mobile-nav-btn ${currentPage === 'faucet' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
-                  >
-                    <Zap className="w-5 h-5" />
-                    <span>Faucet</span>
-                  </button>
-                  <button
-                    onClick={() => {
+                    }
+                  }}
+                  disabled={!isConnected}
+                  className={`mobile-nav-btn ${currentPage === 'activity' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <Eye className="w-5 h-5" />
+                  <span>Activity</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (isConnected) {
                       setCurrentPage('buy');
                       setMobileMenuOpen(false);
-                    }}
-                    className={`mobile-nav-btn ${currentPage === 'buy' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
-                  >
-                    <ShoppingCart className="w-5 h-5" />
-                    <span>Buy</span>
-                  </button>
-                </div>
-              )}
+                    }
+                  }}
+                  disabled={!isConnected}
+                  className={`mobile-nav-btn ${currentPage === 'buy' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  <span>Buy</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (isConnected) {
+                      setCurrentPage('faucet');
+                      setMobileMenuOpen(false);
+                    }
+                  }}
+                  disabled={!isConnected}
+                  className={`mobile-nav-btn ${currentPage === 'faucet' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <Zap className="w-5 h-5" />
+                  <span>Faucet</span>
+                </button>
+              </div>
 
               {/* Mobile Controls */}
               <div className="space-y-4">
@@ -3542,17 +3587,234 @@ function App() {
                 </p>
               </div>
 
-              {/* App functionality placeholder */}
-              <div className="text-center py-12">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">App Functionality</h3>
-                <p className="text-gray-600 mb-6">Your connected app features will be available here.</p>
+              {/* Navigation Tabs */}
+              <div className="flex flex-wrap gap-2 mb-6">
                 <button
                   onClick={() => setCurrentPage('approvals')}
-                  className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    currentPage === 'approvals' 
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                  }`}
                 >
-                  Start Using FarGuard
+                  <Shield className="w-4 h-4 inline mr-2" />
+                  Approvals
+                </button>
+                <button
+                  onClick={() => setCurrentPage('scanner')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    currentPage === 'scanner' 
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                  }`}
+                >
+                  <Radar className="w-4 h-4 inline mr-2" />
+                  Scanner
+                </button>
+                <button
+                  onClick={() => setCurrentPage('activity')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    currentPage === 'activity' 
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                  }`}
+                >
+                  <Activity className="w-4 h-4 inline mr-2" />
+                  Activity
+                </button>
+                <button
+                  onClick={() => setCurrentPage('buy')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    currentPage === 'buy' 
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                  }`}
+                >
+                  <ShoppingCart className="w-4 h-4 inline mr-2" />
+                  Buy
+                </button>
+                <button
+                  onClick={() => setCurrentPage('faucet')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    currentPage === 'faucet' 
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                      : 'bg-white/50 text-gray-700 hover:bg-white/70'
+                  }`}
+                >
+                  <Droplets className="w-4 h-4 inline mr-2" />
+                  Faucet
                 </button>
               </div>
+
+              {/* Page Content */}
+              {currentPage === 'approvals' ? (
+                <div className="space-y-4">
+                  {/* Chain Selection */}
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Chain
+                    </label>
+                    <select
+                      value={selectedChain}
+                      onChange={(e) => setSelectedChain(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      {chains.map(chain => (
+                        <option key={chain.value} value={chain.value}>
+                          {chain.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Approvals Content */}
+                  {loadingApprovals ? (
+                    <div className="text-center py-12">
+                      <RefreshCw className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-4" />
+                      <p className="text-purple-300">Loading approvals...</p>
+                    </div>
+                  ) : approvals.length === 0 ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                      <Shield className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-green-700 text-lg font-semibold">Your wallet is secure! 🎉</p>
+                      <p className="text-green-600 text-sm mt-2">
+                        No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {approvals.map((approval) => (
+                        <div key={approval.id} className="bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors shadow-sm border border-gray-100">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center flex-1">
+                              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-4">
+                                <img 
+                                  src={approval.token.logo} 
+                                  alt={approval.token.symbol}
+                                  className="w-8 h-8"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'block';
+                                  }}
+                                />
+                                <div className="w-8 h-8 bg-purple-100 rounded flex items-center justify-center text-purple-600 font-bold text-sm" style={{display: 'none'}}>
+                                  {approval.token.symbol.charAt(0)}
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold text-gray-900">{approval.token.name}</h3>
+                                  <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
+                                    {approval.token.symbol}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  Spender: <span className="font-mono">{formatAddress(approval.spender)}</span>
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Amount: <span className="font-semibold">
+                                    {approval.amount === 'unlimited' ? 'Unlimited' : formatTokenAmount(approval.amount, approval.token.decimals)}
+                                  </span>
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => revokeApproval(approval)}
+                              disabled={revokingApprovals.has(approval.id)}
+                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50"
+                            >
+                              {revokingApprovals.has(approval.id) ? (
+                                <div className="flex items-center">
+                                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                                  Revoking...
+                                </div>
+                              ) : (
+                                'Revoke'
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : currentPage === 'scanner' ? (
+                <div className="space-y-4">
+                  {/* Scanner Content */}
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="text-center">
+                      <Radar className="w-12 h-12 text-purple-500 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Wallet Security Scanner</h3>
+                      <p className="text-gray-600 mb-4">
+                        Scan your wallet for potential security risks and vulnerabilities
+                      </p>
+                      <button
+                        onClick={() => setCurrentPage('approvals')}
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                      >
+                        Start Security Scan
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : currentPage === 'buy' ? (
+                <div className="space-y-4">
+                  {/* Buy Content */}
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="text-center">
+                      <ShoppingCart className="w-12 h-12 text-purple-500 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Buy Tokens</h3>
+                      <p className="text-gray-600 mb-4">
+                        Purchase tokens directly through our secure platform
+                      </p>
+                      <button
+                        onClick={() => setCurrentPage('approvals')}
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                      >
+                        Browse Tokens
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : currentPage === 'activity' ? (
+                <div className="space-y-4">
+                  {/* Activity Content */}
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="text-center">
+                      <Activity className="w-12 h-12 text-purple-500 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Wallet Activity</h3>
+                      <p className="text-gray-600 mb-4">
+                        View your transaction history and wallet activity
+                      </p>
+                      <button
+                        onClick={() => setCurrentPage('approvals')}
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                      >
+                        View Activity
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Faucet Content */}
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="text-center">
+                      <Droplets className="w-12 h-12 text-purple-500 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Test Token Faucet</h3>
+                      <p className="text-gray-600 mb-4">
+                        Get test tokens for development and testing
+                      </p>
+                      <button
+                        onClick={() => setCurrentPage('approvals')}
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                      >
+                        Request Test Tokens
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
