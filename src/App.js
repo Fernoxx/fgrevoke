@@ -3536,7 +3536,7 @@ function App() {
                       ) : isConnected ? (
                         <>
                           <Shield className="w-5 h-5 mr-3" />
-                          Go to Revokes
+                          Start Revoking
                         </>
                       ) : (
                         <>
@@ -3632,7 +3632,7 @@ function App() {
                   ) : isConnected ? (
                     <>
                       <Shield className="w-5 h-5 mr-3" />
-                      Go to Revokes
+                      Start Revoking
                     </>
                   ) : (
                     <>
