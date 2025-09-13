@@ -3479,25 +3479,27 @@ function App() {
                     FarGuard is a RevokeToEarn miniapp where you secure your wallet by revoking risky approvals and earn $FG, while long-term holders are rewarded daily for securing the ecosystem.
                   </p>
                   
-                  <div className="flex justify-center items-center mb-12">
-                    <button
-                      onClick={() => setShowWalletSelection(true)}
-                      disabled={!sdkReady || isConnecting}
-                      className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
-                    >
-                      {isConnecting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                          Connecting...
-                        </>
-                      ) : (
-                        <>
-                          <Wallet className="w-5 h-5 mr-3" />
-                          Connect Wallet
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  {!isConnected && (
+                    <div className="flex justify-center items-center mb-12">
+                      <button
+                        onClick={() => setShowWalletSelection(true)}
+                        disabled={!sdkReady || isConnecting}
+                        className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
+                      >
+                        {isConnecting ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <Wallet className="w-5 h-5 mr-3" />
+                            Connect Wallet
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -3560,29 +3562,6 @@ function App() {
             {/* Token Box Section */}
             <FGTokenBox />
 
-            {/* Stats Section */}
-            <section className="py-16">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">10K+</div>
-                    <div className="text-gray-600">Wallets Secured</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">50M+</div>
-                    <div className="text-gray-600">Tokens Protected</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">99.9%</div>
-                    <div className="text-gray-600">Security Rate</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-purple-600 mb-2">24/7</div>
-                    <div className="text-gray-600">Monitoring</div>
-                  </div>
-                </div>
-              </div>
-            </section>
 
             {/* CTA Section */}
             <section className="py-16 bg-gradient-to-r from-purple-700 to-indigo-700">
@@ -3594,23 +3573,25 @@ function App() {
                   Join thousands of users who trust FarGuard to protect their crypto assets. 
                   Start securing your wallet today.
                 </p>
-                <button
-                  onClick={() => setShowWalletSelection(true)}
-                  disabled={!sdkReady || isConnecting}
-                  className="bg-white hover:bg-gray-50 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
-                >
-                  {isConnecting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="w-5 h-5 mr-3" />
-                      Get Started Now
-                    </>
-                  )}
-                </button>
+                {!isConnected && (
+                  <button
+                    onClick={() => setShowWalletSelection(true)}
+                    disabled={!sdkReady || isConnecting}
+                    className="bg-white hover:bg-gray-50 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
+                  >
+                    {isConnecting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-5 h-5 mr-3" />
+                        Get Started Now
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </section>
           </>
@@ -3711,7 +3692,7 @@ function App() {
                     <div className="space-y-3">
                       {approvals.map((approval) => (
                         <div key={approval.id} className="bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors shadow-sm border border-gray-100">
-                          <div className="flex items-start justify-between mb-3">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-3">
                             <div className="flex items-center flex-1">
                               <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-4">
                                 <img 
@@ -3747,10 +3728,10 @@ function App() {
                             <button
                               onClick={() => revokeApproval(approval)}
                               disabled={revokingApprovals.has(approval.id)}
-                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50"
+                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 w-full sm:w-auto"
                             >
                               {revokingApprovals.has(approval.id) ? (
-                                <div className="flex items-center">
+                                <div className="flex items-center justify-center">
                                   <RefreshCw className="w-4 h-4 animate-spin mr-2" />
                                   Revoking...
                                 </div>
