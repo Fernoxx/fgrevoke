@@ -324,7 +324,7 @@ function App() {
             token: {
               name: tokenInfo.name || 'Unknown Token',
               symbol: tokenInfo.symbol || 'UNK',
-              logo: `https://tokens.1inch.io/${tokenContract.toLowerCase()}.png`, // Default token logo URL
+              logo: await getTokenIcon(tokenContract, tokenInfo.symbol, tokenInfo.name),
               decimals: tokenInfo.decimals || 18,
               contract: tokenContract
             },
@@ -508,7 +508,7 @@ function App() {
             token: {
               name: tokenInfo.name || 'Unknown Token',
               symbol: tokenInfo.symbol || 'UNK',
-              logo: `https://tokens.1inch.io/${tokenContract.toLowerCase()}.png`, // Default token logo URL
+              logo: await getTokenIcon(tokenContract, tokenInfo.symbol, tokenInfo.name),
               decimals: tokenInfo.decimals || 18,
               contract: tokenContract
             },
@@ -1204,6 +1204,272 @@ function App() {
     if (!amount || !decimals) return '0';
     const formatted = (Number(amount) / Math.pow(10, decimals)).toFixed(6);
     return parseFloat(formatted).toString();
+  };
+
+  // Token icon fallback system
+  const getTokenIcon = async (tokenContract, tokenSymbol, tokenName) => {
+    const fallbacks = [
+      // 1. 1inch (current default)
+      `https://tokens.1inch.io/${tokenContract.toLowerCase()}.png`,
+      
+      // 2. TrustWallet Assets
+      `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/${tokenContract}/logo.png`,
+      `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/${tokenContract}/logo.png`,
+      
+      // 3. CoinGecko API (will be fetched dynamically)
+      null, // Will be populated by CoinGecko lookup
+      
+      // 4. Alchemy Token API (if we have the metadata)
+      null // Will be populated if available
+    ];
+
+    // Try to get CoinGecko logo
+    try {
+      // Common token mappings for CoinGecko
+      const coingeckoMappings = {
+        'USDC': 'usd-coin',
+        'USDT': 'tether',
+        'WETH': 'weth',
+        'DAI': 'dai',
+        'UNI': 'uniswap',
+        'LINK': 'chainlink',
+        'WBTC': 'wrapped-bitcoin',
+        'AAVE': 'aave',
+        'CRV': 'curve-dao-token',
+        'MKR': 'maker',
+        'COMP': 'compound-governance-token',
+        'SNX': 'havven',
+        'YFI': 'yearn-finance',
+        'SUSHI': 'sushi',
+        '1INCH': '1inch',
+        'BAL': 'balancer',
+        'LRC': 'loopring',
+        'BAT': 'basic-attention-token',
+        'ZRX': '0x',
+        'KNC': 'kyber-network-crystal',
+        'REP': 'augur',
+        'GUSD': 'gemini-dollar',
+        'TUSD': 'true-usd',
+        'BUSD': 'binance-usd',
+        'HUSD': 'husd',
+        'PAX': 'paxos-standard',
+        'FRAX': 'frax',
+        'LUSD': 'liquity-usd',
+        'sUSD': 'nusd',
+        'FEI': 'fei-usd',
+        'TRIBE': 'tribe-2',
+        'ALCX': 'alchemix',
+        'OHM': 'olympus',
+        'TOKE': 'tokemak',
+        'FXS': 'frax-share',
+        'CVX': 'convex-finance',
+        'SPELL': 'spell-token',
+        'MIM': 'magic-internet-money',
+        'TIME': 'wonderland',
+        'PENDLE': 'pendle',
+        'RBN': 'ribbon-finance',
+        'DPX': 'dopex',
+        'GRAIL': 'camelot-token',
+        'ARB': 'arbitrum',
+        'OP': 'optimism',
+        'MATIC': 'matic-network',
+        'AVAX': 'avalanche-2',
+        'FTM': 'fantom',
+        'BNB': 'binancecoin',
+        'ADA': 'cardano',
+        'DOT': 'polkadot',
+        'SOL': 'solana',
+        'NEAR': 'near',
+        'ATOM': 'cosmos',
+        'ALGO': 'algorand',
+        'XTZ': 'tezos',
+        'EGLD': 'elrond-erd-2',
+        'VET': 'vechain',
+        'ICP': 'internet-computer',
+        'FIL': 'filecoin',
+        'THETA': 'theta-token',
+        'EOS': 'eos',
+        'TRX': 'tron',
+        'XLM': 'stellar',
+        'XMR': 'monero',
+        'LTC': 'litecoin',
+        'BCH': 'bitcoin-cash',
+        'DOGE': 'dogecoin',
+        'SHIB': 'shiba-inu',
+        'PEPE': 'pepe',
+        'FLOKI': 'floki',
+        'BONK': 'bonk',
+        'WIF': 'dogwifcoin'
+      };
+
+      const coingeckoId = coingeckoMappings[tokenSymbol?.toUpperCase()];
+      if (coingeckoId) {
+        const response = await fetch(`https://api.coingecko.com/api/v3/coins/${coingeckoId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.image?.thumb) {
+            fallbacks[3] = data.image.thumb;
+          }
+        }
+      }
+    } catch (error) {
+      console.log('🔄 CoinGecko API fallback failed:', error.message);
+    }
+
+    // Return the first available fallback
+    for (const fallback of fallbacks) {
+      if (fallback) {
+        return fallback;
+      }
+    }
+
+    // Final fallback to 1inch
+    return `https://tokens.1inch.io/${tokenContract.toLowerCase()}.png`;
+  };
+
+  // Token image component with fallback system
+  const TokenImage = ({ tokenContract, tokenSymbol, className = "w-8 h-8" }) => {
+    const [currentSrc, setCurrentSrc] = useState(null);
+    const [fallbackIndex, setFallbackIndex] = useState(0);
+    
+    const fallbacks = [
+      // 1. 1inch
+      `https://tokens.1inch.io/${tokenContract.toLowerCase()}.png`,
+      // 2. TrustWallet Ethereum
+      `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/${tokenContract}/logo.png`,
+      // 3. TrustWallet Base
+      `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/${tokenContract}/logo.png`,
+      // 4. CoinGecko (will be fetched dynamically)
+    ];
+
+    // Fetch CoinGecko logo on mount
+    useEffect(() => {
+      const fetchCoinGeckoLogo = async () => {
+        try {
+          const coingeckoMappings = {
+            'USDC': 'usd-coin',
+            'USDT': 'tether',
+            'WETH': 'weth',
+            'DAI': 'dai',
+            'UNI': 'uniswap',
+            'LINK': 'chainlink',
+            'WBTC': 'wrapped-bitcoin',
+            'AAVE': 'aave',
+            'CRV': 'curve-dao-token',
+            'MKR': 'maker',
+            'COMP': 'compound-governance-token',
+            'SNX': 'havven',
+            'YFI': 'yearn-finance',
+            'SUSHI': 'sushi',
+            '1INCH': '1inch',
+            'BAL': 'balancer',
+            'LRC': 'loopring',
+            'BAT': 'basic-attention-token',
+            'ZRX': '0x',
+            'KNC': 'kyber-network-crystal',
+            'REP': 'augur',
+            'GUSD': 'gemini-dollar',
+            'TUSD': 'true-usd',
+            'BUSD': 'binance-usd',
+            'HUSD': 'husd',
+            'PAX': 'paxos-standard',
+            'FRAX': 'frax',
+            'LUSD': 'liquity-usd',
+            'sUSD': 'nusd',
+            'FEI': 'fei-usd',
+            'TRIBE': 'tribe-2',
+            'ALCX': 'alchemix',
+            'OHM': 'olympus',
+            'TOKE': 'tokemak',
+            'FXS': 'frax-share',
+            'CVX': 'convex-finance',
+            'SPELL': 'spell-token',
+            'MIM': 'magic-internet-money',
+            'TIME': 'wonderland',
+            'PENDLE': 'pendle',
+            'RBN': 'ribbon-finance',
+            'DPX': 'dopex',
+            'GRAIL': 'camelot-token',
+            'ARB': 'arbitrum',
+            'OP': 'optimism',
+            'MATIC': 'matic-network',
+            'AVAX': 'avalanche-2',
+            'FTM': 'fantom',
+            'BNB': 'binancecoin',
+            'ADA': 'cardano',
+            'DOT': 'polkadot',
+            'SOL': 'solana',
+            'NEAR': 'near',
+            'ATOM': 'cosmos',
+            'ALGO': 'algorand',
+            'XTZ': 'tezos',
+            'EGLD': 'elrond-erd-2',
+            'VET': 'vechain',
+            'ICP': 'internet-computer',
+            'FIL': 'filecoin',
+            'THETA': 'theta-token',
+            'EOS': 'eos',
+            'TRX': 'tron',
+            'XLM': 'stellar',
+            'XMR': 'monero',
+            'LTC': 'litecoin',
+            'BCH': 'bitcoin-cash',
+            'DOGE': 'dogecoin',
+            'SHIB': 'shiba-inu',
+            'PEPE': 'pepe',
+            'FLOKI': 'floki',
+            'BONK': 'bonk',
+            'WIF': 'dogwifcoin'
+          };
+
+          const coingeckoId = coingeckoMappings[tokenSymbol?.toUpperCase()];
+          if (coingeckoId) {
+            const response = await fetch(`https://api.coingecko.com/api/v3/coins/${coingeckoId}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.image?.thumb) {
+                fallbacks[3] = data.image.thumb;
+              }
+            }
+          }
+        } catch (error) {
+          console.log('🔄 CoinGecko API fallback failed:', error.message);
+        }
+      };
+
+      fetchCoinGeckoLogo();
+      setCurrentSrc(fallbacks[0]);
+    }, [tokenContract, tokenSymbol]);
+
+    const handleImageError = () => {
+      const nextIndex = fallbackIndex + 1;
+      if (nextIndex < fallbacks.length && fallbacks[nextIndex]) {
+        setFallbackIndex(nextIndex);
+        setCurrentSrc(fallbacks[nextIndex]);
+      }
+    };
+
+    if (!currentSrc) {
+      return (
+        <div className={`${className} bg-purple-100 rounded flex items-center justify-center text-purple-600 font-bold text-sm`}>
+          {tokenSymbol?.charAt(0) || '?'}
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <img 
+          src={currentSrc} 
+          alt={tokenSymbol}
+          className={className}
+          onError={handleImageError}
+        />
+        <div className={`${className} bg-purple-100 rounded flex items-center justify-center text-purple-600 font-bold text-sm`} style={{display: 'none'}}>
+          {tokenSymbol?.charAt(0) || '?'}
+        </div>
+      </>
+    );
   };
 
   const revokeApproval = async (approval) => {
@@ -3744,18 +4010,11 @@ function App() {
                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-3">
                             <div className="flex items-center flex-1">
                               <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-4">
-                                <img 
-                                  src={approval.token.logo} 
-                                  alt={approval.token.symbol}
+                                <TokenImage 
+                                  tokenContract={approval.token.contract}
+                                  tokenSymbol={approval.token.symbol}
                                   className="w-8 h-8"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.nextSibling.style.display = 'block';
-                                  }}
                                 />
-                                <div className="w-8 h-8 bg-purple-100 rounded flex items-center justify-center text-purple-600 font-bold text-sm" style={{display: 'none'}}>
-                                  {approval.token.symbol.charAt(0)}
-                                </div>
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
