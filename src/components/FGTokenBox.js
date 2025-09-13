@@ -12,7 +12,7 @@ export default function FGTokenBox() {
   };
 
   const handleBuy = () => {
-    window.open("https://www.clanker.world/clanker/", "_blank");
+    window.open("https://www.clanker.world/clanker/0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07", "_blank");
   };
 
   const fakeAddresses = [
