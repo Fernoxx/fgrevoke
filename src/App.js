@@ -3904,6 +3904,59 @@ function App() {
                         </div>
                       )}
 
+                      {/* Activity Heatmap */}
+                      {scannerData.profitLoss && scannerData.profitLoss.heatmapData && scannerData.profitLoss.heatmapData.length > 0 && (
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-3 mb-4">
+                            <Calendar className="w-6 h-6 text-purple-500" />
+                            <h3 className="text-xl font-bold text-gray-900">Activity Heatmap</h3>
+                          </div>
+                          <div className="mb-4">
+                            <p className="text-gray-600 text-sm mb-2">Transaction activity over the last 30 days</p>
+                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-gray-200 rounded"></div>
+                                <span>No activity</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-green-200 rounded"></div>
+                                <span>Low</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-green-400 rounded"></div>
+                                <span>Medium</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-green-600 rounded"></div>
+                                <span>High</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-7 gap-1">
+                            {scannerData.profitLoss.heatmapData.map((day, index) => {
+                              const bgColor = day.activity === 0 ? 'bg-gray-200' :
+                                            day.activity === 1 ? 'bg-green-200' :
+                                            day.activity === 2 ? 'bg-green-400' :
+                                            day.activity === 3 ? 'bg-green-600' : 'bg-green-800';
+                              
+                              return (
+                                <div
+                                  key={index}
+                                  className={`w-8 h-8 ${bgColor} rounded cursor-pointer hover:opacity-80 transition-opacity`}
+                                  title={`${day.date}: ${day.transactions} transactions`}
+                                >
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-4 text-center">
+                            <p className="text-gray-600 text-sm">
+                              Total transactions: {scannerData.profitLoss.heatmapData.reduce((sum, day) => sum + day.transactions, 0)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Wallet Activity */}
                       {scannerData.walletActivity && scannerData.walletActivity.length > 0 && (
                         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
@@ -3921,18 +3974,64 @@ function App() {
                             </button>
                           </div>
                           <div className="space-y-3">
-                            {scannerData.walletActivity.slice(0, 10).map((tx, index) => (
-                              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-2 h-2 rounded-full ${tx.type === 'in' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                  <div>
-                                    <p className="text-gray-900 font-medium text-sm">{tx.type === 'in' ? 'Received' : 'Sent'} {tx.tokenSymbol}</p>
-                                    <p className="text-gray-500 text-xs">{tx.value} {tx.tokenSymbol}</p>
+                            {scannerData.walletActivity.slice(0, 20).map((tx, index) => (
+                              <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-3 h-3 rounded-full ${tx.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                    <div>
+                                      <p className="text-gray-900 font-medium text-sm">{tx.methodName || tx.txType || 'Transaction'}</p>
+                                      <p className="text-gray-500 text-xs">{tx.chain}</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-gray-600 text-xs">{new Date(tx.timestamp * 1000).toLocaleDateString()}</p>
+                                    <p className="text-gray-500 text-xs">Block #{tx.blockNumber}</p>
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-gray-600 text-xs">{new Date(tx.timestamp * 1000).toLocaleDateString()}</p>
-                                  <p className="text-gray-500 text-xs">{tx.hash.slice(0, 8)}...</p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <p className="text-gray-500 mb-1">From:</p>
+                                    <p className="font-mono text-gray-900 break-all">
+                                      {tx.from === scannerAddress.toLowerCase() ? 'You' : `${tx.from.slice(0, 6)}...${tx.from.slice(-4)}`}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-500 mb-1">To:</p>
+                                    <p className="font-mono text-gray-900 break-all">
+                                      {tx.to === scannerAddress.toLowerCase() ? 'You' : `${tx.to.slice(0, 6)}...${tx.to.slice(-4)}`}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <div className="mt-3 pt-3 border-t border-gray-200">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-gray-500 text-xs">Value:</p>
+                                      <p className="text-gray-900 font-medium text-sm">
+                                        {tx.value > 0 ? `${tx.value.toFixed(6)} ETH` : 'Contract Interaction'}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-gray-500 text-xs">Gas Fee:</p>
+                                      <p className="text-gray-900 text-sm">{tx.gasFee ? `${tx.gasFee.toFixed(6)} ETH` : 'N/A'}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="mt-2 flex items-center justify-between">
+                                  <a 
+                                    href={`${tx.explorerUrl}/tx/${tx.hash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-purple-600 hover:text-purple-700 text-xs font-medium"
+                                  >
+                                    View on Explorer
+                                  </a>
+                                  <p className="text-gray-400 text-xs font-mono">
+                                    {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+                                  </p>
                                 </div>
                               </div>
                             ))}
@@ -3949,7 +4048,7 @@ function App() {
                       <Droplets className="w-12 h-12 text-purple-500 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">Test Token Faucet</h3>
                       <p className="text-gray-600 mb-4">
-                        Get test tokens for development and testing
+                        No gas fees for transactions
                       </p>
                     </div>
                     
