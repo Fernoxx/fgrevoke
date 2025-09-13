@@ -1249,19 +1249,18 @@ function App() {
       // Request account access if needed
       await provider.request({ method: 'eth_requestAccounts' });
 
-      // Simple approve function call (approve spender to 0)
-      const approveFunctionSignature = '0x095ea7b3'; // approve(address,uint256)
-      const spenderAddress = approval.spender.slice(2).padStart(64, '0');
-      const amount = '0'.padStart(64, '0');
-      const data = approveFunctionSignature + spenderAddress + amount;
+      // Encode the function call using ethers (more reliable for Farcaster wallet)
+      const iface = new ethers.utils.Interface(approveABI);
+      const data = iface.encodeFunctionData('approve', [approval.spender, '0x0']);
 
-      // Send the transaction
+      // Send the transaction with proper gas estimation
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{
           from: address,
           to: approval.token.contract,
           data: data,
+          gas: '0x5208', // 21000 gas limit for simple approve
         }],
       });
 
@@ -1738,108 +1737,146 @@ function App() {
     try {
       console.log('💰 Fetching REAL token holdings for:', address);
       
-      // Get token balances using Alchemy
-      const response = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 1,
-          jsonrpc: '2.0',
-          method: 'alchemy_getTokenBalances',
-          params: [address, 'DEFAULT_TOKENS']
-        })
-      });
+      // Fetch from all 3 chains using Alchemy
+      const chains = [
+        { 
+          name: 'Ethereum',
+          chainId: 1,
+          alchemyUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+          nativeSymbol: 'ETH',
+          nativeName: 'Ethereum'
+        },
+        { 
+          name: 'Base',
+          chainId: 8453,
+          alchemyUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+          nativeSymbol: 'ETH',
+          nativeName: 'Base ETH'
+        },
+        { 
+          name: 'Arbitrum',
+          chainId: 42161,
+          alchemyUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+          nativeSymbol: 'ETH',
+          nativeName: 'Arbitrum ETH'
+        }
+      ];
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('🔍 Alchemy token response:', data);
-        
-        if (data.result?.tokenBalances) {
-          const validTokens = data.result.tokenBalances
-            .filter(token => {
-              const balance = parseInt(token.tokenBalance || '0x0', 16);
-              return balance > 0;
+      for (const chain of chains) {
+        try {
+          console.log(`🔍 Fetching token holdings from ${chain.name}...`);
+          
+          // Get token balances using Alchemy
+          const response = await fetch(chain.alchemyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: 1,
+              jsonrpc: '2.0',
+              method: 'alchemy_getTokenBalances',
+              params: [address, 'DEFAULT_TOKENS']
             })
-            .slice(0, 20); // Limit to top 20 tokens
+          });
 
-          console.log(`📊 Found ${validTokens.length} tokens with balance`);
-
-          // Get token metadata for each token
-          for (const token of validTokens) {
-            try {
-              const metadataResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  id: 1,
-                  jsonrpc: '2.0',
-                  method: 'alchemy_getTokenMetadata',
-                  params: [token.contractAddress]
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`🔍 ${chain.name} Alchemy token response:`, data);
+            
+            if (data.result?.tokenBalances) {
+              const validTokens = data.result.tokenBalances
+                .filter(token => {
+                  const balance = parseInt(token.tokenBalance || '0x0', 16);
+                  return balance > 0;
                 })
-              });
+                .slice(0, 10); // Limit to top 10 tokens per chain
 
-              if (metadataResponse.ok) {
-                const metadata = await metadataResponse.json();
-                if (metadata.result) {
-                  const balance = parseInt(token.tokenBalance, 16);
-                  const decimals = metadata.result.decimals || 18;
-                  const formattedBalance = balance / Math.pow(10, decimals);
+              console.log(`📊 Found ${validTokens.length} tokens with balance on ${chain.name}`);
 
-                  if (formattedBalance > 0) {
-                    results.tokenHoldings.push({
-                      contractAddress: token.contractAddress,
-                      symbol: metadata.result.symbol || 'UNKNOWN',
-                      name: metadata.result.name || 'Unknown Token',
-                      balance: formattedBalance,
-                      rawBalance: token.tokenBalance,
-                      decimals: decimals,
-                      logo: metadata.result.logo
-                    });
+              // Get token metadata for each token
+              for (const token of validTokens) {
+                try {
+                  const metadataResponse = await fetch(chain.alchemyUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: 1,
+                      jsonrpc: '2.0',
+                      method: 'alchemy_getTokenMetadata',
+                      params: [token.contractAddress]
+                    })
+                  });
+
+                  if (metadataResponse.ok) {
+                    const metadata = await metadataResponse.json();
+                    if (metadata.result) {
+                      const balance = parseInt(token.tokenBalance, 16);
+                      const decimals = metadata.result.decimals || 18;
+                      const formattedBalance = balance / Math.pow(10, decimals);
+
+                      if (formattedBalance > 0) {
+                        results.tokenHoldings.push({
+                          contractAddress: token.contractAddress,
+                          symbol: metadata.result.symbol || 'UNKNOWN',
+                          name: metadata.result.name || 'Unknown Token',
+                          balance: formattedBalance,
+                          rawBalance: token.tokenBalance,
+                          decimals: decimals,
+                          logo: metadata.result.logo,
+                          chain: chain.name,
+                          chainId: chain.chainId
+                        });
+                      }
+                    }
                   }
+                  
+                  // Small delay to avoid rate limits
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (tokenError) {
+                  console.warn(`⚠️ Token metadata failed for ${chain.name}:`, token.contractAddress, tokenError.message);
                 }
               }
-              
-              // Small delay to avoid rate limits
-              await new Promise(resolve => setTimeout(resolve, 100));
-            } catch (tokenError) {
-              console.warn('⚠️ Token metadata failed for:', token.contractAddress, tokenError.message);
             }
           }
-        }
-      }
 
-      // Also check ETH balance
-      try {
-        const ethResponse = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: 1,
-            jsonrpc: '2.0',
-            method: 'eth_getBalance',
-            params: [address, 'latest']
-          })
-        });
+          // Also check native ETH balance for each chain
+          try {
+            const ethResponse = await fetch(chain.alchemyUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: 1,
+                jsonrpc: '2.0',
+                method: 'eth_getBalance',
+                params: [address, 'latest']
+              })
+            });
 
-        if (ethResponse.ok) {
-          const ethData = await ethResponse.json();
-          if (ethData.result) {
-            const ethBalance = parseInt(ethData.result, 16) / 1e18;
-            if (ethBalance > 0) {
-              results.tokenHoldings.unshift({
-                contractAddress: 'ETH',
-                symbol: 'ETH',
-                name: 'Ethereum',
-                balance: ethBalance,
-                rawBalance: ethData.result,
-                decimals: 18,
-                logo: null
-              });
+            if (ethResponse.ok) {
+              const ethData = await ethResponse.json();
+              if (ethData.result) {
+                const ethBalance = parseInt(ethData.result, 16) / 1e18;
+                if (ethBalance > 0) {
+                  results.tokenHoldings.unshift({
+                    contractAddress: 'ETH',
+                    symbol: chain.nativeSymbol,
+                    name: chain.nativeName,
+                    balance: ethBalance,
+                    rawBalance: ethData.result,
+                    decimals: 18,
+                    logo: null,
+                    chain: chain.name,
+                    chainId: chain.chainId
+                  });
+                }
+              }
             }
+          } catch (ethError) {
+            console.warn(`⚠️ ${chain.name} ETH balance fetch failed:`, ethError.message);
           }
+
+        } catch (chainError) {
+          console.warn(`⚠️ ${chain.name} token holdings fetch failed:`, chainError.message);
         }
-      } catch (ethError) {
-        console.warn('⚠️ ETH balance fetch failed:', ethError.message);
       }
 
     } catch (error) {
@@ -2039,6 +2076,12 @@ function App() {
           chainId: 8453,
           url: `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
           explorerUrl: 'https://basescan.org'
+        },
+        { 
+          name: 'Arbitrum',
+          chainId: 42161,
+          url: `https://api.etherscan.io/v2/api?chainid=42161&module=account&action=txlist&address=${address}&startblock=0&endblock=latest&page=${page}&offset=${itemsPerPage}&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+          explorerUrl: 'https://arbiscan.io'
         }
       ];
 
