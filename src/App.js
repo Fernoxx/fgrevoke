@@ -3522,27 +3522,30 @@ function App() {
                     FarGuard is a RevokeToEarn miniapp where you secure your wallet by revoking risky approvals and earn $FG, while long-term holders are rewarded daily for securing the ecosystem.
                   </p>
                   
-                  {!isConnected && (
-                    <div className="flex justify-center items-center mb-12">
-                      <button
-                        onClick={() => setShowWalletSelection(true)}
-                        disabled={!sdkReady || isConnecting}
-                        className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
-                      >
-                        {isConnecting ? (
-                          <>
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                            Connecting...
-                          </>
-                        ) : (
-                          <>
-                            <Wallet className="w-5 h-5 mr-3" />
-                            Connect Wallet
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex justify-center items-center mb-12">
+                    <button
+                      onClick={() => isConnected ? setCurrentPage('approvals') : setShowWalletSelection(true)}
+                      disabled={!sdkReady || isConnecting}
+                      className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
+                    >
+                      {isConnecting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                          Connecting...
+                        </>
+                      ) : isConnected ? (
+                        <>
+                          <Shield className="w-5 h-5 mr-3" />
+                          Go to Revokes
+                        </>
+                      ) : (
+                        <>
+                          <Wallet className="w-5 h-5 mr-3" />
+                          Connect Wallet
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -3616,25 +3619,28 @@ function App() {
                   Join thousands of users who trust FarGuard to protect their crypto assets. 
                   Start securing your wallet today.
                 </p>
-                {!isConnected && (
-                  <button
-                    onClick={() => setShowWalletSelection(true)}
-                    disabled={!sdkReady || isConnecting}
-                    className="bg-white hover:bg-gray-50 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
-                  >
-                    {isConnecting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
-                        Connecting...
-                      </>
-                    ) : (
-                      <>
-                        <Wallet className="w-5 h-5 mr-3" />
-                        Get Started Now
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  onClick={() => isConnected ? setCurrentPage('approvals') : setShowWalletSelection(true)}
+                  disabled={!sdkReady || isConnecting}
+                  className="bg-white hover:bg-gray-50 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
+                >
+                  {isConnecting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
+                      Connecting...
+                    </>
+                  ) : isConnected ? (
+                    <>
+                      <Shield className="w-5 h-5 mr-3" />
+                      Go to Revokes
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5 mr-3" />
+                      Get Started Now
+                    </>
+                  )}
+                </button>
               </div>
             </section>
           </>
