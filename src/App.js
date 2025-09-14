@@ -3951,40 +3951,37 @@ function App() {
               
 
                {/* Navigation Tabs */}
-               <div className="bg-white/50 rounded-lg p-1 mb-6 border border-gray-200/50">
+               <div className="bg-white/50 rounded-lg p-1 mb-6 border border-gray-200/50 max-w-md mx-auto">
                  <div className="flex">
                    <div
                      onClick={() => setCurrentPage('approvals')}
-                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium transition-all duration-200 cursor-pointer ${
+                     className={`flex-1 flex items-center justify-center px-3 py-2 rounded-md font-medium transition-all duration-200 cursor-pointer text-sm ${
                        currentPage === 'approvals' 
                          ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
                          : 'text-gray-700 hover:bg-white/50'
                      }`}
                    >
-                     <Shield className="w-4 h-4" />
-                     <span>Approvals</span>
+                     Approvals
                    </div>
                    <div
                      onClick={() => setCurrentPage('scanner')}
-                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium transition-all duration-200 cursor-pointer ${
+                     className={`flex-1 flex items-center justify-center px-3 py-2 rounded-md font-medium transition-all duration-200 cursor-pointer text-sm ${
                        currentPage === 'scanner' 
                          ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
                          : 'text-gray-700 hover:bg-white/50'
                      }`}
                    >
-                     <Radar className="w-4 h-4" />
-                     <span>Scanner</span>
+                     Scanner
                    </div>
                    <div
                      onClick={() => setCurrentPage('faucet')}
-                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium transition-all duration-200 cursor-pointer ${
+                     className={`flex-1 flex items-center justify-center px-3 py-2 rounded-md font-medium transition-all duration-200 cursor-pointer text-sm ${
                        currentPage === 'faucet' 
                          ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
                          : 'text-gray-700 hover:bg-white/50'
                      }`}
                    >
-                     <Droplets className="w-4 h-4" />
-                     <span>Faucet</span>
+                     Faucet
                    </div>
                  </div>
                </div>
