@@ -32,30 +32,8 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
     }
     
     try {
-      // STEP 1: Revoke approval via RevokeHelper
-      setStatus("⏳ Step 1: Revoking approval...");
-      console.log("🔍 Step 1: Calling RevokeHelper.recordRevoked");
-      
-      const revokeTxHash = await walletClient.writeContract({
-        address: CONTRACTS.revokeHelper,
-        abi: REVOKE_HELPER_ABI,
-        functionName: "recordRevoked",
-        args: [token, spender],
-      });
-      
-      console.log("🔍 Revoke tx sent:", revokeTxHash);
-      setStatus("⏳ Step 1: Waiting for revoke confirmation...");
-      
-      // Wait for transaction confirmation
-      const revokeReceipt = await walletClient.waitForTransactionReceipt({
-        hash: revokeTxHash,
-      });
-      
-      console.log("🔍 Revoke tx confirmed:", revokeReceipt);
-      setStatus("✅ Step 1: Approval revoked successfully");
-      
-      // STEP 2: Get attestation from backend
-      setStatus("⏳ Step 2: Getting attestation...");
+      // STEP 1: Get attestation from backend (revoke should already be done via separate button)
+      setStatus("⏳ Step 1: Getting attestation...");
       
       const requestBody = { 
         wallet: address, 
@@ -64,7 +42,7 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
         spender 
       };
       
-      console.log("🔍 Step 2: Sending attestation request:", requestBody);
+      console.log("🔍 Step 1: Sending attestation request:", requestBody);
       
       const attesterUrl = process.env.REACT_APP_ATTESTER_URL || "https://farguard-attester-production.up.railway.app";
       const attestUrl = `${attesterUrl}/attest`;
@@ -87,13 +65,13 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
       
       const data = await res.json();
       const { sig, nonce, deadline } = data;
-      console.log("🔍 Step 2: Received attestation:", { sig: sig?.slice(0, 10) + "...", nonce, deadline });
+      console.log("🔍 Step 1: Received attestation:", { sig: sig?.slice(0, 10) + "...", nonce, deadline });
       
-      setStatus("✅ Step 2: Attestation received");
+      setStatus("✅ Step 1: Attestation received");
       
-      // STEP 3: Claim reward via RevokeAndClaim
-      setStatus("⏳ Step 3: Claiming reward...");
-      console.log("🔍 Step 3: Calling RevokeAndClaim.claimWithAttestation");
+      // STEP 2: Claim reward via RevokeAndClaim
+      setStatus("⏳ Step 2: Claiming reward...");
+      console.log("🔍 Step 2: Calling RevokeAndClaim.claimWithAttestation");
       
       const claimTxHash = await walletClient.writeContract({
         address: CONTRACTS.revokeAndClaim,
@@ -110,7 +88,7 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
       });
       
       console.log("🔍 Claim tx sent:", claimTxHash);
-      setStatus("⏳ Step 3: Waiting for claim confirmation...");
+      setStatus("⏳ Step 2: Waiting for claim confirmation...");
       
       // Wait for claim transaction confirmation
       const claimReceipt = await walletClient.waitForTransactionReceipt({

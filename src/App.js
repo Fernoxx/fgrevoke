@@ -1527,29 +1527,30 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // Direct approve(spender, 0) - just like revoke.cash
+      // Use RevokeHelper.recordRevoked() instead of direct approval
       const { encodeFunctionData } = await import('viem');
       
-      const ERC20_APPROVE_ABI = [
+      const REVOKE_HELPER_ABI = [
         {
-          name: 'approve',
-          type: 'function',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' }
+          "type": "function",
+          "name": "recordRevoked",
+          "inputs": [
+            { "name": "token", "type": "address" },
+            { "name": "spender", "type": "address" }
           ],
-          outputs: [{ name: '', type: 'bool' }]
+          "outputs": [],
+          "stateMutability": "nonpayable"
         }
       ];
 
       const data = encodeFunctionData({
-        abi: ERC20_APPROVE_ABI,
-        functionName: 'approve',
-        args: [approval.spender, 0n]
+        abi: REVOKE_HELPER_ABI,
+        functionName: 'recordRevoked',
+        args: [approval.token.contract, approval.spender]
       });
 
-      console.log('📝 Sending revoke transaction:', {
-        to: approval.token.contract,
+      console.log('📝 Sending revoke transaction via RevokeHelper:', {
+        to: '0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf',
         from: address,
         data: data.slice(0, 10) + '...'
       });
@@ -1558,7 +1559,7 @@ function App() {
         method: 'eth_sendTransaction',
         params: [{
           from: address,
-          to: approval.token.contract,
+          to: '0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf', // RevokeHelper contract
           data: data,
         }],
       });
@@ -4060,11 +4061,19 @@ function App() {
                                 </p>
                               </div>
                             </div>
-                            <RevokeAndClaimButton 
-                              fid={currentUser?.fid}
-                              token={approval.token.contract}
-                              spender={approval.spender}
-                            />
+                            <div className="flex gap-2 mt-3">
+                              <button 
+                                onClick={() => revokeApproval(approval)}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                              >
+                                Revoke
+                              </button>
+                              <RevokeAndClaimButton 
+                                fid={currentUser?.fid}
+                                token={approval.token.contract}
+                                spender={approval.spender}
+                              />
+                            </div>
                             {/* Debug info */}
                             <div className="text-xs text-gray-500 mt-1">
                               Debug: FID={currentUser?.fid || 'none'}, Wallet={address ? 'connected' : 'not connected'}
