@@ -4061,10 +4061,14 @@ function App() {
                               </div>
                             </div>
                             <RevokeAndClaimButton 
-                              fid={currentUser?.fid || 0}
+                              fid={currentUser?.fid}
                               token={approval.token.contract}
                               spender={approval.spender}
                             />
+                            {/* Debug info */}
+                            <div className="text-xs text-gray-500 mt-1">
+                              Debug: FID={currentUser?.fid || 'none'}, Wallet={address ? 'connected' : 'not connected'}
+                            </div>
                           </div>
                         </div>
                       ))}
