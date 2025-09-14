@@ -4,9 +4,9 @@ import { ethers } from "ethers";
 import RevokeHelperABI from "../abis/RevokeHelper.json";
 import RevokeAndClaimABI from "../abis/RevokeAndClaim.json";
 
-const REVOKE_HELPER = process.env.REACT_APP_REVOKE_HELPER;
-const REVOKE_AND_CLAIM = process.env.REACT_APP_REVOKE_AND_CLAIM;
-const ATTESTER_API = process.env.REACT_APP_ATTESTER_API;
+const REVOKE_HELPER = process.env.REACT_APP_REVOKE_HELPER || "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf";
+const REVOKE_AND_CLAIM = process.env.REACT_APP_REVOKE_AND_CLAIM || "0x547541959d2f7dba7dad4cac7f366c25400a49bc";
+const ATTESTER_API = process.env.REACT_APP_ATTESTER_API || "https://farguard-attester-production.up.railway.app/attest";
 
 export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, onClaimed }) {
   const { address } = useAccount();
@@ -16,6 +16,10 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
 
   async function handleRevoke() {
     try {
+      console.log("🔍 RevokeAndClaimButton - handleRevoke called");
+      console.log("🔍 Contract addresses:", { REVOKE_HELPER, REVOKE_AND_CLAIM, ATTESTER_API });
+      console.log("🔍 Props:", { token, spender, fid });
+      
       const provider = new ethers.providers.Web3Provider(walletClient);
       const signer = provider.getSigner();
 
@@ -36,6 +40,8 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
   async function handleClaim() {
     try {
       setClaiming(true);
+      console.log("🔍 RevokeAndClaimButton - handleClaim called");
+      console.log("🔍 Contract addresses:", { REVOKE_HELPER, REVOKE_AND_CLAIM, ATTESTER_API });
 
       // Step 1: ask backend for attestation
       const res = await fetch(ATTESTER_API, {
