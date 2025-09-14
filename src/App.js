@@ -1764,9 +1764,9 @@ function App() {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
     const shareTextContent = currentPage === 'activity'
-      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:`
+      ? `Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n${activityStats.totalTransactions} transactions\n${activityStats.dappsUsed} dApps used\n${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:`
  
-      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:`;
+      : `Just secured my ${currentChainName} wallet with FarGuard!\n\nReviewed ${approvals.length} token approvals\nProtecting my assets from risky permissions\n\nSecure yours too:`;
     
     const url = "https://fgrevoke.vercel.app";
 
@@ -4364,7 +4364,7 @@ function App() {
                     {hasClaimedFaucet && claimedTokenInfo && (
                       <div className="mt-4 text-center">
                         <div className="text-green-600 text-sm mb-2">
-                          ✅ {claimedTokenInfo.displayAmount} claimed!
+                          {claimedTokenInfo.displayAmount} claimed!
                         </div>
                         <button
                           onClick={async () => {
