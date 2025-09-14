@@ -4,6 +4,7 @@ import { Wallet, ChevronDown, CheckCircle, RefreshCw, AlertTriangle, ExternalLin
 import { ethers } from 'ethers';
 import FGTokenBox from './components/FGTokenBox';
 import FGLoadingBox from './components/FGLoadingBox';
+import RevokeAndClaimButton from './components/RevokeAndClaimButton';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
@@ -1470,6 +1471,23 @@ function App() {
         </div>
       </>
     );
+  };
+
+  // Get attestation from backend
+  const getAttestation = async (wallet, fid, token, spender) => {
+    try {
+      const res = await fetch("/api/attest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet, fid, token, spender }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "attestation failed");
+      return data;
+    } catch (error) {
+      console.error('Failed to get attestation:', error);
+      throw error;
+    }
   };
 
   const revokeApproval = async (approval) => {
@@ -4042,20 +4060,11 @@ function App() {
                                 </p>
                               </div>
                             </div>
-                            <button
-                              onClick={() => revokeApproval(approval)}
-                              disabled={revokingApprovals.has(approval.id)}
-                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 w-full sm:w-auto"
-                            >
-                              {revokingApprovals.has(approval.id) ? (
-                                <div className="flex items-center justify-center">
-                                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                                  Revoking...
-                                </div>
-                              ) : (
-                                'Revoke'
-                              )}
-                            </button>
+                            <RevokeAndClaimButton 
+                              fid={currentUser?.fid || 0}
+                              token={approval.token.contract}
+                              spender={approval.spender}
+                            />
                           </div>
                         </div>
                       ))}
