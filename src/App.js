@@ -3555,7 +3555,6 @@ function App() {
                 onClick={() => setCurrentPage('home')}
                 className={`nav-btn ${currentPage === 'home' ? 'nav-btn-active' : 'nav-btn-inactive'} hover:bg-white/20`}
               >
-                <Home className="w-4 h-4" />
                 <span>Home</span>
               </button>
               <button
@@ -3563,7 +3562,6 @@ function App() {
                 disabled={!isConnected}
                 className={`nav-btn ${currentPage === 'approvals' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
               >
-                <Shield className="w-4 h-4" />
                 <span>Revoke</span>
               </button>
               <button
@@ -3571,7 +3569,6 @@ function App() {
                 disabled={!isConnected}
                 className={`nav-btn ${currentPage === 'scanner' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
               >
-                <Radar className="w-4 h-4" />
                 <span>Scanner</span>
               </button>
               <button
@@ -3579,7 +3576,6 @@ function App() {
                 disabled={!isConnected}
                 className={`nav-btn ${currentPage === 'faucet' ? 'nav-btn-active' : 'nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'}`}
               >
-                <Zap className="w-4 h-4" />
                 <span>Faucet</span>
               </button>
             </div>
@@ -3666,7 +3662,6 @@ function App() {
                   }}
                   className={`mobile-nav-btn ${currentPage === 'home' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'}`}
                 >
-                  <Home className="w-5 h-5" />
                   <span>Home</span>
                 </button>
                 <button
@@ -3679,7 +3674,6 @@ function App() {
                   disabled={!isConnected}
                   className={`mobile-nav-btn ${currentPage === 'approvals' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <Shield className="w-5 h-5" />
                   <span>Revoke</span>
                 </button>
                 <button
@@ -3692,7 +3686,6 @@ function App() {
                   disabled={!isConnected}
                   className={`mobile-nav-btn ${currentPage === 'scanner' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <Radar className="w-5 h-5" />
                   <span>Scanner</span>
                 </button>
                 <button
@@ -3705,7 +3698,6 @@ function App() {
                   disabled={!isConnected}
                   className={`mobile-nav-btn ${currentPage === 'faucet' ? 'mobile-nav-btn-active' : 'mobile-nav-btn-inactive'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <Zap className="w-5 h-5" />
                   <span>Faucet</span>
                 </button>
               </div>
