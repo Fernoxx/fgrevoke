@@ -3927,7 +3927,7 @@ function App() {
                     ? 'Review and manage your token approvals' 
                     : currentPage === 'scanner' 
                       ? 'Scan your wallet for security risks' 
-                      : 'Get test tokens'}
+                      : 'Run out of gas? Claim free gas tokens here without needing any gas upfront.'}
                 </p>
               </div>
               
@@ -4311,9 +4311,9 @@ function App() {
                   <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                     <div className="text-center mb-6">
                       <Droplets className="w-12 h-12 text-purple-500 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Test Token Faucet</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Faucet</h3>
                       <p className="text-gray-600 mb-4">
-                        No gas fees for transactions
+                        No gas fees for transactions?
                       </p>
                     </div>
                     
