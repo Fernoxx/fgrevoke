@@ -11,6 +11,10 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
     console.log("🔍 RevokeAndClaimButton - handleClaim called");
     console.log("🔍 Wallet state:", { address, isConnected, hasWalletClient: !!walletClient });
     console.log("🔍 Props:", { fid, token, spender });
+    console.log("🔍 Environment:", { 
+      REACT_APP_ATTESTER_URL: process.env.REACT_APP_ATTESTER_URL,
+      NODE_ENV: process.env.NODE_ENV 
+    });
     
     if (!isConnected || !address) {
       setStatus("⚠️ Connect wallet first");
@@ -40,16 +44,27 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
       console.log("🔍 Sending attestation request:", requestBody);
       
       // 1. Get attestation from backend
-      const res = await fetch(`${process.env.REACT_APP_ATTESTER_URL}/attest`, {
+      const attesterUrl = process.env.REACT_APP_ATTESTER_URL || "https://farguard-attester-production.up.railway.app";
+      const attestUrl = `${attesterUrl}/attest`;
+      
+      console.log("🔍 Using attestation URL:", attestUrl);
+      
+      const res = await fetch(attestUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
       
       console.log("🔍 Attestation response status:", res.status);
+      console.log("🔍 Attestation response headers:", Object.fromEntries(res.headers.entries()));
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("🔍 Error response body:", errorText);
+        throw new Error(`HTTP ${res.status}: ${errorText || res.statusText}`);
+      }
       
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "attestation failed");
 
       const { sig, nonce, deadline } = data;
       console.log("🔍 Received attestation:", { sig: sig?.slice(0, 10) + "...", nonce, deadline });
