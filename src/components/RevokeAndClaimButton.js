@@ -16,8 +16,8 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
 
   async function handleRevoke() {
     try {
-      const provider = new ethers.BrowserProvider(walletClient);
-      const signer = await provider.getSigner();
+      const provider = new ethers.providers.Web3Provider(walletClient);
+      const signer = provider.getSigner();
 
       const helper = new ethers.Contract(REVOKE_HELPER, RevokeHelperABI, signer);
 
@@ -48,8 +48,8 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       if (!res.ok) throw new Error(data.error || "attest error");
 
       // Step 2: call RevokeAndClaim
-      const provider = new ethers.BrowserProvider(walletClient);
-      const signer = await provider.getSigner();
+      const provider = new ethers.providers.Web3Provider(walletClient);
+      const signer = provider.getSigner();
       const contract = new ethers.Contract(REVOKE_AND_CLAIM, RevokeAndClaimABI, signer);
 
       const tx = await contract.claimWithAttestation(
