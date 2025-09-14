@@ -3934,7 +3934,7 @@ function App() {
                 </h2>
                 <p className="text-gray-600 mt-1">
                   {currentPage === 'approvals' 
-                    ? 'Review and manage your token approvals' 
+                    ? 'Revoke unsafe approvals and unlock $FG rewards for protecting your assets.' 
                     : currentPage === 'scanner' 
                       ? 'Scan your wallet for security risks' 
                       : 'Run out of gas? Claim free gas tokens here without needing any gas upfront.'}
