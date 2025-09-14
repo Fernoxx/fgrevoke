@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useAccount, useWalletClient } from "wagmi";
-import { ethers } from "ethers";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import RevokeHelperABI from "../abis/RevokeHelper.json";
 import RevokeAndClaimABI from "../abis/RevokeAndClaim.json";
 
@@ -10,9 +9,12 @@ const ATTESTER_API = process.env.REACT_APP_ATTESTER_API || "https://farguard-att
 
 export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, onClaimed }) {
   const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
+  const { writeContract: writeRevokeContract } = useWriteContract();
+  const { writeContract: writeClaimContract } = useWriteContract();
   const [revoked, setRevoked] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [revokeTxHash, setRevokeTxHash] = useState(null);
+  const [claimTxHash, setClaimTxHash] = useState(null);
 
   async function handleRevoke() {
     try {
@@ -20,15 +22,17 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       console.log("🔍 Contract addresses:", { REVOKE_HELPER, REVOKE_AND_CLAIM, ATTESTER_API });
       console.log("🔍 Props:", { token, spender, fid });
       
-      const provider = new ethers.providers.Web3Provider(walletClient);
-      const signer = provider.getSigner();
-
-      const helper = new ethers.Contract(REVOKE_HELPER, RevokeHelperABI, signer);
-
-      const tx = await helper.recordRevoked(token, spender);
-      await tx.wait();
-
-      alert("✅ Revoked recorded. Now you can claim.");
+      const hash = await writeRevokeContract({
+        address: REVOKE_HELPER,
+        abi: RevokeHelperABI,
+        functionName: 'recordRevoked',
+        args: [token, spender],
+      });
+      
+      console.log("🔍 Revoke tx hash:", hash);
+      setRevokeTxHash(hash);
+      
+      alert("✅ Revoke transaction sent. Waiting for confirmation...");
       setRevoked(true);
       onRevoked && onRevoked();
     } catch (err) {
@@ -54,21 +58,24 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       if (!res.ok) throw new Error(data.error || "attest error");
 
       // Step 2: call RevokeAndClaim
-      const provider = new ethers.providers.Web3Provider(walletClient);
-      const signer = provider.getSigner();
-      const contract = new ethers.Contract(REVOKE_AND_CLAIM, RevokeAndClaimABI, signer);
+      const hash = await writeClaimContract({
+        address: REVOKE_AND_CLAIM,
+        abi: RevokeAndClaimABI,
+        functionName: 'claimWithAttestation',
+        args: [
+          BigInt(fid),
+          BigInt(data.nonce),
+          BigInt(data.deadline),
+          token,
+          spender,
+          data.sig
+        ],
+      });
+      
+      console.log("🔍 Claim tx hash:", hash);
+      setClaimTxHash(hash);
 
-      const tx = await contract.claimWithAttestation(
-        fid,
-        data.nonce,
-        data.deadline,
-        token,
-        spender,
-        data.sig
-      );
-      await tx.wait();
-
-      alert("🎉 Claimed FG reward!");
+      alert("🎉 Claim transaction sent! Waiting for confirmation...");
       onClaimed && onClaimed();
     } catch (err) {
       console.error("❌ claim failed:", err);
