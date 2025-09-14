@@ -1480,57 +1480,78 @@ function App() {
 
     try {
       setRevokingApprovals(prev => new Set(prev).add(approval.id));
+      console.log('🔄 Starting revoke for approval:', approval);
       
-      // Create the approve transaction data
-      const approveABI = [{
-        "constant": false,
-        "inputs": [
-          {
-            "name": "_spender",
-            "type": "address"
-          },
-          {
-            "name": "_value",
-            "type": "uint256"
-          }
-        ],
-        "name": "approve",
-        "outputs": [
-          {
-            "name": "",
-            "type": "bool"
-          }
-        ],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-      }];
-
-      // Use the provider to send the transaction
-      const provider = window.ethereum;
-      if (!provider) {
-        throw new Error('No wallet provider found');
+      // Get the current provider (Farcaster SDK or fallback)
+      let currentProvider = provider;
+      console.log('🔌 Current provider:', !!currentProvider);
+      
+      if (!currentProvider) {
+        try {
+          console.log('🌐 Trying to get provider from Farcaster SDK...');
+          // Try to get provider from Farcaster SDK first
+          currentProvider = await sdk.wallet.getEthereumProvider();
+          console.log('✅ Got provider from Farcaster SDK');
+        } catch (sdkError) {
+          console.log('⚠️ Farcaster SDK provider failed, trying window.ethereum:', sdkError);
+          // Fallback to window.ethereum
+          currentProvider = window.ethereum;
+          console.log('🔌 Using window.ethereum provider:', !!currentProvider);
+        }
       }
 
-      // Request account access if needed
-      await provider.request({ method: 'eth_requestAccounts' });
+      if (!currentProvider) {
+        throw new Error('No wallet provider found. Please ensure you are using this app in Farcaster or have a wallet installed.');
+      }
 
-      // Encode the function call using ethers (more reliable for Farcaster wallet)
-      const iface = new ethers.utils.Interface(approveABI);
-      const data = iface.encodeFunctionData('approve', [approval.spender, '0x0']);
+      console.log('📝 Requesting account access...');
+      // Request account access if needed - this will trigger wallet popup
+      const accounts = await currentProvider.request({ method: 'eth_requestAccounts' });
+      console.log('✅ Account access granted:', accounts);
+
+      // Use the new revoke contract with MultiRevokeHub
+      const { MULTI_REVOKE_HUB } = await import('./consts');
+      const { MultiRevokeHubAbi } = await import('./abis/MultiRevokeHub');
+
+      // Check if we're on Base chain (required for the contract)
+      const currentChainId = await currentProvider.request({ method: 'eth_chainId' });
+      console.log('🔗 Current chain ID:', currentChainId);
+      
+      if (currentChainId !== '0x2105') { // Base chain ID
+        console.log('🔄 Switching to Base chain...');
+        try {
+          await currentProvider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x2105' }], // Base
+          });
+          console.log('✅ Switched to Base chain');
+        } catch (switchError) {
+          console.error('❌ Failed to switch to Base chain:', switchError);
+          throw new Error('Please switch to Base network to use the revoke contract');
+        }
+      } else {
+        console.log('✅ Already on Base chain');
+      }
+
+      // Encode the function call using ethers for revokeWithPermit2Approve
+      const iface = new ethers.utils.Interface(MultiRevokeHubAbi);
+      const data = iface.encodeFunctionData('revokeWithPermit2Approve', [
+        approval.contract, // token address
+        approval.spender   // spender address
+      ]);
 
       // Send the transaction with proper gas estimation
-      const txHash = await provider.request({
+      const txHash = await currentProvider.request({
         method: 'eth_sendTransaction',
         params: [{
           from: address,
-          to: approval.token.contract,
+          to: MULTI_REVOKE_HUB, // Use the revoke contract
           data: data,
-          gas: '0x5208', // 21000 gas limit for simple approve
+          gas: '0x5208', // 21000 gas limit for simple revoke
         }],
       });
 
-      console.log('Transaction sent:', txHash);
+      console.log('✅ Transaction sent:', txHash);
       
       // Mark as revoked in localStorage first
       localStorage.setItem('hasRevoked', 'true');
@@ -1538,13 +1559,19 @@ function App() {
       // Update local approvals list after successful transaction
       setApprovals(prev => prev.filter(a => a.id !== approval.id));
       
-      alert('Approval revoked successfully!');
+      alert(`✅ Approval revoked successfully!\nTransaction: ${txHash}`);
     } catch (error) {
-      console.error('Error revoking approval:', error);
+      console.error('❌ Error revoking approval:', error);
       if (error.code === 4001) {
-        alert('Transaction was rejected by user');
+        alert('❌ Transaction was rejected by user');
+      } else if (error.message?.includes('User rejected')) {
+        alert('❌ Transaction was rejected by user');
+      } else if (error.message?.includes('insufficient funds')) {
+        alert('❌ Insufficient funds for gas fees');
+      } else if (error.message?.includes('No wallet provider')) {
+        alert('❌ No wallet found. Please connect your wallet or use this app in Farcaster.');
       } else {
-        alert('Failed to revoke approval. Please try again.');
+        alert(`❌ Failed to revoke approval: ${error.message}`);
       }
     } finally {
       setRevokingApprovals(prev => {
@@ -1612,37 +1639,47 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // Direct approve(spender, 0) - just like revoke.cash
-      const { encodeFunctionData } = await import('viem');
+      // Use the new revoke contract with MultiRevokeHub
+      const { MULTI_REVOKE_HUB } = await import('./consts');
+      const { MultiRevokeHubAbi } = await import('./abis/MultiRevokeHub');
+
+      // Check if we're on Base chain (required for the contract)
+      const currentChainId = await provider.request({ method: 'eth_chainId' });
+      console.log('🔗 Current chain ID:', currentChainId);
       
-      const ERC20_APPROVE_ABI = [
-        {
-          name: 'approve',
-          type: 'function',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' }
-          ],
-          outputs: [{ name: '', type: 'bool' }]
+      if (currentChainId !== '0x2105') { // Base chain ID
+        console.log('🔄 Switching to Base chain...');
+        try {
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x2105' }], // Base
+          });
+          console.log('✅ Switched to Base chain');
+        } catch (switchError) {
+          console.error('❌ Failed to switch to Base chain:', switchError);
+          throw new Error('Please switch to Base network to use the revoke contract');
         }
-      ];
+      } else {
+        console.log('✅ Already on Base chain');
+      }
+
+      // Encode revokeWithPermit2Approve function call
+      const iface = new ethers.utils.Interface(MultiRevokeHubAbi);
+      const data = iface.encodeFunctionData('revokeWithPermit2Approve', [
+        approval.contract, // token address
+        approval.spender   // spender address
+      ]);
       
-      // Encode approve(spender, 0)
-      const data = encodeFunctionData({
-        abi: ERC20_APPROVE_ABI,
-        functionName: 'approve',
-        args: [approval.spender, BigInt(0)]
-      });
+      console.log('📝 Sending revoke transaction via MultiRevokeHub...');
       
-      console.log('📝 Sending direct approve(spender, 0) transaction...');
-      
-      // Send transaction
+      // Send transaction to the revoke contract
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{
           from: address,
-          to: approval.contract,
+          to: MULTI_REVOKE_HUB, // Use the revoke contract
           data: data,
+          gas: '0x5208', // 21000 gas limit
         }],
       });
       
@@ -1654,9 +1691,15 @@ function App() {
     } catch (error) {
       console.error('❌ Revoke failed:', error);
       if (error.code === 4001) {
-        setError('Transaction cancelled by user');
+        setError('❌ Transaction cancelled by user');
+      } else if (error.message?.includes('User rejected')) {
+        setError('❌ Transaction was rejected by user');
+      } else if (error.message?.includes('insufficient funds')) {
+        setError('❌ Insufficient funds for gas fees');
+      } else if (error.message?.includes('No wallet provider')) {
+        setError('❌ No wallet found. Please connect your wallet or use this app in Farcaster.');
       } else {
-        setError(`Failed to revoke approval: ${error.message}`);
+        setError(`❌ Failed to revoke approval: ${error.message}`);
       }
     }
   };

@@ -1,5 +1,5 @@
 // Auto-generated: MultiRevokeHub on Base
-export const MULTI_REVOKE_HUB = "0x160ddce544c9d5b54751ae32bf8152ebde96f879";
+export const MULTI_REVOKE_HUB = "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf";
 
 export const MultiRevokeHubAbi = [
   {"type":"function","name":"revokeWithPermit2612","stateMutability":"nonpayable","inputs":[
