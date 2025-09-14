@@ -47,16 +47,31 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       setClaiming(true);
       console.log("🔍 RevokeAndClaimButton - handleClaim called");
       console.log("🔍 Contract addresses:", { REVOKE_HELPER, REVOKE_AND_CLAIM, ATTESTER_API });
+      console.log("🔍 Props:", { token, spender, fid, address });
+      
+      if (!fid || fid === 0) {
+        throw new Error("FID is required for claiming rewards. Please connect with Farcaster wallet.");
+      }
 
       // Step 1: ask backend for attestation
+      const requestBody = { wallet: address, fid: Number(fid), token, spender };
+      console.log("🔍 Attestation request body:", requestBody);
+      
       const res = await fetch(ATTESTER_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: address, fid, token, spender }),
+        body: JSON.stringify(requestBody),
       });
+      
+      console.log("🔍 Attestation response status:", res.status);
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "attest error");
+      console.log("🔍 Attestation response data:", data);
+      
+      if (!res.ok) {
+        console.error("🔍 Attestation error details:", { status: res.status, data });
+        throw new Error(data.error || data.message || `HTTP ${res.status}: attest error`);
+      }
 
       // Step 2: call RevokeAndClaim
       const hash = await writeClaimContract({
@@ -98,10 +113,10 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       ) : (
         <button 
           onClick={handleClaim} 
-          disabled={claiming}
+          disabled={claiming || !fid || fid === 0}
           className="border-2 border-green-500 text-green-600 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
         >
-          {claiming ? "Claiming..." : "Claim $FG"}
+          {claiming ? "Claiming..." : !fid || fid === 0 ? "FID Required" : "Claim $FG"}
         </button>
       )}
     </div>
