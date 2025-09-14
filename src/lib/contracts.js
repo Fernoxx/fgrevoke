@@ -52,6 +52,16 @@ export const REVOKE_HELPER_ABI = [
     "stateMutability": "view"
   },
   {
+    "type": "function",
+    "name": "recordRevoked",
+    "inputs": [
+      { "name": "token", "type": "address" },
+      { "name": "spender", "type": "address" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
     "type": "event",
     "name": "Revoked",
     "inputs": [
