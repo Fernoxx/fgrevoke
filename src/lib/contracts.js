@@ -10,17 +10,70 @@ export const CONTRACTS = {
 
 // ---- ABIs ----
 export const REVOKE_AND_CLAIM_ABI = [
-  "function claimWithAttestation(uint256 fid,uint256 nonce,uint256 deadline,address token,address spender,bytes signature) external",
-  "function fidRewardCount(uint256 fid) view returns (uint8)",
+  {
+    "type": "function",
+    "name": "claimWithAttestation",
+    "inputs": [
+      { "name": "fid", "type": "uint256" },
+      { "name": "nonce", "type": "uint256" },
+      { "name": "deadline", "type": "uint256" },
+      { "name": "token", "type": "address" },
+      { "name": "spender", "type": "address" },
+      { "name": "signature", "type": "bytes" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "fidRewardCount",
+    "inputs": [
+      { "name": "fid", "type": "uint256" }
+    ],
+    "outputs": [
+      { "name": "", "type": "uint8" }
+    ],
+    "stateMutability": "view"
+  }
 ];
 
 export const REVOKE_HELPER_ABI = [
-  "function hasRevoked(address user,address token,address spender) view returns (bool)",
-  "event Revoked(address indexed wallet,address indexed token,address indexed spender)",
+  {
+    "type": "function",
+    "name": "hasRevoked",
+    "inputs": [
+      { "name": "user", "type": "address" },
+      { "name": "token", "type": "address" },
+      { "name": "spender", "type": "address" }
+    ],
+    "outputs": [
+      { "name": "", "type": "bool" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "Revoked",
+    "inputs": [
+      { "name": "wallet", "type": "address", "indexed": true },
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "spender", "type": "address", "indexed": true }
+    ]
+  }
 ];
 
 export const IDREGISTRY_ABI = [
-  "function custodyOf(uint256 fid) view returns (address)",
+  {
+    "type": "function",
+    "name": "custodyOf",
+    "inputs": [
+      { "name": "fid", "type": "uint256" }
+    ],
+    "outputs": [
+      { "name": "", "type": "address" }
+    ],
+    "stateMutability": "view"
+  }
 ];
 
 // ---- Clients ----
