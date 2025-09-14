@@ -40,7 +40,7 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
       console.log("🔍 Sending attestation request:", requestBody);
       
       // 1. Get attestation from backend
-      const res = await fetch("/api/attest", {
+      const res = await fetch(`${process.env.REACT_APP_ATTESTER_URL}/attest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
