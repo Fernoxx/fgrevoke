@@ -66,6 +66,10 @@ function App() {
   const [trendingWalletsError, setTrendingWalletsError] = useState(null);
   const [hasClaimedFaucet, setHasClaimedFaucet] = useState(false);
   const [claimedTokenInfo, setClaimedTokenInfo] = useState(null);
+  
+  // Track revoked and claimed approvals
+  const [revokedApprovals, setRevokedApprovals] = useState(new Set());
+  const [claimedApprovals, setClaimedApprovals] = useState(new Set());
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -4033,7 +4037,12 @@ function App() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {approvals.map((approval) => (
+                      {approvals.filter(approval => {
+                        const isRevoked = revokedApprovals.has(approval.id);
+                        const isClaimed = claimedApprovals.has(approval.id);
+                        // Only show if not both revoked and claimed
+                        return !(isRevoked && isClaimed);
+                      }).map((approval) => (
                         <div key={approval.id} className="bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors shadow-sm border border-gray-100">
                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-3">
                             <div className="flex items-center flex-1">
@@ -4061,17 +4070,13 @@ function App() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex gap-2 mt-3">
-                              <button 
-                                onClick={() => revokeApproval(approval)}
-                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
-                              >
-                                Revoke
-                              </button>
+                            <div className="mt-3">
                               <RevokeAndClaimButton 
                                 fid={currentUser?.fid}
                                 token={approval.token.contract}
                                 spender={approval.spender}
+                                onRevoked={() => setRevokedApprovals(prev => new Set(prev).add(approval.id))}
+                                onClaimed={() => setClaimedApprovals(prev => new Set(prev).add(approval.id))}
                               />
                             </div>
                             {/* Debug info */}
