@@ -4075,6 +4075,7 @@ function App() {
                                 fid={currentUser?.fid}
                                 token={approval.token.contract}
                                 spender={approval.spender}
+                                approvalId={approval.id}
                                 onRevoked={() => setRevokedApprovals(prev => new Set(prev).add(approval.id))}
                                 onClaimed={() => setClaimedApprovals(prev => new Set(prev).add(approval.id))}
                               />

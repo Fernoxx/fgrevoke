@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useConnections } from "wagmi";
 import RevokeHelperABI from "../abis/RevokeHelper.json";
 import RevokeAndClaimABI from "../abis/RevokeAndClaim.json";
 
@@ -7,8 +7,8 @@ const REVOKE_HELPER = process.env.REACT_APP_REVOKE_HELPER || "0x3acb4672fec377bd
 const REVOKE_AND_CLAIM = process.env.REACT_APP_REVOKE_AND_CLAIM || "0x547541959d2f7dba7dad4cac7f366c25400a49bc";
 const ATTESTER_API = process.env.REACT_APP_ATTESTER_API || "https://farguard-attester-production.up.railway.app/attest";
 
-export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, onClaimed }) {
-  const { address } = useAccount();
+export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, onClaimed, approvalId }) {
+  const { address, connector } = useAccount();
   const { writeContract: writeRevokeContract } = useWriteContract();
   const { writeContract: writeClaimContract } = useWriteContract();
   const [revoked, setRevoked] = useState(false);
@@ -21,6 +21,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       console.log("🔍 RevokeAndClaimButton - handleRevoke called");
       console.log("🔍 Contract addresses:", { REVOKE_HELPER, REVOKE_AND_CLAIM, ATTESTER_API });
       console.log("🔍 Props:", { token, spender, fid });
+      console.log("🔍 Wallet info:", { address, connector: connector?.name, connectorId: connector?.id });
       
       const hash = await writeRevokeContract({
         address: REVOKE_HELPER,
@@ -86,12 +87,21 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
   }
 
   return (
-    <div>
+    <div className="flex gap-2">
       {!revoked ? (
-        <button onClick={handleRevoke}>Revoke</button>
+        <button 
+          onClick={handleRevoke}
+          className="border-2 border-red-500 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+        >
+          Revoke
+        </button>
       ) : (
-        <button onClick={handleClaim} disabled={claiming}>
-          {claiming ? "Claiming..." : "Claim FG"}
+        <button 
+          onClick={handleClaim} 
+          disabled={claiming}
+          className="border-2 border-green-500 text-green-600 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+        >
+          {claiming ? "Claiming..." : "Claim $FG"}
         </button>
       )}
     </div>
