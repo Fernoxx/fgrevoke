@@ -1473,64 +1473,79 @@ function App() {
   };
 
   const revokeApproval = async (approval) => {
-    if (!isConnected || !address) {
+    console.log("🔄 Individual revoke requested for:", approval.name);
+    console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
+    
+    if (!provider || !isConnected) {
+      try {
+        const { useConnect } = await import('wagmi')
+        const { connect, connectors } = useConnect.getState ? useConnect.getState() : { connect: null }
+        if (connect) {
+          const mini = connectors?.find(c => c.id === 'farcaster') || connectors?.[0]
+          if (mini) await connect({ connector: mini })
+        }
+      } catch {}
       alert('Please connect your wallet first');
       return;
     }
 
     try {
       setRevokingApprovals(prev => new Set(prev).add(approval.id));
+      console.log('🔄 Starting individual revoke for:', approval.name);
       
-      // Create the approve transaction data
-      const approveABI = [{
-        "constant": false,
-        "inputs": [
-          {
-            "name": "_spender",
-            "type": "address"
-          },
-          {
-            "name": "_value",
-            "type": "uint256"
-          }
-        ],
-        "name": "approve",
-        "outputs": [
-          {
-            "name": "",
-            "type": "bool"
-          }
-        ],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-      }];
-
-      // Use the provider to send the transaction
-      const provider = window.ethereum;
-      if (!provider) {
-        throw new Error('No wallet provider found');
+      // Ensure we're on the right chain
+      const chainConfig = chains.find(c => c.value === selectedChain);
+      const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
+      try {
+        const currentChainId = await provider.request({ method: 'eth_chainId' });
+        if (currentChainId !== expectedChainId) {
+          console.log('🔄 Switching to correct chain...');
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: expectedChainId }],
+          });
+        }
+      } catch (switchError) {
+        console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // Request account access if needed
-      await provider.request({ method: 'eth_requestAccounts' });
+      // Direct approve(spender, 0) - just like revoke.cash
+      const { encodeFunctionData } = await import('viem');
+      
+      const ERC20_APPROVE_ABI = [
+        {
+          name: 'approve',
+          type: 'function',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          outputs: [{ name: '', type: 'bool' }]
+        }
+      ];
 
-      // Encode the function call using ethers (more reliable for Farcaster wallet)
-      const iface = new ethers.utils.Interface(approveABI);
-      const data = iface.encodeFunctionData('approve', [approval.spender, '0x0']);
+      const data = encodeFunctionData({
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [approval.spender, 0n]
+      });
 
-      // Send the transaction with proper gas estimation
+      console.log('📝 Sending revoke transaction:', {
+        to: approval.token.contract,
+        from: address,
+        data: data.slice(0, 10) + '...'
+      });
+
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{
           from: address,
           to: approval.token.contract,
           data: data,
-          gas: '0x5208', // 21000 gas limit for simple approve
         }],
       });
 
-      console.log('Transaction sent:', txHash);
+      console.log('✅ Transaction sent:', txHash);
       
       // Mark as revoked in localStorage first
       localStorage.setItem('hasRevoked', 'true');
@@ -1540,11 +1555,11 @@ function App() {
       
       alert('Approval revoked successfully!');
     } catch (error) {
-      console.error('Error revoking approval:', error);
+      console.error('❌ Revoke failed:', error);
       if (error.code === 4001) {
-        alert('Transaction was rejected by user');
+        alert('Transaction cancelled by user');
       } else {
-        alert('Failed to revoke approval. Please try again.');
+        alert(`Failed to revoke approval: ${error.message}`);
       }
     } finally {
       setRevokingApprovals(prev => {
@@ -1748,7 +1763,10 @@ function App() {
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
     
-    const shareTextContent = `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:`;
+    const shareTextContent = currentPage === 'activity'
+      ? `🔍 Just analyzed my ${currentChainName} wallet activity with FarGuard!\n\n💰 ${activityStats.totalTransactions} transactions\n🏗️ ${activityStats.dappsUsed} dApps used\n⛽ ${activityStats.totalGasFees.toFixed(4)} ${chains.find(c => c.value === selectedChain)?.nativeCurrency} in gas fees\n\nTrack your journey:`
+ 
+      : `🛡️ Just secured my ${currentChainName} wallet with FarGuard!\n\n✅ Reviewed ${approvals.length} token approvals\n🔒 Protecting my assets from risky permissions\n\nSecure yours too:`;
     
     const url = "https://fgrevoke.vercel.app";
 
@@ -3933,40 +3951,42 @@ function App() {
               
 
                {/* Navigation Tabs */}
-               <div className="flex flex-wrap gap-2 mb-6">
-                 <button
-                   onClick={() => setCurrentPage('approvals')}
-                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                     currentPage === 'approvals' 
-                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                   }`}
-                 >
-                   <Shield className="w-4 h-4 inline mr-2" />
-                   Approvals
-                 </button>
-                 <button
-                   onClick={() => setCurrentPage('scanner')}
-                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                     currentPage === 'scanner' 
-                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                   }`}
-                 >
-                   <Radar className="w-4 h-4 inline mr-2" />
-                   Scanner
-                 </button>
-                 <button
-                   onClick={() => setCurrentPage('faucet')}
-                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                     currentPage === 'faucet' 
-                       ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
-                       : 'bg-white/50 text-gray-700 hover:bg-white/70'
-                   }`}
-                 >
-                   <Droplets className="w-4 h-4 inline mr-2" />
-                   Faucet
-                 </button>
+               <div className="bg-white/50 rounded-lg p-1 mb-6 border border-gray-200/50">
+                 <div className="flex">
+                   <div
+                     onClick={() => setCurrentPage('approvals')}
+                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium transition-all duration-200 cursor-pointer ${
+                       currentPage === 'approvals' 
+                         ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                         : 'text-gray-700 hover:bg-white/50'
+                     }`}
+                   >
+                     <Shield className="w-4 h-4" />
+                     <span>Approvals</span>
+                   </div>
+                   <div
+                     onClick={() => setCurrentPage('scanner')}
+                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium transition-all duration-200 cursor-pointer ${
+                       currentPage === 'scanner' 
+                         ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                         : 'text-gray-700 hover:bg-white/50'
+                     }`}
+                   >
+                     <Radar className="w-4 h-4" />
+                     <span>Scanner</span>
+                   </div>
+                   <div
+                     onClick={() => setCurrentPage('faucet')}
+                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium transition-all duration-200 cursor-pointer ${
+                       currentPage === 'faucet' 
+                         ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg' 
+                         : 'text-gray-700 hover:bg-white/50'
+                     }`}
+                   >
+                     <Droplets className="w-4 h-4" />
+                     <span>Faucet</span>
+                   </div>
+                 </div>
                </div>
 
                {/* Page Content */}
