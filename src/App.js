@@ -1509,6 +1509,10 @@ function App() {
       const accounts = await currentProvider.request({ method: 'eth_requestAccounts' });
       console.log('✅ Account access granted:', accounts);
 
+      // Use the actual connected account address, not the state variable
+      const connectedAddress = accounts[0];
+      console.log('🔗 Using connected address:', connectedAddress);
+
       // Use the new revoke contract with MultiRevokeHub
       const { MULTI_REVOKE_HUB } = await import('./consts');
       const { MultiRevokeHubAbi } = await import('./abis/MultiRevokeHub');
@@ -1544,7 +1548,7 @@ function App() {
       const txHash = await currentProvider.request({
         method: 'eth_sendTransaction',
         params: [{
-          from: address,
+          from: connectedAddress, // Use the actual connected address
           to: MULTI_REVOKE_HUB, // Use the revoke contract
           data: data,
           gas: '0x5208', // 21000 gas limit for simple revoke
@@ -1672,11 +1676,16 @@ function App() {
       
       console.log('📝 Sending revoke transaction via MultiRevokeHub...');
       
+      // Get the current connected account to ensure we use the right address
+      const accounts = await provider.request({ method: 'eth_accounts' });
+      const connectedAddress = accounts[0];
+      console.log('🔗 Using connected address for requestRevokeApproval:', connectedAddress);
+
       // Send transaction to the revoke contract
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [{
-          from: address,
+          from: connectedAddress, // Use the actual connected address
           to: MULTI_REVOKE_HUB, // Use the revoke contract
           data: data,
           gas: '0x5208', // 21000 gas limit
