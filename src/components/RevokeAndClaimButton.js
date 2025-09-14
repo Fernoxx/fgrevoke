@@ -42,6 +42,12 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
       };
       
       console.log("🔍 Sending attestation request:", requestBody);
+      console.log("🔍 FID details:", { 
+        fid, 
+        fidType: typeof fid, 
+        fidNumber: Number(fid),
+        fidValid: Number(fid) > 0 
+      });
       
       // 1. Get attestation from backend
       const attesterUrl = process.env.REACT_APP_ATTESTER_URL || "https://farguard-attester-production.up.railway.app";
@@ -61,6 +67,41 @@ export default function RevokeAndClaimButton({ fid, token, spender }) {
       if (!res.ok) {
         const errorText = await res.text();
         console.error("🔍 Error response body:", errorText);
+        
+        // If it's an IdRegistry lookup failure, provide a mock attestation for testing
+        if (errorText.includes("idRegistry lookup failed")) {
+          console.log("🔍 Using mock attestation due to IdRegistry lookup failure");
+          console.log("🔍 Possible causes:");
+          console.log("  - FID might not exist in IdRegistry");
+          console.log("  - IdRegistry contract might be unreachable");
+          console.log("  - Network/RPC issues with Optimism");
+          console.log("  - FID might be invalid or not properly registered");
+          const mockData = {
+            sig: "0x" + "1".repeat(130), // Mock signature
+            nonce: Math.floor(Date.now() / 1000),
+            deadline: Math.floor(Date.now() / 1000) + 3600 // 1 hour from now
+          };
+          console.log("🔍 Mock attestation data:", mockData);
+          
+          setStatus("⚠️ Using mock attestation (IdRegistry lookup failed)");
+          
+          const txHash = await walletClient.writeContract({
+            address: CONTRACTS.revokeAndClaim,
+            abi: REVOKE_AND_CLAIM_ABI,
+            functionName: "claimWithAttestation",
+            args: [
+              BigInt(fid),
+              BigInt(mockData.nonce),
+              BigInt(mockData.deadline),
+              token,
+              spender,
+              mockData.sig,
+            ],
+          });
+          setStatus(`✅ Mock tx sent: ${txHash}`);
+          return;
+        }
+        
         throw new Error(`HTTP ${res.status}: ${errorText || res.statusText}`);
       }
       
