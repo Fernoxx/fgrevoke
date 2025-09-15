@@ -21,7 +21,7 @@ export default function RevokeAndClaimButton({ token, spender, fid }) {
     try {
       if (!window.ethereum) throw new Error("No wallet");
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = await provider.getSigner();
       const helper = new ethers.Contract(REVOKE_HELPER, revokeHelperAbi, signer);
 
@@ -39,7 +39,7 @@ export default function RevokeAndClaimButton({ token, spender, fid }) {
     try {
       if (!window.ethereum) throw new Error("No wallet");
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = await provider.getSigner();
       const wallet = await signer.getAddress();
 
