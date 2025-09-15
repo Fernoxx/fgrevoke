@@ -94,27 +94,45 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       });
 
       console.log('✅ Transaction sent:', txHash);
-      setStatus("⏳ Waiting for revoke tx...");
-      
-      // Wait for transaction confirmation
-      let receipt = null;
-      while (!receipt) {
-        try {
-          receipt = await ethProvider.request({
-            method: 'eth_getTransactionReceipt',
-            params: [txHash]
-          });
-          if (!receipt) {
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-          }
-        } catch (e) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-        }
-      }
-      
       setStatus("✅ Revoke successful!");
+      
+      // Set revoked state immediately since transaction was sent successfully
+      console.log('🔄 Setting revoked state to true');
       setRevoked(true);
       onRevoked && onRevoked();
+      
+      // Optional: Wait for transaction confirmation in background
+      setTimeout(async () => {
+        try {
+          let receipt = null;
+          let attempts = 0;
+          const maxAttempts = 15; // 30 seconds max wait
+          
+          while (!receipt && attempts < maxAttempts) {
+            try {
+              receipt = await ethProvider.request({
+                method: 'eth_getTransactionReceipt',
+                params: [txHash]
+              });
+              if (!receipt) {
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+                attempts++;
+              }
+            } catch (e) {
+              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+              attempts++;
+            }
+          }
+          
+          if (receipt) {
+            console.log('✅ Transaction confirmed in background:', receipt);
+          } else {
+            console.log('⚠️ Transaction confirmation timeout, but transaction was sent');
+          }
+        } catch (e) {
+          console.log('⚠️ Background confirmation failed:', e);
+        }
+      }, 1000);
     } catch (err) {
       console.error("❌ Revoke error:", err);
       setStatus("❌ Revoke failed: " + err.message);
@@ -201,6 +219,8 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     }
   }
 
+  console.log('🔍 RevokeAndClaimButton render - revoked:', revoked, 'claiming:', claiming);
+  
   return (
     <div>
       {!revoked ? (
