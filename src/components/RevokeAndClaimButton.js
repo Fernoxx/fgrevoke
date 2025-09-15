@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useWalletClient } from "wagmi";
+import { ethers } from "ethers";
 
 const REVOKE_HELPER = "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf";
 const REVOKE_AND_CLAIM = "0x547541959d2f7dba7dad4cac7f366c25400a49bc";
@@ -49,8 +50,7 @@ const revokeAndClaimAbi = [
 
 export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, onClaimed }) {
   const { address } = useAccount();
-  const { writeContract: writeRevokeContract } = useWriteContract();
-  const { writeContract: writeClaimContract } = useWriteContract();
+  const { data: walletClient } = useWalletClient();
   const [revoked, setRevoked] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [status, setStatus] = useState("");
@@ -58,20 +58,26 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
   async function handleRevoke() {
     try {
       console.log("🔍 RevokeAndClaimButton - handleRevoke called");
-      console.log("🔍 Using wagmi hooks for Farcaster wallet");
+      console.log("🔍 Using walletClient for Farcaster wallet popup");
       
-      const hash = await writeRevokeContract({
-        address: REVOKE_HELPER,
-        abi: revokeHelperAbi,
-        functionName: 'recordRevoked',
-        args: [token, spender],
-      });
+      if (!walletClient) {
+        throw new Error("Wallet not connected");
+      }
+
+      const provider = new ethers.providers.Web3Provider(walletClient);
+      const signer = provider.getSigner();
+      const helper = new ethers.Contract(REVOKE_HELPER, revokeHelperAbi, signer);
+
+      console.log("🔍 Calling recordRevoked with:", { token, spender });
+      const tx = await helper.recordRevoked(token, spender);
       
-      console.log("🔍 Revoke tx hash:", hash);
+      console.log("🔍 Revoke tx hash:", tx.hash);
       setStatus("⏳ Waiting for revoke tx...");
+      await tx.wait();
+      
+      setStatus("✅ Revoke successful!");
       setRevoked(true);
       onRevoked && onRevoked();
-      setStatus("✅ Revoke transaction sent!");
     } catch (err) {
       console.error("❌ Revoke error:", err);
       setStatus("❌ Revoke failed: " + err.message);
@@ -82,7 +88,11 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     try {
       setClaiming(true);
       console.log("🔍 RevokeAndClaimButton - handleClaim called");
-      console.log("🔍 Using wagmi hooks for Farcaster wallet");
+      console.log("🔍 Using walletClient for Farcaster wallet popup");
+
+      if (!walletClient) {
+        throw new Error("Wallet not connected");
+      }
 
       // Call attester backend
       const body = { wallet: address, token, spender };
@@ -96,25 +106,35 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       console.log("🔍 Attestation response:", data);
       if (!resp.ok) throw new Error(data.error || "Attestation failed");
 
-      // Call contract claim using wagmi
-      const hash = await writeClaimContract({
-        address: REVOKE_AND_CLAIM,
-        abi: revokeAndClaimAbi,
-        functionName: 'claimWithAttestation',
-        args: [
-          BigInt(data.fid),
-          BigInt(data.nonce),
-          BigInt(data.deadline),
-          token,
-          spender,
-          data.sig
-        ],
+      // Call contract claim using ethers
+      const provider = new ethers.providers.Web3Provider(walletClient);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(REVOKE_AND_CLAIM, revokeAndClaimAbi, signer);
+      
+      console.log("🔍 Calling claimWithAttestation with:", {
+        fid: data.fid,
+        nonce: data.nonce,
+        deadline: data.deadline,
+        token,
+        spender,
+        sig: data.sig?.slice(0, 10) + "..."
       });
       
-      console.log("🔍 Claim tx hash:", hash);
+      const tx = await contract.claimWithAttestation(
+        data.fid,
+        data.nonce,
+        data.deadline,
+        token,
+        spender,
+        data.sig
+      );
+      
+      console.log("🔍 Claim tx hash:", tx.hash);
       setStatus("⏳ Waiting for claim tx...");
+      await tx.wait();
+      
+      setStatus("✅ Claim successful!");
       onClaimed && onClaimed();
-      setStatus("✅ Claim transaction sent!");
     } catch (err) {
       console.error("❌ Claim failed:", err);
       setStatus("❌ Claim failed: " + err.message);
