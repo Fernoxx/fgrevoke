@@ -69,16 +69,48 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
         throw new Error("No wallet provider available from Farcaster.");
       }
 
-      const provider = new ethers.providers.Web3Provider(ethProvider);
-      const signer = provider.getSigner();
-      const helper = new ethers.Contract(REVOKE_HELPER, revokeHelperAbi, signer);
-
-      console.log("🔍 Calling recordRevoked with:", { token, spender });
-      const tx = await helper.recordRevoked(token, spender);
+      // Use viem to encode the function call (same as working App.js)
+      const { encodeFunctionData } = await import('viem');
       
-      console.log("🔍 Revoke tx hash:", tx.hash);
+      const data = encodeFunctionData({
+        abi: revokeHelperAbi,
+        functionName: 'recordRevoked',
+        args: [token, spender]
+      });
+
+      console.log('📝 Sending revoke transaction via RevokeHelper:', {
+        to: REVOKE_HELPER,
+        from: address,
+        data: data.slice(0, 10) + '...'
+      });
+
+      const txHash = await ethProvider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: REVOKE_HELPER,
+          data: data,
+        }],
+      });
+
+      console.log('✅ Transaction sent:', txHash);
       setStatus("⏳ Waiting for revoke tx...");
-      await tx.wait();
+      
+      // Wait for transaction confirmation
+      let receipt = null;
+      while (!receipt) {
+        try {
+          receipt = await ethProvider.request({
+            method: 'eth_getTransactionReceipt',
+            params: [txHash]
+          });
+          if (!receipt) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          }
+        } catch (e) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+        }
+      }
       
       setStatus("✅ Revoke successful!");
       setRevoked(true);
@@ -116,32 +148,48 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       console.log("🔍 Attestation response:", data);
       if (!resp.ok) throw new Error(data.error || "Attestation failed");
 
-      // Call contract claim using Farcaster SDK provider
-      const provider = new ethers.providers.Web3Provider(ethProvider);
-      const signer = provider.getSigner();
-      const contract = new ethers.Contract(REVOKE_AND_CLAIM, revokeAndClaimAbi, signer);
+      // Use viem to encode the function call
+      const { encodeFunctionData } = await import('viem');
       
-      console.log("🔍 Calling claimWithAttestation with:", {
-        fid: data.fid,
-        nonce: data.nonce,
-        deadline: data.deadline,
-        token,
-        spender,
-        sig: data.sig?.slice(0, 10) + "..."
+      const claimData = encodeFunctionData({
+        abi: revokeAndClaimAbi,
+        functionName: 'claimWithAttestation',
+        args: [data.fid, data.nonce, data.deadline, token, spender, data.sig]
       });
-      
-      const tx = await contract.claimWithAttestation(
-        data.fid,
-        data.nonce,
-        data.deadline,
-        token,
-        spender,
-        data.sig
-      );
-      
-      console.log("🔍 Claim tx hash:", tx.hash);
+
+      console.log('📝 Sending claim transaction via RevokeAndClaim:', {
+        to: REVOKE_AND_CLAIM,
+        from: address,
+        data: claimData.slice(0, 10) + '...'
+      });
+
+      const txHash = await ethProvider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: REVOKE_AND_CLAIM,
+          data: claimData,
+        }],
+      });
+
+      console.log('✅ Claim transaction sent:', txHash);
       setStatus("⏳ Waiting for claim tx...");
-      await tx.wait();
+      
+      // Wait for transaction confirmation
+      let receipt = null;
+      while (!receipt) {
+        try {
+          receipt = await ethProvider.request({
+            method: 'eth_getTransactionReceipt',
+            params: [txHash]
+          });
+          if (!receipt) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          }
+        } catch (e) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+        }
+      }
       
       setStatus("✅ Claim successful!");
       onClaimed && onClaimed();
