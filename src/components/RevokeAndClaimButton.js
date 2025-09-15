@@ -58,13 +58,21 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
   async function handleRevoke() {
     try {
       console.log("🔍 RevokeAndClaimButton - handleRevoke called");
-      console.log("🔍 Using walletClient for Farcaster wallet popup");
+      console.log("🔍 Wallet state:", { address, walletClient: !!walletClient, hasWindowEthereum: !!window.ethereum });
       
-      if (!walletClient) {
-        throw new Error("Wallet not connected");
+      let provider;
+      
+      // Try walletClient first, fallback to window.ethereum
+      if (walletClient) {
+        console.log("🔍 Using walletClient");
+        provider = new ethers.providers.Web3Provider(walletClient);
+      } else if (window.ethereum) {
+        console.log("🔍 Using window.ethereum as fallback");
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+      } else {
+        throw new Error("No wallet provider available");
       }
 
-      const provider = new ethers.providers.Web3Provider(walletClient);
       const signer = provider.getSigner();
       const helper = new ethers.Contract(REVOKE_HELPER, revokeHelperAbi, signer);
 
@@ -88,10 +96,19 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     try {
       setClaiming(true);
       console.log("🔍 RevokeAndClaimButton - handleClaim called");
-      console.log("🔍 Using walletClient for Farcaster wallet popup");
+      console.log("🔍 Wallet state:", { address, walletClient: !!walletClient, hasWindowEthereum: !!window.ethereum });
 
-      if (!walletClient) {
-        throw new Error("Wallet not connected");
+      let provider;
+      
+      // Try walletClient first, fallback to window.ethereum
+      if (walletClient) {
+        console.log("🔍 Using walletClient");
+        provider = new ethers.providers.Web3Provider(walletClient);
+      } else if (window.ethereum) {
+        console.log("🔍 Using window.ethereum as fallback");
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+      } else {
+        throw new Error("No wallet provider available");
       }
 
       // Call attester backend
@@ -107,7 +124,6 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       if (!resp.ok) throw new Error(data.error || "Attestation failed");
 
       // Call contract claim using ethers
-      const provider = new ethers.providers.Web3Provider(walletClient);
       const signer = provider.getSigner();
       const contract = new ethers.Contract(REVOKE_AND_CLAIM, revokeAndClaimAbi, signer);
       
