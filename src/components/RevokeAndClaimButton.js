@@ -106,7 +106,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       // Wait for revocation to be confirmed
       let revokeReceipt = null;
       let attempts = 0;
-      const maxAttempts = 30;
+      const maxAttempts = 15; // 30 seconds max wait (15 × 2 seconds)
       
       while (!revokeReceipt && attempts < maxAttempts) {
         try {
