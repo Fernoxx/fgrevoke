@@ -156,40 +156,36 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       // Set revoked state immediately since transaction was sent successfully
       console.log('🔄 Setting revoked state to true');
       setRevoked(true);
-      onRevoked && onRevoked();
       
-      // Optional: Wait for record transaction confirmation in background
-      setTimeout(async () => {
+      // Wait for record transaction confirmation before calling onRevoked
+      let receipt = null;
+      let attempts = 0;
+      const maxAttempts = 15; // 30 seconds max wait
+      
+      while (!receipt && attempts < maxAttempts) {
         try {
-          let receipt = null;
-          let attempts = 0;
-          const maxAttempts = 15; // 30 seconds max wait
-          
-          while (!receipt && attempts < maxAttempts) {
-            try {
-              receipt = await ethProvider.request({
-                method: 'eth_getTransactionReceipt',
-                params: [recordTxHash]
-              });
-              if (!receipt) {
-                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-                attempts++;
-              }
-            } catch (e) {
-              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-              attempts++;
-            }
-          }
-          
-          if (receipt) {
-            console.log('✅ Transaction confirmed in background:', receipt);
-          } else {
-            console.log('⚠️ Transaction confirmation timeout, but transaction was sent');
+          receipt = await ethProvider.request({
+            method: 'eth_getTransactionReceipt',
+            params: [recordTxHash]
+          });
+          if (!receipt) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+            attempts++;
           }
         } catch (e) {
-          console.log('⚠️ Background confirmation failed:', e);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempts++;
         }
-      }, 1000);
+      }
+      
+      if (receipt) {
+        console.log('✅ Transaction confirmed:', receipt);
+      } else {
+        console.log('⚠️ Transaction confirmation timeout, but transaction was sent');
+      }
+      
+      // Only call onRevoked after transaction is confirmed (or timeout)
+      onRevoked && onRevoked();
     } catch (err) {
       console.error("❌ Revoke error:", err);
       setStatus("❌ Revoke failed: " + err.message);
