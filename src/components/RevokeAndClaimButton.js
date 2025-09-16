@@ -53,6 +53,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
   const { address } = useAccount();
   const [revoked, setRevoked] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [claimed, setClaimed] = useState(false);
   const [status, setStatus] = useState("");
 
   async function handleRevoke() {
@@ -103,45 +104,16 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       
       console.log('✅ Allowance revoked:', revokeTxHash);
       
-      // Wait for revocation to be confirmed
-      let revokeReceipt = null;
-      let attempts = 0;
-      const maxAttempts = 15; // 30 seconds max wait (15 × 2 seconds)
+      // Wait just 1-2 seconds for revocation, then proceed
+      console.log('⏳ Waiting 2 seconds for revocation...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      while (!revokeReceipt && attempts < maxAttempts) {
-        try {
-          revokeReceipt = await ethProvider.request({
-            method: 'eth_getTransactionReceipt',
-            params: [revokeTxHash]
-          });
-          if (!revokeReceipt) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            attempts++;
-          }
-        } catch (e) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          attempts++;
-        }
-      }
-      
-      if (!revokeReceipt) {
-        console.log('⚠️ Revocation confirmation timeout, but continuing with record...');
-      } else {
-        console.log('✅ Revocation confirmed:', revokeReceipt);
-      }
-      
-      // Step 2: Record the revocation
+      // Step 2: Record the revocation immediately
       console.log('📝 Step 2: Recording revocation...');
       const recordData = encodeFunctionData({
         abi: revokeHelperAbi,
         functionName: 'recordRevoked',
         args: [token, spender]
-      });
-
-      console.log('📝 Sending record transaction via RevokeHelper:', {
-        to: REVOKE_HELPER,
-        from: address,
-        data: recordData.slice(0, 10) + '...'
       });
 
       const recordTxHash = await ethProvider.request({
@@ -153,51 +125,12 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
         }],
       });
 
-      console.log('✅ Record transaction sent:', recordTxHash);
-      setStatus("✅ Revoke and record successful!");
+      console.log('✅ Both transactions sent successfully!');
+      setStatus("✅ Revoke successful!");
       
-      // Set revoked state immediately since transaction was sent successfully
-      console.log('🔄 Setting revoked state to true');
+      // Set revoked state immediately
       setRevoked(true);
-      
-      // Call onRevoked immediately since we've successfully sent both transactions
-      console.log('🔄 Calling onRevoked callback');
       onRevoked && onRevoked();
-      
-      console.log('✅ Revoke process completed successfully');
-      
-      // Wait for record transaction confirmation in background
-      setTimeout(async () => {
-        try {
-          let receipt = null;
-          let recordAttempts = 0;
-          const maxRecordAttempts = 15; // 30 seconds max wait
-          
-          while (!receipt && recordAttempts < maxRecordAttempts) {
-            try {
-              receipt = await ethProvider.request({
-                method: 'eth_getTransactionReceipt',
-                params: [recordTxHash]
-              });
-              if (!receipt) {
-                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-                recordAttempts++;
-              }
-            } catch (e) {
-              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-              recordAttempts++;
-            }
-          }
-          
-          if (receipt) {
-            console.log('✅ Transaction confirmed in background:', receipt);
-          } else {
-            console.log('⚠️ Transaction confirmation timeout, but transaction was sent');
-          }
-        } catch (e) {
-          console.log('⚠️ Background confirmation failed:', e);
-        }
-      }, 1000);
     } catch (err) {
       console.error("❌ Revoke error:", err);
       setStatus("❌ Revoke failed: " + err.message);
@@ -288,11 +221,12 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       }
       
       setStatus("✅ Claim successful!");
+      setClaiming(false);
+      setClaimed(true);
       onClaimed && onClaimed();
     } catch (err) {
       console.error("❌ Claim failed:", err);
       setStatus("❌ Claim failed: " + err.message);
-    } finally {
       setClaiming(false);
     }
   }
@@ -316,14 +250,14 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
         
         <button 
           onClick={handleClaim} 
-          disabled={!revoked || claiming}
+          disabled={!revoked || claiming || claimed}
           className={`border-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-            !revoked || claiming
+            !revoked || claiming || claimed
               ? 'border-gray-300 text-gray-500 bg-gray-100 cursor-not-allowed'
               : 'border-green-500 text-green-600 hover:bg-green-50'
           }`}
         >
-          {claiming ? "Claiming..." : "Claim $FG"}
+          {claimed ? "✅ Claimed" : claiming ? "Claiming..." : "Claim $FG"}
         </button>
       </div>
       {status && <div className="mt-2 text-sm">{status}</div>}
