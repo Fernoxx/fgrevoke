@@ -191,6 +191,9 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     try {
       setClaiming(true);
       console.log("🔍 RevokeAndClaimButton - handleClaim called");
+      console.log("🔍 FID from props:", fid);
+      console.log("🔍 FID type:", typeof fid);
+      console.log("🔍 FID value:", fid);
       console.log("🔍 Using Farcaster Miniapp SDK for wallet interaction");
 
       // Get Ethereum provider from Farcaster Miniapp SDK
@@ -212,10 +215,21 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       });
       const data = await resp.json();
       console.log("🔍 Attestation response:", data);
+      console.log("🔍 Attestation FID:", data.fid);
+      console.log("🔍 Attestation FID type:", typeof data.fid);
       if (!resp.ok) throw new Error(data.error || "Attestation failed");
 
       // Use viem to encode the function call
       const { encodeFunctionData } = await import('viem');
+      
+      console.log("🔍 Contract call args:", {
+        fid: data.fid,
+        nonce: data.nonce,
+        deadline: data.deadline,
+        token: token,
+        spender: spender,
+        sig: data.sig
+      });
       
       const claimData = encodeFunctionData({
         abi: revokeAndClaimAbi,
