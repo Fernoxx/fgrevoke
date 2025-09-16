@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { ethers } from "ethers";
 import { sdk } from "@farcaster/miniapp-sdk";
+import revokeAndClaimAbi from "../abis/RevokeAndClaim.json";
 
 const REVOKE_HELPER = "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf";
 const REVOKE_AND_CLAIM = "0x547541959d2f7dba7dad4cac7f366c25400a49bc";
@@ -63,15 +64,49 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     
     try {
       setCheckingClaimed(true);
-      console.log("🔍 Checking if approval was already claimed...");
+      console.log("🔍 Checking if user already claimed from this token:", token);
       
       const ethProvider = await sdk.wallet.getEthereumProvider();
       if (!ethProvider) return;
 
-      // Check if user has already claimed for this approval
-      // We can check the contract's claimed mapping or events
-      // For now, we'll use a simple approach - if the approval exists but user can't claim, it's likely already claimed
-      console.log("✅ Check completed - approval may already be claimed");
+      // Try to call the contract to check if user already claimed
+      // We'll use a test call to see if claim would succeed
+      const { encodeFunctionData } = await import('viem');
+      
+      // Create a test claim call with dummy data
+      const testClaimData = encodeFunctionData({
+        abi: revokeAndClaimAbi,
+        functionName: 'claimWithAttestation',
+        args: [
+          BigInt(fid || 0),
+          BigInt(1), // dummy nonce
+          BigInt(Math.floor(Date.now() / 1000) + 600), // dummy deadline
+          token,
+          spender,
+          "0x" + "0".repeat(130) // dummy signature
+        ]
+      });
+
+      // Try to simulate the call
+      try {
+        await ethProvider.request({
+          method: 'eth_call',
+          params: [{
+            to: REVOKE_AND_CLAIM,
+            data: testClaimData,
+            from: address
+          }, 'latest']
+        });
+        console.log("✅ Token not claimed yet - claim button available");
+      } catch (simulationError) {
+        if (simulationError.message.includes("not revoked") || 
+            simulationError.message.includes("already claimed") ||
+            simulationError.message.includes("execution reverted")) {
+          console.log("⚠️ User already claimed from this token - hiding claim button");
+          setClaimed(true);
+          onClaimed && onClaimed(); // Hide from UI
+        }
+      }
     } catch (err) {
       console.error("❌ Error checking claim status:", err);
     } finally {
@@ -287,17 +322,27 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
           {revoked ? "✅ Revoked" : "Revoke"}
         </button>
         
+        {/* Only show claim button if not already claimed from this token */}
+        {!claimed && (
           <button
             onClick={handleClaim}
-            disabled={!revoked || claiming || claimed}
+            disabled={!revoked || claiming}
             className={`border-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-              !revoked || claiming || claimed
+              !revoked || claiming
                 ? 'border-gray-300 text-gray-500 bg-gray-100 cursor-not-allowed'
                 : 'border-green-500 text-green-600 hover:bg-green-50'
             }`}
           >
-            {claimed ? "✅ Already Claimed" : claiming ? "Claiming..." : "Claim $FG"}
+            {claiming ? "Claiming..." : "Claim $FG"}
           </button>
+        )}
+        
+        {/* Show message if already claimed */}
+        {claimed && (
+          <div className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 border-2 border-gray-300">
+            ⚠️ Already claimed from this token
+          </div>
+        )}
       </div>
       {status && <div className="mt-2 text-sm">{status}</div>}
     </div>
