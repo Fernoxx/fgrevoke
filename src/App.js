@@ -1801,26 +1801,6 @@ function App() {
     window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank');
   };
 
-  const buyFG = () => {
-    // Farcaster Wallet deep link to swap ETH for $FG
-    const fgTokenCA = "0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07";
-    const ethTokenCA = "0x0000000000000000000000000000000000000000"; // ETH
-    
-    // Try Farcaster Wallet deep link first
-    const farcasterWalletLink = `farcasterwallet://swap?tokenIn=${ethTokenCA}&tokenOut=${fgTokenCA}`;
-    
-    // Fallback to universal link
-    const universalLink = `https://wallet.farcaster.xyz/swap?tokenIn=${ethTokenCA}&tokenOut=${fgTokenCA}`;
-    
-    // Try to open Farcaster Wallet app
-    window.location.href = farcasterWalletLink;
-    
-    // Fallback after a short delay if the app doesn't open
-    setTimeout(() => {
-      window.open(universalLink, '_blank');
-    }, 1000);
-  };
-
   // Share to Farcaster using proper SDK method
   const handleShare = async () => {
     const currentChainName = chains.find(c => c.value === selectedChain)?.name || selectedChain;
@@ -3860,7 +3840,7 @@ function App() {
                     FarGuard is a RevokeToEarn miniapp where you secure your wallet by revoking risky approvals and earn $FG, while long-term holders are rewarded daily for securing the ecosystem.
                   </p>
                   
-                  <div className="flex justify-center items-center gap-4 mb-12">
+                  <div className="flex justify-center items-center mb-12">
                     <button
                       onClick={() => isConnected ? setCurrentPage('approvals') : connectFarcaster()}
                       disabled={!sdkReady || isConnecting}
@@ -3882,14 +3862,6 @@ function App() {
                           Connect Wallet
                         </>
                       )}
-                    </button>
-                    
-                    <button
-                      onClick={buyFG}
-                      className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
-                    >
-                      <DollarSign className="w-5 h-5 mr-3" />
-                      Buy $FG
                     </button>
                   </div>
                 </div>
@@ -3965,38 +3937,28 @@ function App() {
                   Join thousands of users who trust FarGuard to protect their crypto assets. 
                   Start securing your wallet today.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                  <button
-                    onClick={() => isConnected ? setCurrentPage('approvals') : connectFarcaster()}
-                    disabled={!sdkReady || isConnecting}
-                    className="bg-white hover:bg-gray-50 text-purple-600 px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
-                  >
-                    {isConnecting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
-                        Connecting...
-                      </>
-                    ) : isConnected ? (
-                      <>
-                        <Shield className="w-5 h-5 mr-3" />
-                        Start Revoking
-                      </>
-                    ) : (
-                      <>
-                        <Wallet className="w-5 h-5 mr-3" />
-                        Get Started Now
-                      </>
-                    )}
-                  </button>
-                  
-                  <button
-                    onClick={buyFG}
-                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
-                  >
-                    <DollarSign className="w-5 h-5 mr-3" />
-                    Buy $FG
-                  </button>
-                </div>
+                <button
+                  onClick={() => isConnected ? setCurrentPage('approvals') : connectFarcaster()}
+                  disabled={!sdkReady || isConnecting}
+                  className="bg-white hover:bg-gray-50 text-purple-600 px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
+                >
+                  {isConnecting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600 mr-3"></div>
+                      Connecting...
+                    </>
+                  ) : isConnected ? (
+                    <>
+                      <Shield className="w-5 h-5 mr-3" />
+                      Start Revoking
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5 mr-3" />
+                      Get Started Now
+                    </>
+                  )}
+                </button>
               </div>
             </section>
           </>
