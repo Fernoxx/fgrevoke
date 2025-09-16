@@ -125,17 +125,20 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       }
       
       if (!revokeReceipt) {
-        throw new Error("Revocation transaction confirmation timeout");
+        console.log('⚠️ Revocation confirmation timeout, but continuing with record...');
+      } else {
+        console.log('✅ Revocation confirmed:', revokeReceipt);
       }
       
       // Step 2: Record the revocation
+      console.log('📝 Step 2: Recording revocation...');
       const recordData = encodeFunctionData({
         abi: revokeHelperAbi,
         functionName: 'recordRevoked',
         args: [token, spender]
       });
 
-      console.log('📝 Step 2: Recording revocation via RevokeHelper:', {
+      console.log('📝 Sending record transaction via RevokeHelper:', {
         to: REVOKE_HELPER,
         from: address,
         data: recordData.slice(0, 10) + '...'
