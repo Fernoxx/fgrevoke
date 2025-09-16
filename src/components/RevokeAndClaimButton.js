@@ -293,22 +293,31 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
   
   return (
     <div>
-      {!revoked ? (
+      <div className="flex gap-2">
         <button 
           onClick={handleRevoke}
-          className="border-2 border-red-500 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+          disabled={revoked}
+          className={`border-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+            revoked 
+              ? 'border-gray-300 text-gray-500 bg-gray-100 cursor-not-allowed' 
+              : 'border-red-500 text-red-600 hover:bg-red-50'
+          }`}
         >
-          Revoke
+          {revoked ? "✅ Revoked" : "Revoke"}
         </button>
-      ) : (
+        
         <button 
           onClick={handleClaim} 
-          disabled={claiming}
-          className="border-2 border-green-500 text-green-600 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+          disabled={!revoked || claiming}
+          className={`border-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+            !revoked || claiming
+              ? 'border-gray-300 text-gray-500 bg-gray-100 cursor-not-allowed'
+              : 'border-green-500 text-green-600 hover:bg-green-50'
+          }`}
         >
           {claiming ? "Claiming..." : "Claim $FG"}
         </button>
-      )}
+      </div>
       {status && <div className="mt-2 text-sm">{status}</div>}
     </div>
   );
