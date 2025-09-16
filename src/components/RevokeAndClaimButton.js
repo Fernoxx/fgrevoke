@@ -205,7 +205,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
         throw new Error("No wallet provider available from Farcaster.");
       }
 
-      // Call attester backend
+      // Call attester backend (FID will be looked up by backend)
       const body = { wallet: address, token, spender };
       console.log("🔍 Attestation request body:", body);
       const resp = await fetch(ATTESTER_API, {
