@@ -1494,104 +1494,6 @@ function App() {
     }
   };
 
-  const revokeApproval = async (approval) => {
-    console.log("🔄 Individual revoke requested for:", approval.name);
-    console.log("🔌 Provider state:", { hasProvider: !!provider, isConnected, address });
-    
-    if (!provider || !isConnected) {
-      try {
-        const { useConnect } = await import('wagmi')
-        const { connect, connectors } = useConnect.getState ? useConnect.getState() : { connect: null }
-        if (connect) {
-          const mini = connectors?.find(c => c.id === 'farcaster') || connectors?.[0]
-          if (mini) await connect({ connector: mini })
-        }
-      } catch {}
-      alert('Please connect your wallet first');
-      return;
-    }
-
-    try {
-      setRevokingApprovals(prev => new Set(prev).add(approval.id));
-      console.log('🔄 Starting individual revoke for:', approval.name);
-      
-      // Ensure we're on the right chain
-      const chainConfig = chains.find(c => c.value === selectedChain);
-      const expectedChainId = `0x${chainConfig.chainId.toString(16)}`;
-      try {
-        const currentChainId = await provider.request({ method: 'eth_chainId' });
-        if (currentChainId !== expectedChainId) {
-          console.log('🔄 Switching to correct chain...');
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: expectedChainId }],
-          });
-        }
-      } catch (switchError) {
-        console.log('Chain switch error (might be expected):', switchError);
-      }
-
-      // Use RevokeHelper.recordRevoked() instead of direct approval
-      const { encodeFunctionData } = await import('viem');
-      
-      const REVOKE_HELPER_ABI = [
-        {
-          "type": "function",
-          "name": "recordRevoked",
-          "inputs": [
-            { "name": "token", "type": "address" },
-            { "name": "spender", "type": "address" }
-          ],
-          "outputs": [],
-          "stateMutability": "nonpayable"
-        }
-      ];
-
-      const data = encodeFunctionData({
-        abi: REVOKE_HELPER_ABI,
-        functionName: 'recordRevoked',
-        args: [approval.token.contract, approval.spender]
-      });
-
-      console.log('📝 Sending revoke transaction via RevokeHelper:', {
-        to: '0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf',
-        from: address,
-        data: data.slice(0, 10) + '...'
-      });
-
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          from: address,
-          to: '0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf', // RevokeHelper contract
-          data: data,
-        }],
-      });
-
-      console.log('✅ Transaction sent:', txHash);
-      
-      // Mark as revoked in localStorage first
-      localStorage.setItem('hasRevoked', 'true');
-      
-      // Update local approvals list after successful transaction
-      setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      
-      alert('Approval revoked successfully!');
-    } catch (error) {
-      console.error('❌ Revoke failed:', error);
-      if (error.code === 4001) {
-        alert('Transaction cancelled by user');
-      } else {
-        alert(`Failed to revoke approval: ${error.message}`);
-      }
-    } finally {
-      setRevokingApprovals(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(approval.id);
-        return newSet;
-      });
-    }
-  };
 
   // Track revoke and claim status with localStorage
   const hasRevoked = localStorage.getItem('hasRevoked') === 'true';
@@ -1612,6 +1514,135 @@ function App() {
     setError(null); // Clear errors when switching tabs
   }, [selectedChain, currentPage]);
 
+  // Add RevokeHelper constants
+  const REVOKE_HELPER_ADDRESS = "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf";
+  const REVOKE_HELPER_ABI = [
+    {
+      name: 'recordRevoked',
+      type: 'function',
+      inputs: [
+        { name: 'token', type: 'address' },
+        { name: 'spender', type: 'address' }
+      ],
+      outputs: [],
+      stateMutability: 'nonpayable'
+    }
+  ];
+
+  // Enhanced revoke function with automatic recordRevoked call
+  const revokeAndRecord = async (userWallet, tokenAddress, spenderAddress) => {
+    try {
+      console.log("🚀 Starting revoke and record process...");
+      
+      const { encodeFunctionData } = await import('viem');
+      
+      // Step 1: Revoke the allowance
+      console.log("📝 Step 1: Revoking allowance...");
+      const ERC20_APPROVE_ABI = [
+        {
+          name: 'approve',
+          type: 'function',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          outputs: [{ name: '', type: 'bool' }]
+        }
+      ];
+      
+      const revokeData = encodeFunctionData({
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [spenderAddress, BigInt(0)]
+      });
+      
+      const revokeTxHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: userWallet,
+          to: tokenAddress,
+          data: revokeData,
+        }],
+      });
+      
+      console.log("✅ Allowance revoked successfully:", revokeTxHash);
+      
+      // Wait for revocation transaction to be mined
+      let revokeReceipt = null;
+      let attempts = 0;
+      const maxAttempts = 30; // 60 seconds max wait
+      
+      while (!revokeReceipt && attempts < maxAttempts) {
+        try {
+          revokeReceipt = await provider.request({
+            method: 'eth_getTransactionReceipt',
+            params: [revokeTxHash]
+          });
+          if (!revokeReceipt) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+            attempts++;
+          }
+        } catch (e) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempts++;
+        }
+      }
+      
+      if (!revokeReceipt) {
+        throw new Error("Revocation transaction confirmation timeout");
+      }
+      
+      // Step 2: Record the revocation in RevokeHelper
+      console.log("📝 Step 2: Recording revocation...");
+      const recordData = encodeFunctionData({
+        abi: REVOKE_HELPER_ABI,
+        functionName: 'recordRevoked',
+        args: [tokenAddress, spenderAddress]
+      });
+      
+      const recordTxHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: userWallet,
+          to: REVOKE_HELPER_ADDRESS,
+          data: recordData,
+        }],
+      });
+      
+      console.log("✅ Revocation recorded successfully:", recordTxHash);
+      
+      // Wait for record transaction to be mined
+      let recordReceipt = null;
+      attempts = 0;
+      
+      while (!recordReceipt && attempts < maxAttempts) {
+        try {
+          recordReceipt = await provider.request({
+            method: 'eth_getTransactionReceipt',
+            params: [recordTxHash]
+          });
+          if (!recordReceipt) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+            attempts++;
+          }
+        } catch (e) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempts++;
+        }
+      }
+      
+      if (!recordReceipt) {
+        throw new Error("Record transaction confirmation timeout");
+      }
+      
+      return { success: true, revokeTxHash, recordTxHash };
+      
+    } catch (error) {
+      console.error("❌ Revoke and record failed:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
   // Real revoke function - direct approve(spender, 0) like revoke.cash
   const requestRevokeApproval = async (approval) => {
     console.log("🔄 Individual revoke requested for:", approval.name);
@@ -1630,6 +1661,9 @@ function App() {
       return;
     }
 
+    // Set loading state for this specific approval
+    setRevokingApprovals(prev => new Set(prev).add(approval.id));
+    
     try {
       console.log('🔄 Starting individual revoke for:', approval.name);
       setError(null);
@@ -1650,44 +1684,22 @@ function App() {
         console.log('Chain switch error (might be expected):', switchError);
       }
 
-      // Direct approve(spender, 0) - just like revoke.cash
-      const { encodeFunctionData } = await import('viem');
+      // Use the new revokeAndRecord function
+      console.log('📝 Starting revoke and record process...');
       
-      const ERC20_APPROVE_ABI = [
-        {
-          name: 'approve',
-          type: 'function',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' }
-          ],
-          outputs: [{ name: '', type: 'bool' }]
-        }
-      ];
+      const result = await revokeAndRecord(address, approval.contract, approval.spender);
       
-      // Encode approve(spender, 0)
-      const data = encodeFunctionData({
-        abi: ERC20_APPROVE_ABI,
-        functionName: 'approve',
-        args: [approval.spender, BigInt(0)]
-      });
-      
-      console.log('📝 Sending direct approve(spender, 0) transaction...');
-      
-      // Send transaction
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-          from: address,
-          to: approval.contract,
-          data: data,
-        }],
-      });
-      
-      console.log('✅ Revoke transaction sent:', txHash);
-      localStorage.setItem('hasRevoked', 'true');
-      setApprovals(prev => prev.filter(a => a.id !== approval.id));
-      console.log('✅ Revoke complete for:', approval.name);
+      if (result.success) {
+        console.log('✅ Revoke and record completed successfully!');
+        console.log('📝 Revoke transaction:', result.revokeTxHash);
+        console.log('📝 Record transaction:', result.recordTxHash);
+        
+        localStorage.setItem('hasRevoked', 'true');
+        setApprovals(prev => prev.filter(a => a.id !== approval.id));
+        console.log('✅ Revoke complete for:', approval.name);
+      } else {
+        throw new Error(result.error || 'Revoke and record failed');
+      }
 
     } catch (error) {
       console.error('❌ Revoke failed:', error);
@@ -1696,6 +1708,13 @@ function App() {
       } else {
         setError(`Failed to revoke approval: ${error.message}`);
       }
+    } finally {
+      // Clear loading state for this approval
+      setRevokingApprovals(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(approval.id);
+        return newSet;
+      });
     }
   };
 
