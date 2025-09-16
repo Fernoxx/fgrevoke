@@ -159,10 +159,10 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       
       // Wait for record transaction confirmation before calling onRevoked
       let receipt = null;
-      let attempts = 0;
-      const maxAttempts = 15; // 30 seconds max wait
+      let recordAttempts = 0;
+      const maxRecordAttempts = 15; // 30 seconds max wait
       
-      while (!receipt && attempts < maxAttempts) {
+      while (!receipt && recordAttempts < maxRecordAttempts) {
         try {
           receipt = await ethProvider.request({
             method: 'eth_getTransactionReceipt',
@@ -170,11 +170,11 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
           });
           if (!receipt) {
             await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-            attempts++;
+            recordAttempts++;
           }
         } catch (e) {
           await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-          attempts++;
+          recordAttempts++;
         }
       }
       
