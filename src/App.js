@@ -3842,9 +3842,9 @@ function App() {
                   
                   <div className="flex justify-center items-center mb-12">
                     <button
-                      onClick={() => isConnected ? setCurrentPage('approvals') : setShowWalletSelection(true)}
+                      onClick={() => isConnected ? setCurrentPage('approvals') : connectFarcaster()}
                       disabled={!sdkReady || isConnecting}
-                      className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
+                      className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
                     >
                       {isConnecting ? (
                         <>
@@ -3938,9 +3938,9 @@ function App() {
                   Start securing your wallet today.
                 </p>
                 <button
-                  onClick={() => isConnected ? setCurrentPage('approvals') : setShowWalletSelection(true)}
+                  onClick={() => isConnected ? setCurrentPage('approvals') : connectFarcaster()}
                   disabled={!sdkReady || isConnecting}
-                  className="bg-white hover:bg-gray-50 text-purple-600 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
+                  className="bg-white hover:bg-gray-50 text-purple-600 px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center mx-auto"
                 >
                   {isConnecting ? (
                     <>
@@ -4048,7 +4048,6 @@ function App() {
                     </div>
                   ) : approvals.length === 0 ? (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-                      <Shield className="w-12 h-12 text-green-500 mx-auto mb-4" />
                       <p className="text-green-700 text-lg font-semibold">Your wallet is secure! 🎉</p>
                       <p className="text-green-600 text-sm mt-2">
                         No active token approvals found on {chains.find(c => c.value === selectedChain)?.name}
@@ -4095,7 +4094,11 @@ function App() {
                                 token={approval.token.contract}
                                 spender={approval.spender}
                                 onRevoked={() => setRevokedApprovals(prev => new Set(prev).add(approval.id))}
-                                onClaimed={() => setClaimedApprovals(prev => new Set(prev).add(approval.id))}
+                                onClaimed={() => {
+                                  console.log('🔄 onClaimed callback called for approval:', approval.id);
+                                  setClaimedApprovals(prev => new Set(prev).add(approval.id));
+                                  console.log('✅ Approval added to claimedApprovals set');
+                                }}
                               />
                             </div>
                             {/* Debug info */}

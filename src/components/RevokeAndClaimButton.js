@@ -223,7 +223,9 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       setStatus("✅ Claim successful!");
       setClaiming(false);
       setClaimed(true);
+      console.log('🔄 Calling onClaimed callback');
       onClaimed && onClaimed();
+      console.log('✅ onClaimed callback completed');
     } catch (err) {
       console.error("❌ Claim failed:", err);
       setStatus("❌ Claim failed: " + err.message);
