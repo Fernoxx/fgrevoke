@@ -33,22 +33,6 @@ const revokeHelperAbi = [
   }
 ];
 
-const revokeAndClaimAbi = [
-  {
-    "type": "function",
-    "name": "claimWithAttestation",
-    "inputs": [
-      { "name": "fid", "type": "uint256" },
-      { "name": "nonce", "type": "uint256" },
-      { "name": "deadline", "type": "uint256" },
-      { "name": "token", "type": "address" },
-      { "name": "spender", "type": "address" },
-      { "name": "signature", "type": "bytes" }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  }
-];
 
 export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, onClaimed }) {
   const { address } = useAccount();
