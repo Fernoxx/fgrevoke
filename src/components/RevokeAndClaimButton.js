@@ -244,7 +244,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       // Wait for transaction confirmation with timeout
       let receipt = null;
       let attempts = 0;
-      const maxAttempts = 30; // 60 seconds max wait
+      const maxAttempts = 10; // 10 seconds max wait
       
       while (!receipt && attempts < maxAttempts) {
         try {
@@ -253,11 +253,11 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
             params: [txHash]
           });
           if (!receipt) {
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
             attempts++;
           }
         } catch (e) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
           attempts++;
         }
       }
