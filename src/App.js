@@ -4058,8 +4058,9 @@ function App() {
                     <div className="space-y-3">
                       {approvals.filter(approval => {
                         const isRevoked = revokedApprovals.has(approval.id);
-                        // Hide the approval as soon as it's revoked
-                        return !isRevoked;
+                        const isClaimed = claimedApprovals.has(approval.id);
+                        // Only hide if both revoked AND claimed
+                        return !(isRevoked && isClaimed);
                       }).map((approval) => (
                         <div key={approval.id} className="bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors shadow-sm border border-gray-100">
                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-3">
