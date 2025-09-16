@@ -69,39 +69,96 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
         throw new Error("No wallet provider available from Farcaster.");
       }
 
-      // Use viem to encode the function call (same as working App.js)
+      // Use viem to encode the function call
       const { encodeFunctionData } = await import('viem');
       
-      const data = encodeFunctionData({
+      // Step 1: First revoke the allowance
+      const ERC20_APPROVE_ABI = [
+        {
+          name: 'approve',
+          type: 'function',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          outputs: [{ name: '', type: 'bool' }]
+        }
+      ];
+      
+      const revokeData = encodeFunctionData({
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [spender, BigInt(0)]
+      });
+      
+      console.log('📝 Step 1: Revoking allowance...');
+      const revokeTxHash = await ethProvider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: address,
+          to: token,
+          data: revokeData,
+        }],
+      });
+      
+      console.log('✅ Allowance revoked:', revokeTxHash);
+      
+      // Wait for revocation to be confirmed
+      let revokeReceipt = null;
+      let attempts = 0;
+      const maxAttempts = 30;
+      
+      while (!revokeReceipt && attempts < maxAttempts) {
+        try {
+          revokeReceipt = await ethProvider.request({
+            method: 'eth_getTransactionReceipt',
+            params: [revokeTxHash]
+          });
+          if (!revokeReceipt) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            attempts++;
+          }
+        } catch (e) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          attempts++;
+        }
+      }
+      
+      if (!revokeReceipt) {
+        throw new Error("Revocation transaction confirmation timeout");
+      }
+      
+      // Step 2: Record the revocation
+      const recordData = encodeFunctionData({
         abi: revokeHelperAbi,
         functionName: 'recordRevoked',
         args: [token, spender]
       });
 
-      console.log('📝 Sending revoke transaction via RevokeHelper:', {
+      console.log('📝 Step 2: Recording revocation via RevokeHelper:', {
         to: REVOKE_HELPER,
         from: address,
-        data: data.slice(0, 10) + '...'
+        data: recordData.slice(0, 10) + '...'
       });
 
-      const txHash = await ethProvider.request({
+      const recordTxHash = await ethProvider.request({
         method: 'eth_sendTransaction',
         params: [{
           from: address,
           to: REVOKE_HELPER,
-          data: data,
+          data: recordData,
         }],
       });
 
-      console.log('✅ Transaction sent:', txHash);
-      setStatus("✅ Revoke successful!");
+      console.log('✅ Record transaction sent:', recordTxHash);
+      setStatus("✅ Revoke and record successful!");
       
       // Set revoked state immediately since transaction was sent successfully
       console.log('🔄 Setting revoked state to true');
       setRevoked(true);
       onRevoked && onRevoked();
       
-      // Optional: Wait for transaction confirmation in background
+      // Optional: Wait for record transaction confirmation in background
       setTimeout(async () => {
         try {
           let receipt = null;
@@ -112,7 +169,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
             try {
               receipt = await ethProvider.request({
                 method: 'eth_getTransactionReceipt',
-                params: [txHash]
+                params: [recordTxHash]
               });
               if (!receipt) {
                 await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
