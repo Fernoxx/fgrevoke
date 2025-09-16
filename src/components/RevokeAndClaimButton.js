@@ -161,6 +161,8 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       console.log('🔄 Calling onRevoked callback');
       onRevoked && onRevoked();
       
+      console.log('✅ Revoke process completed successfully');
+      
       // Wait for record transaction confirmation in background
       setTimeout(async () => {
         try {
@@ -196,6 +198,9 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     } catch (err) {
       console.error("❌ Revoke error:", err);
       setStatus("❌ Revoke failed: " + err.message);
+      
+      // Reset revoked state on error
+      setRevoked(false);
     }
   }
 
@@ -289,7 +294,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     }
   }
 
-  console.log('🔍 RevokeAndClaimButton render - revoked:', revoked, 'claiming:', claiming);
+  console.log('🔍 RevokeAndClaimButton render - revoked:', revoked, 'claiming:', claiming, 'canClaim:', !revoked || claiming);
   
   return (
     <div>
