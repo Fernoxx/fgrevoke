@@ -152,17 +152,36 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
       
         console.log('✅ Allowance revoked:', revokeTxHash);
 
-        // Record revocation in database immediately (no need for second transaction)
+        // Step 2: Record the revocation in RevokeHelper contract (required for claim verification)
+        console.log('📝 Step 2: Recording revocation in RevokeHelper contract...');
+        const recordData = encodeFunctionData({
+          abi: revokeHelperAbi,
+          functionName: 'recordRevoked',
+          args: [token, spender]
+        });
+
+        const recordTxHash = await ethProvider.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: address,
+            to: REVOKE_HELPER,
+            data: recordData,
+          }],
+        });
+
+        console.log('✅ Revocation recorded in contract:', recordTxHash);
+
+        // Also record in database for backend verification
         console.log('📝 Recording revocation in database...');
         try {
-          await recordRevocation(address, token, spender, fid || 0, null, revokeTxHash);
+          await recordRevocation(address, token, spender, fid || 0, null, recordTxHash);
           console.log('✅ Revocation recorded in database');
         } catch (dbError) {
           console.error('❌ Failed to record revocation in database:', dbError);
           // Don't fail the whole process if database recording fails
         }
 
-        console.log('✅ Revoke completed successfully!');
+        console.log('✅ Both transactions completed successfully!');
         setStatus("✅ Revoke successful!");
 
         // Set revoked state immediately
