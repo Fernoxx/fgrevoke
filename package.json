@@ -1,76 +1,23 @@
 {
-  "name": "farguard-farcaster-miniapp",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {
-    "@farcaster/miniapp-sdk": "^0.1.6",
-    "@farcaster/miniapp-wagmi-connector": "^1.0.0",
-    "@privy-io/react-auth": "^2.21.0",
-    "@privy-io/wagmi-connector": "^0.1.13",
-    "@supabase/supabase-js": "^2.57.4",
-    "@tanstack/react-query": "^5.83.0",
-    "@wagmi/connectors": "^5.9.0",
-    "@wagmi/core": "^2.18.0",
-    "ajv": "^8.17.1",
-    "ethers": "^5.8.0",
-    "framer-motion": "^12.23.12",
-    "lucide-react": "^0.263.1",
-    "node-fetch": "^3.3.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "typescript": "^4.9.5",
-    "viem": "^2.33.1",
-    "wagmi": "^2.16.0"
-  },
-  "overrides": {
-    "typescript": "^4.9.5"
-  },
-  "resolutions": {
-    "typescript": "^4.9.5"
-  },
+  "name": "dynamic-holder-rewards",
+  "version": "1.0.0",
+  "description": "Dynamic Holder Rewards Contract for $FG Token",
+  "main": "index.js",
   "scripts": {
-    "start": "craco start",
-    "build": "craco build",
-    "test": "craco test",
-    "eject": "react-scripts eject",
-    "verify": "echo 'Testing manifest...' && curl -s https://fgrevoke.vercel.app/.well-known/farcaster.json | head -20",
-    "dev": "craco start",
-    "preview": "npx serve -s build",
-    "check-manifest": "curl -s https://fgrevoke.vercel.app/.well-known/farcaster.json | jq ."
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy-dynamic-rewards.js",
+    "manage": "hardhat run scripts/manage-dynamic-rewards.js",
+    "verify": "hardhat verify"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ],
-    "globals": {
-      "BigInt": "readonly"
-    }
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
+  "keywords": ["solidity", "ethereum", "rewards", "defi"],
+  "author": "Your Name",
+  "license": "MIT",
   "devDependencies": {
-    "@craco/craco": "^7.1.0",
-    "assert": "^2.1.0",
-    "buffer": "^6.0.3",
-    "crypto-browserify": "^3.12.1",
-    "https-browserify": "^1.0.0",
-    "os-browserify": "^0.3.0",
-    "process": "^0.11.10",
-    "stream-browserify": "^3.0.0",
-    "stream-http": "^3.2.0",
-    "url": "^0.11.4",
-    "util": "^0.12.5"
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0"
   }
 }
