@@ -4090,7 +4090,6 @@ function App() {
                             </div>
                             <div className="mt-3">
                               <RevokeAndClaimButton 
-                                fid={currentUser?.fid}
                                 token={approval.token.contract}
                                 spender={approval.spender}
                                 onRevoked={() => setRevokedApprovals(prev => new Set(prev).add(approval.id))}

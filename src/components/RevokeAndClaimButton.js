@@ -35,7 +35,7 @@ const revokeHelperAbi = [
 ];
 
 
-export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, onClaimed }) {
+export default function RevokeAndClaimButton({ token, spender, onRevoked, onClaimed }) {
   const { address } = useAccount();
   const [revoked, setRevoked] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -174,7 +174,7 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
         // Also record in database for backend verification
         console.log('📝 Recording revocation in database...');
         try {
-          await recordRevocation(address, token, spender, fid || 0, null, recordTxHash);
+          await recordRevocation(address, token, spender, 0, null, recordTxHash); // FID will be determined by backend
           console.log('✅ Revocation recorded in database');
         } catch (dbError) {
           console.error('❌ Failed to record revocation in database:', dbError);
@@ -200,9 +200,6 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
     try {
       setClaiming(true);
       console.log("🔍 RevokeAndClaimButton - handleClaim called");
-      console.log("🔍 FID from props:", fid);
-      console.log("🔍 FID type:", typeof fid);
-      console.log("🔍 FID value:", fid);
       console.log("🔍 Using Farcaster Miniapp SDK for wallet interaction");
 
       // Get Ethereum provider from Farcaster Miniapp SDK
