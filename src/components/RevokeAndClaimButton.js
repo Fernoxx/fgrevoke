@@ -3,6 +3,7 @@ import { useAccount } from "wagmi";
 import { ethers } from "ethers";
 import { sdk } from "@farcaster/miniapp-sdk";
 import revokeAndClaimAbi from "../abis/RevokeAndClaim.json";
+import { recordRevocation } from "../lib/supabase";
 
 const REVOKE_HELPER = "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf";
 const REVOKE_AND_CLAIM = "0x547541959d2f7dba7dad4cac7f366c25400a49bc";
@@ -172,12 +173,22 @@ export default function RevokeAndClaimButton({ token, spender, fid, onRevoked, o
         }],
       });
 
-      console.log('✅ Both transactions sent successfully!');
-      setStatus("✅ Revoke successful!");
-      
-      // Set revoked state immediately
-      setRevoked(true);
-      onRevoked && onRevoked();
+        console.log('✅ Both transactions sent successfully!');
+        setStatus("✅ Revoke successful!");
+
+        // Record revocation in database
+        console.log('📝 Recording revocation in database...');
+        try {
+          await recordRevocation(address, token, spender, fid || 0, null, recordTxHash);
+          console.log('✅ Revocation recorded in database');
+        } catch (dbError) {
+          console.error('❌ Failed to record revocation in database:', dbError);
+          // Don't fail the whole process if database recording fails
+        }
+
+        // Set revoked state immediately
+        setRevoked(true);
+        onRevoked && onRevoked();
     } catch (err) {
       console.error("❌ Revoke error:", err);
       setStatus("❌ Revoke failed: " + err.message);

@@ -1,4 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "http";
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+);
 
 export default async function handler(req: IncomingMessage & { method?: string; body?: any }, res: ServerResponse) {
   console.log("[api/attest] Handler started");
@@ -72,10 +79,35 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       return;
     }
     
-    // TODO: Implement actual verification logic
+    // Check if user has actually revoked using RevokeHelper
+    console.log('[api/attest] Checking revocation in database...');
+    const { data: revocationData, error: revocationError } = await supabase
+      .from('revocations')
+      .select('*')
+      .eq('wallet', wallet.toLowerCase())
+      .eq('token', token.toLowerCase())
+      .eq('spender', spender.toLowerCase())
+      .single();
+    
+    if (revocationError && revocationError.code !== 'PGRST116') {
+      console.error('[api/attest] Database error:', revocationError);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: "Database error checking revocation" }));
+      return;
+    }
+    
+    if (!revocationData) {
+      console.log('[api/attest] User has not revoked using RevokeHelper');
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "User must revoke using RevokeHelper before claiming" }));
+      return;
+    }
+    
+    console.log('[api/attest] Revocation found:', revocationData);
+    
+    // TODO: Implement additional verification logic
     // 1. Verify custodyOf(fid) on Optimism (IdRegistry)
-    // 2. Verify Revoked(wallet,token,spender) log on Base
-    // 3. Sign EIP-712 attestation
+    // 2. Sign EIP-712 attestation
     
     // For now, return a mock attestation with correct FID
     const nonce = Date.now();
