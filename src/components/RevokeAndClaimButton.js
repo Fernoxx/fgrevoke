@@ -63,7 +63,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         abi: revokeAndClaimAbi,
         functionName: 'claimWithAttestation',
         args: [
-          BigInt(fid || 0),
+          BigInt(0), // dummy fid - will be determined by backend
           BigInt(1), // dummy nonce
           BigInt(Math.floor(Date.now() / 1000) + 600), // dummy deadline
           token,
