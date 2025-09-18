@@ -1,23 +1,51 @@
 {
-  "name": "dynamic-holder-rewards",
+  "name": "farguard-revoke-app",
   "version": "1.0.0",
-  "description": "Dynamic Holder Rewards Contract for $FG Token",
-  "main": "index.js",
-  "scripts": {
-    "compile": "hardhat compile",
-    "test": "hardhat test",
-    "deploy": "hardhat run scripts/deploy-dynamic-rewards.js",
-    "manage": "hardhat run scripts/manage-dynamic-rewards.js",
-    "verify": "hardhat verify"
-  },
-  "keywords": ["solidity", "ethereum", "rewards", "defi"],
-  "author": "Your Name",
-  "license": "MIT",
-  "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "hardhat": "^2.19.0"
-  },
+  "private": true,
   "dependencies": {
-    "@openzeppelin/contracts": "^5.0.0"
+    "@farcaster/miniapp-sdk": "^0.1.6",
+    "@farcaster/miniapp-wagmi-connector": "^1.0.0",
+    "@heroicons/react": "^2.0.18",
+    "@privy-io/react-auth": "^1.80.0",
+    "@privy-io/wagmi": "^0.2.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "@tanstack/react-query": "^5.17.0",
+    "@tanstack/react-virtual": "^3.0.0-beta.60",
+    "clsx": "^2.0.0",
+    "ethers": "^6.13.2",
+    "framer-motion": "^11.0.0",
+    "lucide-react": "^0.303.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "viem": "^2.0.0",
+    "wagmi": "^2.0.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@craco/craco": "^7.1.0"
   }
 }

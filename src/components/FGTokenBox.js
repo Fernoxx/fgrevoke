@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { sdk } from "@farcaster/miniapp-sdk";
 
 export default function FGTokenBox() {
   const [copied, setCopied] = useState(false);
@@ -11,8 +12,29 @@ export default function FGTokenBox() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleBuy = () => {
-    window.open("https://www.clanker.world/clanker/0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07", "_blank");
+  const handleBuy = async () => {
+    try {
+      console.log('🔄 Opening Farcaster wallet for $FG token swap...');
+      
+      // Use Farcaster SDK to open swap directly in wallet
+      const result = await sdk.actions.swapToken({
+        sellToken: 'eip155:8453/native', // Base ETH
+        buyToken: `eip155:8453/erc20:${contractAddress}`, // $FG token on Base
+        sellAmount: '1000000000000000000', // 1 ETH in wei (user can modify in wallet)
+      });
+
+      if (result.success) {
+        console.log('✅ Swap initiated successfully:', result.swap.transactions);
+      } else {
+        console.error('❌ Swap failed:', result.error?.message);
+        // Fallback to external link if swap fails
+        window.open("https://www.clanker.world/clanker/0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07", "_blank");
+      }
+    } catch (error) {
+      console.error('❌ Error initiating swap:', error);
+      // Fallback to external link if SDK fails
+      window.open("https://www.clanker.world/clanker/0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07", "_blank");
+    }
   };
 
   const fakeAddresses = [
