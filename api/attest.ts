@@ -105,16 +105,12 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     console.log('[api/attest] Revocation found:', revocationData);
     
-    // TODO: Implement additional verification logic
-    // 1. Verify custodyOf(fid) on Optimism (IdRegistry)
-    // 2. Sign EIP-712 attestation
-    
-    // For now, return a mock attestation with correct FID
-    const nonce = Date.now();
-    const deadline = Math.floor(Date.now() / 1000) + 600; // 10 minutes from now
-    const sig = "0x" + "0".repeat(130); // Mock signature
-    
-    console.log('[api/attest] Returning mock attestation:', { nonce, deadline, sig, fid: userFid });
+    // TEMPORARILY DISABLE CLAIMS TO PREVENT EXPLOITATION
+    // TODO: Implement proper EIP-712 signature verification
+    console.log('[api/attest] Claims temporarily disabled to prevent exploitation');
+    res.statusCode = 400;
+    res.end(JSON.stringify({ error: "Claims temporarily disabled - implementing proper security verification" }));
+    return;
     
     res.statusCode = 200;
     res.end(JSON.stringify({ 
