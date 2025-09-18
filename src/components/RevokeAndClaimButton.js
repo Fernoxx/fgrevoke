@@ -419,17 +419,6 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         )}
       </div>
       
-      {/* Share button after successful claim - ALWAYS show when claimed */}
-      {claimed && (
-        <div className="mt-3">
-          <button
-            onClick={handleShare}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200"
-          >
-            Share on ComposeCast (1 approval = 33,333 FG)
-          </button>
-        </div>
-      )}
       
       {status && <div className="mt-2 text-sm">{status}</div>}
     </div>
