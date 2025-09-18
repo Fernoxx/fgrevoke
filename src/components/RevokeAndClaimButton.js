@@ -226,10 +226,31 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         const step2Duration = step2EndTime - step2StartTime;
         console.log(`✅ Revocation recorded in contract: ${recordTxHash} (took ${step2Duration}ms)`);
 
-        // Also record in database for backend verification
+        // Get FID from Neynar for database recording
+        console.log('📝 Getting FID from Neynar for database recording...');
+        let userFid = 0;
+        try {
+          const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${address}`, {
+            headers: {
+              'api_key': process.env.REACT_APP_NEYNAR_API_KEY || '',
+            }
+          });
+          
+          if (neynarResponse.ok) {
+            const neynarData = await neynarResponse.json();
+            if (neynarData.users && neynarData.users.length > 0) {
+              userFid = neynarData.users[0].fid;
+              console.log('✅ Found FID for database:', userFid);
+            }
+          }
+        } catch (neynarError) {
+          console.error('❌ Failed to get FID from Neynar:', neynarError);
+        }
+
+        // Record in database for backend verification
         console.log('📝 Recording revocation in database...');
         try {
-          await recordRevocation(address, token, spender, 0, null, recordTxHash); // FID will be determined by backend
+          await recordRevocation(address, token, spender, userFid, null, recordTxHash);
           console.log('✅ Revocation recorded in database');
         } catch (dbError) {
           console.error('❌ Failed to record revocation in database:', dbError);
