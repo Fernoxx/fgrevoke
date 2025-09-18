@@ -123,8 +123,16 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     }
     
     // Generate EIP-712 signature for the attestation
-    const nonce = Math.floor(Math.random() * 1000000);
-    const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+    const nonce = Math.floor(Math.random() * 1000000000); // Larger nonce range
+    const deadline = Math.floor(Date.now() / 1000) + 1800; // 30 minutes from now (shorter window)
+    
+    // Additional security validations
+    if (userFid < 1 || userFid > 1000000) {
+      console.error('[api/attest] Invalid FID range:', userFid);
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "Invalid FID range" }));
+      return;
+    }
     
     // Generate proper EIP-712 signature using the attester's private key
     const attesterPrivateKey = process.env.ATTESTER_PRIVATE_KEY;
@@ -137,7 +145,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const attesterWallet = new ethers.Wallet(attesterPrivateKey);
     
-    // EIP-712 domain and types for the attestation
+    // EIP-712 domain and types for the attestation - FIXED to match contract
     const domain = {
       name: "RevokeAndClaim",
       version: "1",
