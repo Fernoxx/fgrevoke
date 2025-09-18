@@ -16,7 +16,7 @@ export default function FGTokenBox() {
     try {
       console.log('🔄 Opening Farcaster wallet for $FG token swap...');
       
-      // Use Farcaster SDK to open swap directly in wallet
+      // Use Farcaster SDK to open swap directly in wallet - NO FALLBACK TO CLANKER
       const result = await sdk.actions.swapToken({
         sellToken: 'eip155:8453/native', // Base ETH
         buyToken: `eip155:8453/erc20:${contractAddress}`, // $FG token on Base
@@ -27,13 +27,11 @@ export default function FGTokenBox() {
         console.log('✅ Swap initiated successfully:', result.swap.transactions);
       } else {
         console.error('❌ Swap failed:', result.error?.message);
-        // Fallback to external link if swap fails
-        window.open("https://www.clanker.world/clanker/0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07", "_blank");
+        alert('Swap failed. Please try again.');
       }
     } catch (error) {
       console.error('❌ Error initiating swap:', error);
-      // Fallback to external link if SDK fails
-      window.open("https://www.clanker.world/clanker/0x946A173Ad73Cbb942b9877E9029fa4c4dC7f2B07", "_blank");
+      alert('Failed to open swap. Please try again.');
     }
   };
 

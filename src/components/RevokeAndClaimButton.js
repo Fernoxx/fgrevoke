@@ -109,14 +109,13 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
   // Share function for ComposeCast using Farcaster SDK
   const handleShare = async () => {
     try {
-      // Calculate total FG tokens based on total approvals claimed
-      const fgPerApproval = 33333; // 33,333 FG tokens per approval
-      const totalFgTokens = totalClaimed * fgPerApproval;
+      // Each approval gives 33,333 FG tokens
+      const fgPerApproval = 33333;
       
-      const shareTextContent = `Claimed ${totalFgTokens.toLocaleString()} FG tokens while securing my wallet from FarGuard by @doteth`;
+      const shareTextContent = `Claimed ${fgPerApproval.toLocaleString()} FG tokens while securing my wallet from FarGuard by @doteth`;
       const url = "https://fgrevoke.vercel.app";
 
-      console.log(`📊 Sharing: ${totalClaimed} approvals = ${totalFgTokens.toLocaleString()} FG tokens`);
+      console.log(`📊 Sharing: 1 approval = ${fgPerApproval.toLocaleString()} FG tokens`);
 
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
@@ -140,7 +139,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       }
     } catch (error) {
       console.error('Share failed:', error);
-      const fallbackText = `Claimed ${totalClaimed * 33333} FG tokens while securing my wallet from FarGuard by @doteth\nhttps://fgrevoke.vercel.app`;
+      const fallbackText = `Claimed 33,333 FG tokens while securing my wallet from FarGuard by @doteth\nhttps://fgrevoke.vercel.app`;
       try {
         await navigator.clipboard.writeText(fallbackText);
         setStatus("✅ Share text copied to clipboard!");
@@ -201,9 +200,12 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         console.log('✅ Allowance revoked:', revokeTxHash);
 
         // Step 2: Record the revocation in RevokeHelper contract (required for claim verification)
-        // IMMEDIATE - no delay for fastest UX
-        console.log('📝 Step 2: Recording revocation IMMEDIATELY...');
+        // MAX 1 SECOND DELAY - no minimum, instant as possible
+        console.log('📝 Step 2: Recording revocation with MAX 1 second delay...');
         const step2StartTime = Date.now();
+        
+        // Add MAX 1 second delay (no minimum)
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000, Math.random() * 1000)));
         
         const recordData = encodeFunctionData({
           abi: revokeHelperAbi,
@@ -355,6 +357,12 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       onClaimed && onClaimed();
       onApprovalClaimed && onApprovalClaimed(newTotal);
       console.log('✅ onClaimed callback completed');
+      
+      // Force show share button after a short delay to ensure state is updated
+      setTimeout(() => {
+        setShowShare(true);
+        console.log('🔄 Force setting showShare to true');
+      }, 100);
     } catch (err) {
       console.error("❌ Claim failed:", err);
       
@@ -418,7 +426,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
             onClick={handleShare}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200"
           >
-            Share on ComposeCast ({totalClaimed} approval{totalClaimed !== 1 ? 's' : ''} = {(totalClaimed * 33333).toLocaleString()} FG)
+            Share on ComposeCast (1 approval = 33,333 FG)
           </button>
         </div>
       )}
