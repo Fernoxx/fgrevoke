@@ -248,6 +248,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         console.log('📝 Getting FID from Neynar for database recording...');
         let userFid = 0;
         try {
+          // Try to get FID from Neynar (if API key is available)
           const neynarResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${address}`, {
             headers: {
               'api_key': process.env.REACT_APP_NEYNAR_API_KEY || '',
@@ -262,17 +263,12 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
               console.log('✅ Found FID for database:', userFid);
             } else {
               console.log('⚠️ No Farcaster user found for this wallet address');
-              // Don't allow non-Farcaster users to proceed
-              throw new Error('This wallet is not associated with a Farcaster account. Only Farcaster users can revoke and claim.');
             }
           } else {
-            console.error('❌ Neynar API error:', neynarResponse.status, neynarResponse.statusText);
-            throw new Error('Failed to verify Farcaster account');
+            console.log('⚠️ Neynar API not available in frontend, backend will handle FID verification');
           }
         } catch (neynarError) {
-          console.error('❌ Failed to get FID from Neynar:', neynarError);
-          // Don't allow users without valid Farcaster accounts to proceed
-          throw new Error('Only Farcaster users can revoke and claim tokens. Please ensure your wallet is connected to a Farcaster account.');
+          console.log('⚠️ Frontend Neynar API not configured, backend will handle FID verification');
         }
 
         // Record in database for backend verification
