@@ -34,15 +34,52 @@ export default async function handler(req: IncomingMessage & { method?: string; 
   }
   
   try {
-    const { wallet, token, spender } = parsed as {
+    const { wallet, token, spender, captchaToken } = parsed as {
       wallet: string;
       token: string;
       spender: string;
+      captchaToken?: string;
     };
     
     if (!wallet || !token || !spender) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: "missing required fields: wallet, token, spender" }));
+      return;
+    }
+
+    // Verify CAPTCHA token
+    if (!captchaToken) {
+      console.error('[api/attest] No CAPTCHA token provided');
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "CAPTCHA verification required" }));
+      return;
+    }
+
+    console.log('[api/attest] Verifying CAPTCHA token...');
+    try {
+      const captchaResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          secret: process.env.RECAPTCHA_SECRET_KEY || '',
+          response: captchaToken,
+          remoteip: req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown'
+        })
+      });
+
+      const captchaResult = await captchaResponse.json();
+      console.log('[api/attest] CAPTCHA verification result:', captchaResult);
+
+      if (!captchaResult.success) {
+        console.error('[api/attest] CAPTCHA verification failed:', captchaResult['error-codes']);
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "CAPTCHA verification failed" }));
+        return;
+      }
+    } catch (captchaError) {
+      console.error('[api/attest] CAPTCHA verification error:', captchaError);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: "CAPTCHA verification service error" }));
       return;
     }
     

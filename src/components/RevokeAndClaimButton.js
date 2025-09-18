@@ -37,6 +37,24 @@ const revokeHelperAbi = [
 
 export default function RevokeAndClaimButton({ token, spender, onRevoked, onClaimed, onApprovalClaimed }) {
   const { address } = useAccount();
+
+  // CAPTCHA callback functions
+  useEffect(() => {
+    window.onCaptchaSuccess = (token) => {
+      console.log("✅ CAPTCHA completed:", token);
+      setCaptchaToken(token);
+    };
+
+    window.onCaptchaExpired = () => {
+      console.log("⏰ CAPTCHA expired");
+      setCaptchaToken(null);
+    };
+
+    return () => {
+      delete window.onCaptchaSuccess;
+      delete window.onCaptchaExpired;
+    };
+  }, []);
   const [revoked, setRevoked] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
@@ -44,6 +62,8 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
   const [checkingClaimed, setCheckingClaimed] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [totalClaimed, setTotalClaimed] = useState(0);
+  const [showCaptcha, setShowCaptcha] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
 
   // Check if this approval was already claimed
   const checkIfClaimed = async () => {
@@ -284,8 +304,25 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
 
   async function handleClaim() {
     try {
+      // Show CAPTCHA first
+      setShowCaptcha(true);
+      return; // Exit early, actual claim happens after CAPTCHA
+    } catch (error) {
+      console.error("❌ Error in handleClaim:", error);
+      setClaiming(false);
+    }
+  }
+
+  async function handleClaimWithCaptcha() {
+    try {
+      if (!captchaToken) {
+        alert("Please complete the CAPTCHA first");
+        return;
+      }
+
       setClaiming(true);
-      console.log("🔍 RevokeAndClaimButton - handleClaim called");
+      setShowCaptcha(false);
+      console.log("🔍 RevokeAndClaimButton - handleClaimWithCaptcha called");
       console.log("🔍 Using Farcaster Miniapp SDK for wallet interaction");
 
       // Get Ethereum provider from Farcaster Miniapp SDK
@@ -298,7 +335,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       }
 
       // Call attester backend (FID will be looked up by backend)
-      const body = { wallet: address, token, spender };
+      const body = { wallet: address, token, spender, captchaToken };
       console.log("🔍 Attestation request body:", body);
       const resp = await fetch(ATTESTER_API, {
         method: "POST",
@@ -452,6 +489,50 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       
       
       {status && <div className="mt-2 text-sm">{status}</div>}
+
+      {/* CAPTCHA Modal */}
+      {showCaptcha && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Security Verification</h3>
+            <p className="text-gray-600 mb-4">
+              Please complete the CAPTCHA to claim your reward tokens.
+            </p>
+            
+            <div className="flex justify-center mb-4">
+              <div 
+                className="g-recaptcha" 
+                data-sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY}
+                data-callback="onCaptchaSuccess"
+                data-expired-callback="onCaptchaExpired"
+              ></div>
+            </div>
+            
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setShowCaptcha(false);
+                  setCaptchaToken(null);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClaimWithCaptcha}
+                disabled={!captchaToken}
+                className={`px-4 py-2 rounded-lg ${
+                  captchaToken
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Claim $FG
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
