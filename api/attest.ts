@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from '@supabase/supabase-js';
+import { ethers } from 'ethers';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -109,9 +110,41 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     const nonce = Math.floor(Math.random() * 1000000);
     const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
     
-    // For now, return a valid signature structure
-    // TODO: Implement proper private key signing
-    const sig = "0x" + "0".repeat(130); // Placeholder signature
+    // Generate proper EIP-712 signature using the attester's private key
+    const attesterPrivateKey = process.env.ATTESTER_PRIVATE_KEY;
+    if (!attesterPrivateKey) {
+      throw new Error('ATTESTER_PRIVATE_KEY environment variable not set');
+    }
+    
+    const attesterWallet = new ethers.Wallet(attesterPrivateKey);
+    
+    // EIP-712 domain and types for the attestation
+    const domain = {
+      name: "RevokeAndClaim",
+      version: "1",
+      chainId: 8453, // Base mainnet
+      verifyingContract: "0x547541959d2f7dba7dad4cac7f366c25400a49bc" // RevokeAndClaim contract address
+    };
+    
+    const types = {
+      Attestation: [
+        { name: "fid", type: "uint256" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "token", type: "address" },
+        { name: "spender", type: "address" }
+      ]
+    };
+    
+    const message = {
+      fid: userFid,
+      nonce: nonce,
+      deadline: deadline,
+      token: token,
+      spender: spender
+    };
+    
+    const sig = await attesterWallet.signTypedData(domain, types, message);
     
     console.log('[api/attest] Generated attestation:', { 
       fid: userFid, 
