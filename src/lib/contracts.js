@@ -3,7 +3,7 @@ import { base } from "viem/chains";
 
 // ---- Contract addresses ----
 export const CONTRACTS = {
-  revokeAndClaim: "0x9fd4b132091e308cd834814680e020f26d1ec470", // Base
+  revokeAndClaim: "0xec8e0b71ab6a10f6e29cd5243ce7c25a6e987a59", // Base
   revokeHelper: "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf",   // Base
   idRegistry: "0x00000000fc6c5f01fc30151999387bb99a9f489b",     // Optimism
 };
