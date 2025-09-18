@@ -153,11 +153,9 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         console.log('✅ Allowance revoked:', revokeTxHash);
 
         // Step 2: Record the revocation in RevokeHelper contract (required for claim verification)
-        // Wait only 1.5 seconds for faster UX
-        console.log('📝 Step 2: Waiting 1.5 seconds then recording revocation...');
-        await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+        // IMMEDIATE - no delay for fastest UX
+        console.log('📝 Step 2: Recording revocation IMMEDIATELY...');
         
-        console.log('📝 Recording revocation in RevokeHelper contract...');
         const recordData = encodeFunctionData({
           abi: revokeHelperAbi,
           functionName: 'recordRevoked',
