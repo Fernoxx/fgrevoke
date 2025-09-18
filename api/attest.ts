@@ -95,7 +95,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
         console.log('[api/attest] Requesting wallet:', wallet);
         
         if (primaryWallet.toLowerCase() !== wallet.toLowerCase()) {
-          throw new Error(`Only the primary wallet (${primaryWallet}) for this Farcaster account can claim rewards. This wallet (${wallet}) is not the primary wallet.`);
+          throw new Error(`Only the primary wallet (${primaryWallet}) for this Farcaster account can claim rewards. You are currently using wallet (${wallet}) which is not your primary wallet. Please switch to your primary wallet in Farcaster and try again.`);
         }
         
         console.log('[api/attest] ✅ Primary wallet verification passed');

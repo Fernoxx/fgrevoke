@@ -321,9 +321,17 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       });
       const data = await resp.json();
       console.log("🔍 Attestation response:", data);
+      
+      if (!resp.ok) {
+        // Check if it's a primary wallet issue
+        if (data.error && data.error.includes("primary wallet")) {
+          throw new Error("❌ Only your primary Farcaster wallet can claim rewards. Please switch to your main wallet in Farcaster and try again.");
+        }
+        throw new Error(data.error || "Attestation failed");
+      }
+      
       console.log("🔍 Attestation FID:", data.fid);
       console.log("🔍 Attestation FID type:", typeof data.fid);
-      if (!resp.ok) throw new Error(data.error || "Attestation failed");
 
       // Use viem to encode the function call
       const { encodeFunctionData } = await import('viem');
