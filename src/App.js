@@ -70,6 +70,7 @@ function App() {
   // Track revoked and claimed approvals
   const [revokedApprovals, setRevokedApprovals] = useState(new Set());
   const [claimedApprovals, setClaimedApprovals] = useState(new Set());
+  const [totalClaimedApprovals, setTotalClaimedApprovals] = useState(0);
 
   // Farcaster integration states
   const [currentUser, setCurrentUser] = useState(null); // Real Farcaster user data
@@ -4097,6 +4098,10 @@ function App() {
                                   console.log('🔄 onClaimed callback called for approval:', approval.id);
                                   setClaimedApprovals(prev => new Set(prev).add(approval.id));
                                   console.log('✅ Approval added to claimedApprovals set');
+                                }}
+                                onApprovalClaimed={(newTotal) => {
+                                  console.log('📊 Total claimed approvals updated:', newTotal);
+                                  setTotalClaimedApprovals(newTotal);
                                 }}
                               />
                             </div>

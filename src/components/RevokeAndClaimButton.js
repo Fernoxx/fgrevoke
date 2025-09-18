@@ -35,7 +35,7 @@ const revokeHelperAbi = [
 ];
 
 
-export default function RevokeAndClaimButton({ token, spender, onRevoked, onClaimed }) {
+export default function RevokeAndClaimButton({ token, spender, onRevoked, onClaimed, onApprovalClaimed }) {
   const { address } = useAccount();
   const [revoked, setRevoked] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -43,6 +43,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
   const [status, setStatus] = useState("");
   const [checkingClaimed, setCheckingClaimed] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [totalClaimed, setTotalClaimed] = useState(0);
 
   // Check if this approval was already claimed
   const checkIfClaimed = async () => {
@@ -108,8 +109,14 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
   // Share function for ComposeCast using Farcaster SDK
   const handleShare = async () => {
     try {
-      const shareTextContent = "Claimed 33333 FG tokens while securing my wallet from FarGuard by @doteth";
+      // Calculate total FG tokens based on total approvals claimed
+      const fgPerApproval = 33333; // 33,333 FG tokens per approval
+      const totalFgTokens = totalClaimed * fgPerApproval;
+      
+      const shareTextContent = `Claimed ${totalFgTokens.toLocaleString()} FG tokens while securing my wallet from FarGuard by @doteth`;
       const url = "https://fgrevoke.vercel.app";
+
+      console.log(`📊 Sharing: ${totalClaimed} approvals = ${totalFgTokens.toLocaleString()} FG tokens`);
 
       if (sdk?.actions?.composeCast) {
         console.log('📝 Composing cast via SDK...');
@@ -133,7 +140,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       }
     } catch (error) {
       console.error('Share failed:', error);
-      const fallbackText = "Claimed 33333 FG tokens while securing my wallet from FarGuard by @doteth\nhttps://fgrevoke.vercel.app";
+      const fallbackText = `Claimed ${totalClaimed * 33333} FG tokens while securing my wallet from FarGuard by @doteth\nhttps://fgrevoke.vercel.app`;
       try {
         await navigator.clipboard.writeText(fallbackText);
         setStatus("✅ Share text copied to clipboard!");
@@ -196,6 +203,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         // Step 2: Record the revocation in RevokeHelper contract (required for claim verification)
         // IMMEDIATE - no delay for fastest UX
         console.log('📝 Step 2: Recording revocation IMMEDIATELY...');
+        const step2StartTime = Date.now();
         
         const recordData = encodeFunctionData({
           abi: revokeHelperAbi,
@@ -212,7 +220,9 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
           }],
         });
 
-        console.log('✅ Revocation recorded in contract:', recordTxHash);
+        const step2EndTime = Date.now();
+        const step2Duration = step2EndTime - step2StartTime;
+        console.log(`✅ Revocation recorded in contract: ${recordTxHash} (took ${step2Duration}ms)`);
 
         // Also record in database for backend verification
         console.log('📝 Recording revocation in database...');
@@ -334,9 +344,16 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       setClaiming(false);
       setClaimed(true);
       setShowShare(true);
+      
+      // Update total claimed count
+      const newTotal = totalClaimed + 1;
+      setTotalClaimed(newTotal);
+      
       console.log('🎉 Claim successful! Share button should now be visible');
+      console.log(`📊 Total approvals claimed: ${newTotal}`);
       console.log('🔄 Calling onClaimed callback');
       onClaimed && onClaimed();
+      onApprovalClaimed && onApprovalClaimed(newTotal);
       console.log('✅ onClaimed callback completed');
     } catch (err) {
       console.error("❌ Claim failed:", err);
@@ -394,14 +411,14 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         )}
       </div>
       
-      {/* Share button after successful claim */}
-      {showShare && (
+      {/* Share button after successful claim - ALWAYS show when claimed */}
+      {claimed && (
         <div className="mt-3">
           <button
             onClick={handleShare}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200"
           >
-            Share on ComposeCast
+            Share on ComposeCast ({totalClaimed} approval{totalClaimed !== 1 ? 's' : ''} = {(totalClaimed * 33333).toLocaleString()} FG)
           </button>
         </div>
       )}
