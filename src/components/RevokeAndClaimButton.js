@@ -6,7 +6,7 @@ import revokeAndClaimAbi from "../abis/RevokeAndClaim.json";
 import { recordRevocation } from "../lib/supabase";
 
 const REVOKE_HELPER = "0x3acb4672fec377bd62cf4d9a0e6bdf5f10e5caaf";
-const REVOKE_AND_CLAIM = "0x547541959d2f7dba7dad4cac7f366c25400a49bc";
+const REVOKE_AND_CLAIM = "0xec8e0b71ab6a10f6e29cd5243ce7c25a6e987a59";
 const ATTESTER_API = "https://farguard-attester-production.up.railway.app/attest";
 
 // Minimal ABI

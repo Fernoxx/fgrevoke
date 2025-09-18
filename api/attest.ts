@@ -150,7 +150,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       name: "RevokeAndClaim",
       version: "1",
       chainId: 8453, // Base mainnet
-      verifyingContract: "0x547541959d2f7dba7dad4cac7f366c25400a49bc" // RevokeAndClaim contract address
+      verifyingContract: "0xec8e0b71ab6a10f6e29cd5243ce7c25a6e987a59" // RevokeAndClaim contract address
     };
     
     const types = {
