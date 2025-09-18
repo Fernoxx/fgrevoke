@@ -129,7 +129,10 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     // Generate proper EIP-712 signature using the attester's private key
     const attesterPrivateKey = process.env.ATTESTER_PRIVATE_KEY;
     if (!attesterPrivateKey) {
-      throw new Error('ATTESTER_PRIVATE_KEY environment variable not set');
+      console.error('[api/attest] ATTESTER_PRIVATE_KEY not set - claims disabled for security');
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "Attester not properly configured - claims temporarily disabled" }));
+      return;
     }
     
     const attesterWallet = new ethers.Wallet(attesterPrivateKey);
@@ -166,7 +169,10 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       fid: userFid, 
       nonce, 
       deadline,
-      sig: sig.substring(0, 10) + "..." 
+      sig: sig.substring(0, 10) + "...",
+      attesterAddress: attesterWallet.address,
+      domain: domain,
+      message: message
     });
     
     res.statusCode = 200;
