@@ -238,13 +238,23 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
           
           if (neynarResponse.ok) {
             const neynarData = await neynarResponse.json();
+            console.log('📊 Neynar response:', neynarData);
             if (neynarData.users && neynarData.users.length > 0) {
               userFid = neynarData.users[0].fid;
               console.log('✅ Found FID for database:', userFid);
+            } else {
+              console.log('⚠️ No Farcaster user found for this wallet address');
+              // Don't allow non-Farcaster users to proceed
+              throw new Error('This wallet is not associated with a Farcaster account. Only Farcaster users can revoke and claim.');
             }
+          } else {
+            console.error('❌ Neynar API error:', neynarResponse.status, neynarResponse.statusText);
+            throw new Error('Failed to verify Farcaster account');
           }
         } catch (neynarError) {
           console.error('❌ Failed to get FID from Neynar:', neynarError);
+          // Don't allow users without valid Farcaster accounts to proceed
+          throw new Error('Only Farcaster users can revoke and claim tokens. Please ensure your wallet is connected to a Farcaster account.');
         }
 
         // Record in database for backend verification

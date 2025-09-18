@@ -73,6 +73,11 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       userFid = neynarData.users[0].fid;
       console.log('[api/attest] Found FID:', userFid);
       
+      // Ensure FID is valid (not 0 or undefined)
+      if (!userFid || userFid === 0) {
+        throw new Error('Invalid FID: User must have a valid Farcaster ID');
+      }
+      
     } catch (neynarError) {
       console.error('[api/attest] Neynar lookup failed:', neynarError);
       res.statusCode = 400;
@@ -105,6 +110,17 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     }
     
     console.log('[api/attest] Revocation found:', revocationData);
+    
+    // Verify the FID in database matches the one from Neynar
+    if (revocationData.fid !== userFid) {
+      console.error('[api/attest] FID mismatch:', { 
+        databaseFid: revocationData.fid, 
+        neynarFid: userFid 
+      });
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "FID verification failed - database and Neynar FIDs do not match" }));
+      return;
+    }
     
     // Generate EIP-712 signature for the attestation
     const nonce = Math.floor(Math.random() * 1000000);
