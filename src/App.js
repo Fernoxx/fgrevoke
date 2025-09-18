@@ -3180,6 +3180,10 @@ function App() {
       return;
     }
     
+    // Show "Not Live" message
+    alert('Not Live');
+    return;
+    
     setFaucetBusy(chain === 'base' ? 'eth' : chain);
     try {
       // For Monad and Celo, use meta-transactions (user signs, we pay gas)
