@@ -334,6 +334,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       setClaiming(false);
       setClaimed(true);
       setShowShare(true);
+      console.log('🎉 Claim successful! Share button should now be visible');
       console.log('🔄 Calling onClaimed callback');
       onClaimed && onClaimed();
       console.log('✅ onClaimed callback completed');
@@ -353,7 +354,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
     }
   }
 
-  console.log('🔍 RevokeAndClaimButton render - revoked:', revoked, 'claiming:', claiming, 'canClaim:', !revoked || claiming);
+  console.log('🔍 RevokeAndClaimButton render - revoked:', revoked, 'claiming:', claiming, 'claimed:', claimed, 'showShare:', showShare, 'canClaim:', !revoked || claiming);
   
   return (
     <div>
