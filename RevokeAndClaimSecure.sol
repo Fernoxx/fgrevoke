@@ -307,8 +307,8 @@ contract RevokeAndClaimSecure is Ownable, ReentrancyGuard, Pausable {
     ) {
         uint8 count = fidRewardCount[fid];
         uint8 remaining = count < MAX_REWARDS_PER_FID ? MAX_REWARDS_PER_FID - count : 0;
-        bool canClaim = count < MAX_REWARDS_PER_FID;
+        bool canClaimMore = count < MAX_REWARDS_PER_FID;
         
-        return (count, remaining, canClaim);
+        return (count, remaining, canClaimMore);
     }
 }
