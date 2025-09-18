@@ -4122,15 +4122,6 @@ function App() {
                   {/* Global Share Button - Shows after any successful claim */}
                   {totalClaimedApprovals > 0 && (
                     <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6 text-center">
-                      <div className="mb-4">
-                        <div className="text-2xl mb-2">🎉</div>
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">
-                          Congratulations! You've secured your wallet
-                        </h3>
-                        <p className="text-gray-600 mb-4">
-                          You've claimed {totalClaimedApprovals} approval{totalClaimedApprovals !== 1 ? 's' : ''} and earned {(totalClaimedApprovals * 33333).toLocaleString()} FG tokens!
-                        </p>
-                      </div>
                       <button
                         onClick={async () => {
                           try {
@@ -4172,7 +4163,7 @@ function App() {
                         }}
                         className="px-6 py-3 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200"
                       >
-                        Share on ComposeCast ({totalClaimedApprovals} approval{totalClaimedApprovals !== 1 ? 's' : ''} = {(totalClaimedApprovals * 33333).toLocaleString()} FG)
+                        Share
                       </button>
                     </div>
                   )}
