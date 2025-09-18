@@ -105,24 +105,43 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
     checkIfClaimed();
   }, [token, spender, address]);
 
-  // Share function for ComposeCast
+  // Share function for ComposeCast using Farcaster SDK
   const handleShare = async () => {
     try {
-      const shareText = "Claimed 33333 FG tokens while securing my wallet from FarGuard by @doteth https://farguard.vercel.app";
-      
-      if (navigator.share) {
-        await navigator.share({
-          text: shareText,
-          url: "https://farguard.vercel.app"
+      const shareTextContent = "Claimed 33333 FG tokens while securing my wallet from FarGuard by @doteth";
+      const url = "https://fgrevoke.vercel.app";
+
+      if (sdk?.actions?.composeCast) {
+        console.log('📝 Composing cast via SDK...');
+        await sdk.actions.composeCast({ 
+          text: shareTextContent.trim(),
+          embeds: [url]
         });
-      } else {
-        // Fallback: copy to clipboard
-        await navigator.clipboard.writeText(shareText);
+        console.log('✅ Shared to Farcaster');
+        return;
+      }
+      
+      // Fallback to clipboard
+      const finalShareText = `${shareTextContent}\n${url}`;
+      try {
+        await navigator.clipboard.writeText(finalShareText);
         setStatus("✅ Share text copied to clipboard!");
         setTimeout(() => setStatus(""), 3000);
+      } catch (clipboardError) {
+        const encoded = encodeURIComponent(finalShareText);
+        window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
       }
-    } catch (err) {
-      console.error("❌ Share failed:", err);
+    } catch (error) {
+      console.error('Share failed:', error);
+      const fallbackText = "Claimed 33333 FG tokens while securing my wallet from FarGuard by @doteth\nhttps://fgrevoke.vercel.app";
+      try {
+        await navigator.clipboard.writeText(fallbackText);
+        setStatus("✅ Share text copied to clipboard!");
+        setTimeout(() => setStatus(""), 3000);
+      } catch (clipboardError) {
+        const encoded = encodeURIComponent(fallbackText);
+        window.open(`https://warpcast.com/~/compose?text=${encoded}`, '_blank');
+      }
     }
   };
 
