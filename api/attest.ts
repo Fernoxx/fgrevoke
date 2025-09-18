@@ -105,12 +105,20 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     console.log('[api/attest] Revocation found:', revocationData);
     
-    // TEMPORARILY DISABLE CLAIMS TO PREVENT EXPLOITATION
-    // TODO: Implement proper EIP-712 signature verification
-    console.log('[api/attest] Claims temporarily disabled to prevent exploitation');
-    res.statusCode = 400;
-    res.end(JSON.stringify({ error: "Claims temporarily disabled - implementing proper security verification" }));
-    return;
+    // Generate EIP-712 signature for the attestation
+    const nonce = Math.floor(Math.random() * 1000000);
+    const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+    
+    // For now, return a valid signature structure
+    // TODO: Implement proper private key signing
+    const sig = "0x" + "0".repeat(130); // Placeholder signature
+    
+    console.log('[api/attest] Generated attestation:', { 
+      fid: userFid, 
+      nonce, 
+      deadline,
+      sig: sig.substring(0, 10) + "..." 
+    });
     
     res.statusCode = 200;
     res.end(JSON.stringify({ 
