@@ -8,6 +8,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
+// Initialize provider for blockchain calls
+const provider = new ethers.JsonRpcProvider('https://optimism-mainnet.g.alchemy.com/v2/demo');
+
 export default async function handler(req: IncomingMessage & { method?: string; body?: any }, res: ServerResponse) {
   console.log("[api/attest] Handler started");
   
@@ -76,6 +79,29 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       // Ensure FID is valid (not 0 or undefined)
       if (!userFid || userFid === 0) {
         throw new Error('Invalid FID: User must have a valid Farcaster ID');
+      }
+
+      // Check if this wallet is the PRIMARY wallet (custody address) for this FID
+      console.log('[api/attest] Verifying primary wallet ownership...');
+      try {
+        const idRegistryContract = new ethers.Contract(
+          '0x00000000fc6c5f01fc30151999387bb99a9f489b', // Optimism IdRegistry
+          ['function custodyOf(uint256 fid) external view returns (address)'],
+          provider
+        );
+        
+        const primaryWallet = await idRegistryContract.custodyOf(userFid);
+        console.log('[api/attest] Primary wallet for FID', userFid, ':', primaryWallet);
+        console.log('[api/attest] Requesting wallet:', wallet);
+        
+        if (primaryWallet.toLowerCase() !== wallet.toLowerCase()) {
+          throw new Error(`Only the primary wallet (${primaryWallet}) for this Farcaster account can claim rewards. This wallet (${wallet}) is not the primary wallet.`);
+        }
+        
+        console.log('[api/attest] ✅ Primary wallet verification passed');
+      } catch (custodyError) {
+        console.error('[api/attest] Primary wallet verification failed:', custodyError);
+        throw new Error('Failed to verify primary wallet ownership. Only the primary wallet for your Farcaster account can claim rewards.');
       }
       
     } catch (neynarError) {

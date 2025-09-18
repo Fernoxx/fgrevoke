@@ -417,6 +417,9 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
         setClaimed(true); // Mark as claimed even though transaction failed
         setClaiming(false);
         onClaimed && onClaimed(); // Still call callback to hide from UI
+      } else if (err.message.includes("primary wallet") || err.message.includes("not the primary wallet")) {
+        setStatus("❌ Only your primary Farcaster wallet can claim. Please switch to your main wallet in Farcaster.");
+        setClaiming(false);
       } else {
         setStatus("❌ Claim failed: " + err.message);
         setClaiming(false);
