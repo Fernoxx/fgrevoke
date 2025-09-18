@@ -42,6 +42,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
   const [claimed, setClaimed] = useState(false);
   const [status, setStatus] = useState("");
   const [checkingClaimed, setCheckingClaimed] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   // Check if this approval was already claimed
   const checkIfClaimed = async () => {
@@ -103,6 +104,27 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
   useEffect(() => {
     checkIfClaimed();
   }, [token, spender, address]);
+
+  // Share function for ComposeCast
+  const handleShare = async () => {
+    try {
+      const shareText = "Claimed 33333 FG tokens while securing my wallet from FarGuard by @doteth https://farguard.vercel.app";
+      
+      if (navigator.share) {
+        await navigator.share({
+          text: shareText,
+          url: "https://farguard.vercel.app"
+        });
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(shareText);
+        setStatus("✅ Share text copied to clipboard!");
+        setTimeout(() => setStatus(""), 3000);
+      }
+    } catch (err) {
+      console.error("❌ Share failed:", err);
+    }
+  };
 
   async function handleRevoke() {
     try {
@@ -292,6 +314,7 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       setStatus("✅ Claim successful!");
       setClaiming(false);
       setClaimed(true);
+      setShowShare(true);
       console.log('🔄 Calling onClaimed callback');
       onClaimed && onClaimed();
       console.log('✅ onClaimed callback completed');
@@ -350,6 +373,19 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
           </div>
         )}
       </div>
+      
+      {/* Share button after successful claim */}
+      {showShare && (
+        <div className="mt-3">
+          <button
+            onClick={handleShare}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200"
+          >
+            Share on ComposeCast
+          </button>
+        </div>
+      )}
+      
       {status && <div className="mt-2 text-sm">{status}</div>}
     </div>
   );
