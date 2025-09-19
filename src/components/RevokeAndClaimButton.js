@@ -217,38 +217,13 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
       
       console.log('✅ Allowance revoked:', revokeTxHash);
 
-      // Wait for first transaction to be confirmed before proceeding
-      console.log('⏳ Waiting for first transaction to be confirmed...');
-      let revokeReceipt = null;
-      let attempts = 0;
-      const maxAttempts = 30; // 30 seconds max wait
-      
-      while (!revokeReceipt && attempts < maxAttempts) {
-        try {
-          revokeReceipt = await ethProvider.request({
-            method: 'eth_getTransactionReceipt',
-            params: [revokeTxHash]
-          });
-          if (!revokeReceipt) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-            attempts++;
-          }
-        } catch (error) {
-          console.log('⏳ Still waiting for first transaction confirmation...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          attempts++;
-        }
-      }
-
-      if (!revokeReceipt) {
-        console.log('⚠️ First transaction not confirmed after 30 seconds, proceeding anyway...');
-      } else {
-        console.log('✅ First transaction confirmed, proceeding to step 2...');
-      }
-
       // Step 2: Record the revocation in RevokeHelper contract (required for claim verification)
-      console.log('📝 Step 2: Recording revocation...');
+      // MAX 1 SECOND DELAY - no minimum, instant as possible
+      console.log('📝 Step 2: Recording revocation with MAX 1 second delay...');
       const step2StartTime = Date.now();
+      
+      // Add MAX 1 second delay (no minimum)
+      await new Promise(resolve => setTimeout(resolve, Math.min(1000, Math.random() * 1000)));
         
         const recordData = encodeFunctionData({
           abi: revokeHelperAbi,
