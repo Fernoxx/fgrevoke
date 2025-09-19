@@ -90,18 +90,33 @@ export default async function handler(req: IncomingMessage & { method?: string; 
           provider
         );
         
-        const primaryWallet = await idRegistryContract.custodyOf(userFid);
-        console.log('[api/attest] Primary wallet for FID', userFid, ':', primaryWallet);
+        const custodyWallet = await idRegistryContract.custodyOf(userFid);
+        console.log('[api/attest] Custody wallet for FID', userFid, ':', custodyWallet);
         console.log('[api/attest] Requesting wallet:', wallet);
         
-        if (primaryWallet.toLowerCase() !== wallet.toLowerCase()) {
-          throw new Error(`Only the primary wallet (${primaryWallet}) for this Farcaster account can claim rewards. You are currently using wallet (${wallet}) which is not your primary wallet. Please switch to your primary wallet in Farcaster and try again.`);
+        // The requesting wallet must be either the custody wallet OR a verified address from Neynar
+        const neynarUser = neynarData.users[0];
+        const verifiedAddresses = neynarUser.verified_addresses || [];
+        
+        console.log('[api/attest] Verified addresses from Neynar:', verifiedAddresses);
+        
+        // Check if requesting wallet is custody wallet OR in verified addresses
+        const isCustodyWallet = custodyWallet.toLowerCase() === wallet.toLowerCase();
+        const isVerifiedAddress = verifiedAddresses.some(addr => addr.toLowerCase() === wallet.toLowerCase());
+        
+        if (!isCustodyWallet && !isVerifiedAddress) {
+          throw new Error(`Wallet (${wallet}) is not authorized for this Farcaster account. Authorized wallets: custody=${custodyWallet}, verified=${verifiedAddresses.join(', ')}`);
         }
         
-        console.log('[api/attest] ✅ Primary wallet verification passed');
+        console.log('[api/attest] ✅ Wallet authorization verified');
+        if (isCustodyWallet) {
+          console.log('[api/attest] Using custody wallet');
+        } else {
+          console.log('[api/attest] Using verified address');
+        }
       } catch (custodyError) {
-        console.error('[api/attest] Primary wallet verification failed:', custodyError);
-        throw new Error('Failed to verify primary wallet ownership. Only the primary wallet for your Farcaster account can claim rewards.');
+        console.error('[api/attest] Wallet verification failed:', custodyError);
+        throw new Error('Failed to verify wallet authorization for this Farcaster account.');
       }
       
     } catch (neynarError) {
