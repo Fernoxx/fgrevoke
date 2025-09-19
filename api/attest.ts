@@ -186,13 +186,16 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const attesterWallet = new ethers.Wallet(attesterPrivateKey);
     
-    // EIP-712 domain and types for the attestation - FIXED to match contract
+    // EIP-712 domain and types for the attestation - EXACTLY match contract
     const domain = {
       name: "RevokeAndClaim",
       version: "1",
       chainId: 8453, // Base mainnet
       verifyingContract: "0xec8e0b71ab6a10f6e29cd5243ce7c25a6e987a59" // RevokeAndClaim contract address
     };
+    
+    console.log('[api/attest] EIP-712 Domain:', domain);
+    console.log('[api/attest] Attester wallet address:', attesterWallet.address);
     
     const types = {
       Attestation: [
