@@ -208,6 +208,9 @@ export default async function handler(req: IncomingMessage & { method?: string; 
       ]
     };
     
+    console.log('[api/attest] EIP-712 Types:', types);
+    console.log('[api/attest] Message to sign:', message);
+    
     const message = {
       user: wallet,
       fid: userFid,
