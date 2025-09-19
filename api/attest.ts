@@ -196,6 +196,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     
     const types = {
       Attestation: [
+        { name: "user", type: "address" },
         { name: "fid", type: "uint256" },
         { name: "nonce", type: "uint256" },
         { name: "deadline", type: "uint256" },
@@ -205,6 +206,7 @@ export default async function handler(req: IncomingMessage & { method?: string; 
     };
     
     const message = {
+      user: wallet,
       fid: userFid,
       nonce: nonce,
       deadline: deadline,
