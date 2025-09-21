@@ -4173,10 +4173,6 @@ function App() {
                                 }}
                               />
                             </div>
-                            {/* Debug info */}
-                            <div className="text-xs text-gray-500 mt-1">
-                              Debug: FID={currentUser?.fid || 'none'}, Wallet={address ? 'connected' : 'not connected'}
-                            </div>
                           </div>
                         </div>
                       ))}
