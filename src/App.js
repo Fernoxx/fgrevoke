@@ -6,14 +6,17 @@ import FGTokenBox from './components/FGTokenBox';
 import FGLoadingBox from './components/FGLoadingBox';
 import RevokeAndClaimButton from './components/RevokeAndClaimButton';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useDisconnect } from 'wagmi';
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
 import { UNISWAP_V4_UNIVERSAL_ROUTER_ABI, UNISWAP_V4_UNIVERSAL_ROUTER_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, CLANKER_V4_FEE_TIER } from './abis/swap';
 import { encodeAbiParameters, parseAbiParameters } from 'viem';
-import { ReownWalletButton } from './components/ReownWalletButton';
 
 
 function App() {
+  // Wagmi hooks for wallet connection state
+  const { address: wagmiAddress, isConnected: wagmiIsConnected } = useAccount();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
+
   const [selectedChain, setSelectedChain] = useState('base');
   const [approvals, setApprovals] = useState([]);
   const [loadingApprovals, setLoadingApprovals] = useState(false);
@@ -822,12 +825,36 @@ function App() {
     }
   };
 
-  // Main connect wallet function - shows selection dialog
+  // Main connect wallet function - shows selection dialog or Reown modal
   const connectWallet = () => {
-    setShowWalletSelection(true);
+    // If Reown is configured, open Reown modal directly
+    if (window.reownAppKit && typeof window.reownAppKit.open === 'function') {
+      console.log('Opening Reown AppKit modal...');
+      window.reownAppKit.open();
+    } else {
+      // Fallback to old wallet selection
+      setShowWalletSelection(true);
+    }
   };
 
 
+
+  // Sync wagmi state with local state
+  useEffect(() => {
+    if (wagmiIsConnected && wagmiAddress) {
+      console.log('🔗 Wallet connected via Reown/Wagmi:', wagmiAddress);
+      setAddress(wagmiAddress);
+      setIsConnected(true);
+      if (!userAddresses.includes(wagmiAddress)) {
+        setUserAddresses([wagmiAddress]);
+      }
+      // Set up provider if not already set
+      if (!provider && window.ethereum) {
+        const ethersProvider = new ethers.BrowserProvider(window.ethereum);
+        setProvider(ethersProvider);
+      }
+    }
+  }, [wagmiIsConnected, wagmiAddress, userAddresses, provider]);
 
   // Listen for account changes
   useEffect(() => {
@@ -1847,6 +1874,10 @@ function App() {
   };
 
   const disconnect = () => {
+    // Disconnect from wagmi/Reown if connected
+    if (wagmiIsConnected) {
+      wagmiDisconnect();
+    }
     setAddress(null);
     setIsConnected(false);
     setApprovals([]);
@@ -3847,7 +3878,7 @@ function App() {
                   
                   <div className="flex justify-center items-center mb-12">
                     <button
-                      onClick={() => isConnected ? setCurrentPage('approvals') : connectFarcaster()}
+                      onClick={() => isConnected ? setCurrentPage('approvals') : connectWallet()}
                       disabled={!sdkReady || isConnecting}
                       className="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 transform hover:scale-105 shadow-xl flex items-center"
                     >
@@ -4502,7 +4533,8 @@ function App() {
         )}
       </main>
 
-      {showWalletSelection && (
+      {/* Wallet Selection Modal - Removed, using Reown AppKit modal instead */}
+      {false && showWalletSelection && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden relative">
             {/* Close Button */}

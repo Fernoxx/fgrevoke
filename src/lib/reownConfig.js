@@ -29,6 +29,14 @@ if (hasValidProjectId) {
   const wagmiAdapter = new WagmiAdapter({
     projectId,
     networks: [base, mainnet, arbitrum],
+    connectors: [
+      farcasterMiniApp(),
+      injected(),
+      coinbaseWallet({
+        appName: 'Farcaster Token Revoke',
+        preference: 'smartWalletOnly'
+      })
+    ]
   })
 
   // Define metadata
@@ -57,8 +65,20 @@ if (hasValidProjectId) {
       '--w3m-font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       '--w3m-accent': '#7C65C1',
       '--w3m-border-radius-master': '8px'
-    }
+    },
+    featuredWalletIds: [
+      // Farcaster Wallet ID (if available in Reown)
+      // Add other featured wallets here
+    ],
+    includeWalletIds: [
+      // Include all wallets, Reown will handle the list
+    ]
   })
+  
+  // Make appKit available globally for direct access
+  if (typeof window !== 'undefined') {
+    window.reownAppKit = appKitInstance;
+  }
 
   // Export the wagmi config from the adapter
   wagmiConfig = wagmiAdapter.wagmiConfig
