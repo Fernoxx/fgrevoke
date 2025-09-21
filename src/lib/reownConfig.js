@@ -22,6 +22,7 @@ console.log('🔧 Reown Configuration:', {
 
 // Create wagmi configuration
 let wagmiConfig
+let appKitInstance = null
 
 if (hasValidProjectId) {
   // Use Reown AppKit adapter if we have a valid project ID
@@ -39,7 +40,7 @@ if (hasValidProjectId) {
   }
 
   // Create modal
-  const appKit = createAppKit({
+  appKitInstance = createAppKit({
     adapters: [wagmiAdapter],
     projectId,
     networks: [base, mainnet, arbitrum],
@@ -84,4 +85,4 @@ if (hasValidProjectId) {
   })
 }
 
-export { wagmiConfig, hasValidProjectId as isReownInitialized }
+export { wagmiConfig, hasValidProjectId as isReownInitialized, appKitInstance }
