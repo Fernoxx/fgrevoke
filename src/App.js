@@ -10,9 +10,12 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 
 import { rewardClaimerAddress, rewardClaimerABI } from './lib/rewardClaimerABI';
 import { UNISWAP_V4_UNIVERSAL_ROUTER_ABI, UNISWAP_V4_UNIVERSAL_ROUTER_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, CLANKER_V4_FEE_TIER } from './abis/swap';
 import { encodeAbiParameters, parseAbiParameters } from 'viem';
+import { useAppKit } from '@reown/appkit/react';
 
 
 function App() {
+  // Reown AppKit hook
+  const { open: openReownModal } = useAppKit();
 
   const [selectedChain, setSelectedChain] = useState('base');
   const [approvals, setApprovals] = useState([]);
@@ -3813,7 +3816,14 @@ function App() {
                   </div>
                 ) : (
                   <button
-                    onClick={connectWallet}
+                    onClick={() => {
+                      // Use Reown modal if configured, otherwise use the existing wallet selection
+                      if (process.env.REACT_APP_REOWN_PROJECT_ID && process.env.REACT_APP_REOWN_PROJECT_ID !== 'YOUR_REOWN_PROJECT_ID_HERE') {
+                        openReownModal();
+                      } else {
+                        connectWallet();
+                      }
+                    }}
                     disabled={isConnecting || !sdkReady}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors duration-200 shadow-sm"
                   >

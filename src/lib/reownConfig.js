@@ -14,6 +14,12 @@ const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || 'ZEdRoAJMYps0b-
 // Check if we have a valid Reown project ID
 const hasValidProjectId = projectId && projectId !== 'YOUR_REOWN_PROJECT_ID_HERE' && projectId.length > 10
 
+console.log('🔧 Reown Configuration:', {
+  projectId: projectId ? `${projectId.substring(0, 8)}...` : 'Not set',
+  hasValidProjectId,
+  mode: hasValidProjectId ? 'Reown AppKit' : 'Fallback wagmi'
+})
+
 // Create wagmi configuration
 let wagmiConfig
 
