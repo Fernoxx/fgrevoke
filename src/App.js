@@ -1234,9 +1234,24 @@ function App() {
   };
 
   const formatTokenAmount = (amount, decimals) => {
-    if (!amount || !decimals) return '0';
-    const formatted = (Number(amount) / Math.pow(10, decimals)).toFixed(6);
-    return parseFloat(formatted).toString();
+    // Handle invalid inputs
+    if (amount === undefined || amount === null || isNaN(amount)) return '0';
+    if (decimals === undefined || decimals === null || isNaN(decimals)) return '0';
+    
+    try {
+      // Convert to number and check validity
+      const numAmount = Number(amount);
+      const numDecimals = Number(decimals);
+      
+      if (isNaN(numAmount) || isNaN(numDecimals)) return '0';
+      if (numDecimals === 0) return numAmount.toString();
+      
+      const formatted = (numAmount / Math.pow(10, numDecimals)).toFixed(6);
+      return parseFloat(formatted).toString();
+    } catch (error) {
+      console.error('Error formatting token amount:', error, { amount, decimals });
+      return '0';
+    }
   };
 
   // Token icon fallback system

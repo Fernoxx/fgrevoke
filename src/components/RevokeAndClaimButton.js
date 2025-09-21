@@ -172,15 +172,26 @@ export default function RevokeAndClaimButton({ token, spender, onRevoked, onClai
   async function handleRevoke() {
     try {
       console.log("🔍 RevokeAndClaimButton - handleRevoke called");
-      console.log("🔍 Using Farcaster Miniapp SDK for wallet interaction");
       
-      // Get Ethereum provider from Farcaster Miniapp SDK
-      console.log("🌐 Getting Ethereum provider from Farcaster...");
-      const ethProvider = await sdk.wallet.getEthereumProvider();
-      console.log("✅ Got provider from miniapp SDK");
+      // Get Ethereum provider based on connection type
+      let ethProvider;
+      
+      // Check if we're in Farcaster miniapp
+      const isMiniApp = await sdk.isInMiniApp();
+      
+      if (isMiniApp) {
+        console.log("🔍 Using Farcaster Miniapp SDK for wallet interaction");
+        console.log("🌐 Getting Ethereum provider from Farcaster...");
+        ethProvider = await sdk.wallet.getEthereumProvider();
+        console.log("✅ Got provider from miniapp SDK");
+      } else if (window.ethereum) {
+        console.log("🔍 Using browser wallet (MetaMask, Rabby, etc.)");
+        ethProvider = window.ethereum;
+        console.log("✅ Got provider from browser wallet");
+      }
       
       if (!ethProvider) {
-        throw new Error("No wallet provider available from Farcaster.");
+        throw new Error("No wallet provider available.");
       }
 
       // Use viem to encode the function call
