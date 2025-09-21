@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from './lib/wagmi'
 import App from './App'
 
+// Initialize Reown AppKit
+import './lib/reownConfig'
+
 console.log('🔧 Setting up wagmi for reward claimer contract');
 
 const queryClient = new QueryClient()
