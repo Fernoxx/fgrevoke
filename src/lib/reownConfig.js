@@ -84,4 +84,4 @@ if (hasValidProjectId) {
   })
 }
 
-export { wagmiConfig }
+export { wagmiConfig, hasValidProjectId as isReownInitialized }
