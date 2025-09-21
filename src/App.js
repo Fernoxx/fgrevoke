@@ -339,7 +339,8 @@ function App() {
             },
             spender: spenderAddress,
             spenderName: getSpenderName(spenderAddress),
-            amount: formatAllowance(allowance, tokenInfo.decimals),
+            amount: allowance, // Store raw amount value
+            formattedAmount: formatAllowance(allowance, tokenInfo.decimals), // Store formatted display value
             riskLevel: assessRiskLevel(spenderAddress),
             txHash: log.transactionHash,
             blockNumber: parseInt(log.blockNumber, 16) || log.blockNumber,
@@ -523,7 +524,8 @@ function App() {
             },
             spender: spenderAddress,
             spenderName: getSpenderName(spenderAddress),
-            amount: formatAllowance(allowance, tokenInfo.decimals),
+            amount: allowance, // Store raw amount value
+            formattedAmount: formatAllowance(allowance, tokenInfo.decimals), // Store formatted display value
             riskLevel: assessRiskLevel(spenderAddress),
             txHash: log.transactionHash,
             blockNumber: parseInt(log.blockNumber, 16),
@@ -4134,7 +4136,23 @@ function App() {
                                 </p>
                                 <p className="text-sm text-gray-600">
                                   Amount: <span className="font-semibold">
-                                    {approval.amount === 'unlimited' ? 'Unlimited' : formatTokenAmount(approval.amount, approval.token.decimals)}
+                                    {(() => {
+                                      // Check if it's unlimited approval (max uint256)
+                                      const maxUint256 = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
+                                      const maxUint256Decimal = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
+                                      
+                                      if (approval.amount === maxUint256 || approval.amount === maxUint256Decimal || 
+                                          approval.amount === 'unlimited' || parseFloat(approval.amount) > 1e50) {
+                                        return 'Unlimited';
+                                      }
+                                      
+                                      // Use the formatted amount if available, otherwise format the raw amount
+                                      if (approval.formattedAmount && approval.formattedAmount !== 'Unknown') {
+                                        return approval.formattedAmount;
+                                      }
+                                      
+                                      return formatTokenAmount(approval.amount, approval.token.decimals);
+                                    })()}
                                   </span>
                                 </p>
                               </div>
