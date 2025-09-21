@@ -3812,12 +3812,14 @@ function App() {
                     </button>
                   </div>
                 ) : (
-                  <ReownWalletButton
-                    fallbackAction={connectWallet}
-                    isConnecting={isConnecting}
+                  <button
+                    onClick={connectWallet}
                     disabled={isConnecting || !sdkReady}
-                    buttonText={isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}
-                  />
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors duration-200 shadow-sm"
+                  >
+                    <Wallet className="w-5 h-5" />
+                    <span>{isConnecting ? 'Connecting...' : userAddresses.length > 0 ? 'Use Verified Address' : 'Connect Wallet'}</span>
+                  </button>
                 )}
               </div>
             </div>
@@ -4560,6 +4562,38 @@ function App() {
                 </div>
                 <ChevronDown className="w-5 h-5 text-gray-400 transform -rotate-90" />
               </button>
+
+              {/* Other Wallets Option - Reown */}
+              <ReownWalletButton
+                fallbackAction={() => {
+                  console.log('Reown not configured, showing fallback message');
+                  setError('Additional wallets not configured. Please use Farcaster or Rabby.');
+                }}
+                isConnecting={isConnecting}
+                disabled={isConnecting}
+                buttonText=""
+                customButton={(onClick, disabled) => (
+                  <button
+                    onClick={() => {
+                      setShowWalletSelection(false); // Close the modal before opening Reown
+                      onClick();
+                    }}
+                    disabled={disabled}
+                    className="w-full bg-white border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 disabled:opacity-50 text-gray-900 p-4 rounded-xl transition-all duration-200 flex items-center justify-between shadow-sm hover:shadow-md"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                        <Wallet className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div className="text-left">
+                        <h3 className="font-semibold text-lg">Other Wallets</h3>
+                        <p className="text-gray-500 text-sm">MetaMask, Coinbase, Trust & 300+ wallets</p>
+                      </div>
+                    </div>
+                    <ChevronDown className="w-5 h-5 text-gray-400 transform -rotate-90" />
+                  </button>
+                )}
+              />
 
               {/* Loading State */}
               {isConnecting && (

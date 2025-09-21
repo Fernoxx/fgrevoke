@@ -3,6 +3,16 @@ import { Wallet } from 'lucide-react';
 import { isReownInitialized } from '../lib/reownConfig';
 import { useAppKit } from '@reown/appkit/react';
 
+// Component that uses Reown AppKit with custom button
+function ReownCustomButton({ disabled, customButton }) {
+  const { open } = useAppKit();
+
+  return customButton(() => {
+    console.log('Opening Reown modal for 300+ wallets...');
+    open();
+  }, disabled);
+}
+
 // Component that uses Reown AppKit
 function ReownButton({ disabled, buttonText }) {
   const { open } = useAppKit();
@@ -40,8 +50,18 @@ function FallbackButton({ fallbackAction, disabled, buttonText }) {
 }
 
 // Main export that conditionally renders the appropriate button
-export function ReownWalletButton({ fallbackAction, isConnecting, disabled, buttonText }) {
-  // If Reown is initialized, use the Reown button, otherwise use fallback
+export function ReownWalletButton({ fallbackAction, isConnecting, disabled, buttonText, customButton }) {
+  // If custom button is provided and Reown is initialized
+  if (customButton && isReownInitialized) {
+    return <ReownCustomButton disabled={disabled} customButton={customButton} />;
+  }
+  
+  // If custom button but no Reown
+  if (customButton && !isReownInitialized) {
+    return customButton(fallbackAction || (() => console.log('No action available')), disabled);
+  }
+  
+  // Default buttons
   if (isReownInitialized) {
     return <ReownButton disabled={disabled} buttonText={buttonText} />;
   } else {
